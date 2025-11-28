@@ -6,8 +6,12 @@ version = "0.1.0"
 
 [dependencies]
 cortex-m-rt = "0.7.5"
-embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "executor-interrupt", "executor-thread"] }
-embassy-rp = { version = "0.8.0", features = ["binary-info", "critical-section-impl", "rp235xa", "time-driver"] }
-embassy-usb = "0.5.1"
+# These are installed from my fork to fix an embassy-usb bug. If I only install
+# embassy-usb from the fork I get compilation errors, so I just do all of them.
+embassy-executor = { features = ["arch-cortex-m", "executor-interrupt", "executor-thread"], git = "https://github.com/chrisdoble/embassy.git", package = "embassy-executor" }
+embassy-rp = { features = ["binary-info", "critical-section-impl", "rp235xa", "time-driver"], git = "https://github.com/chrisdoble/embassy.git", package = "embassy-rp" }
+embassy-time = { git = "https://github.com/chrisdoble/embassy.git", package = "embassy-time" }
+embassy-usb = { git = "https://github.com/chrisdoble/embassy.git", package = "embassy-usb" }
+embedded-io-async = "0.6.1"
 panic-probe = "1.0.0"
 static_cell = "2.1.1"
