@@ -6,12 +6,14 @@ version = "0.1.0"
 
 [dependencies]
 cortex-m-rt = "0.7.5"
+defmt = "1.0.1"
+defmt-rtt = "1.1.0"
 # These are installed from my fork to fix an embassy-usb bug. If I only install
 # embassy-usb from the fork I get compilation errors, so I just do all of them.
-embassy-executor = { features = ["arch-cortex-m", "executor-interrupt", "executor-thread"], git = "https://github.com/chrisdoble/embassy.git", package = "embassy-executor" }
-embassy-rp = { features = ["binary-info", "critical-section-impl", "rp235xa", "time-driver"], git = "https://github.com/chrisdoble/embassy.git", package = "embassy-rp" }
-embassy-time = { git = "https://github.com/chrisdoble/embassy.git", package = "embassy-time" }
-embassy-usb = { git = "https://github.com/chrisdoble/embassy.git", package = "embassy-usb" }
+embassy-executor = { features = ["arch-cortex-m", "defmt", "executor-interrupt", "executor-thread"], git = "https://github.com/chrisdoble/embassy.git", package = "embassy-executor" }
+embassy-rp = { features = ["binary-info", "critical-section-impl", "defmt", "rp235xa", "time-driver"], git = "https://github.com/chrisdoble/embassy.git", package = "embassy-rp" }
+embassy-time = { features = ["defmt", "defmt-timestamp-uptime"], git = "https://github.com/chrisdoble/embassy.git", package = "embassy-time" }
+embassy-usb = { features = ["defmt"], git = "https://github.com/chrisdoble/embassy.git", package = "embassy-usb" }
 embedded-io-async = "0.6.1"
-panic-probe = "1.0.0"
+panic-probe = { features=["print-defmt"], version = "1.0.0" }
 static_cell = "2.1.1"

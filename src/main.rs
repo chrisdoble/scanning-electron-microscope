@@ -16,8 +16,8 @@ use embassy_usb::{
     driver::EndpointError,
 };
 use embedded_io_async::Read;
-use panic_probe as _;
 use static_cell::StaticCell;
+use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     UART0_IRQ => uart::InterruptHandler<peripherals::UART0>;
