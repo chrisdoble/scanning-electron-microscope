@@ -1,15 +1,18 @@
-#![no_std]
 #![no_main]
+#![no_std]
 
+use defmt::*;
 use embassy_executor::Spawner;
 use embassy_rp::{
     Peri, binary_info, bind_interrupts, dma,
+    gpio::{Level, Output},
     interrupt::typelevel::Binding,
-    peripherals,
+    pac,
+    peripherals::{UART0, UART1, USB},
     uart::{self, Uart},
     usb,
 };
-use embassy_time::{Duration, with_timeout};
+use embassy_time::{Duration, Timer, with_timeout};
 use embassy_usb::{
     UsbDevice,
     class::cdc_acm::{BufferedReceiver, CdcAcmClass, Sender, State},
@@ -20,13 +23,14 @@ use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
-    UART0_IRQ => uart::InterruptHandler<peripherals::UART0>;
-    USBCTRL_IRQ => usb::InterruptHandler<peripherals::USB>;
+    UART0_IRQ => uart::InterruptHandler<UART0>;
+    UART1_IRQ => uart::InterruptHandler<UART1>;
+    USBCTRL_IRQ => usb::InterruptHandler<USB>;
 });
 
 // This data appears in the output of `pictool info`[1].
 //
-// 2: https://docs.rs/rp-binary-info/0.1.1/rp_binary_info/
+// 1: https://docs.rs/rp-binary-info/0.1.1/rp_binary_info/
 #[unsafe(link_section = ".bi_entries")]
 #[used]
 pub static PICOTOOL_ENTRIES: [binary_info::EntryAddr; 3] = [
@@ -35,88 +39,150 @@ pub static PICOTOOL_ENTRIES: [binary_info::EntryAddr; 3] = [
     binary_info::rp_cargo_version!(),
 ];
 
-// The duration for which we'll wait before considering an operation timed out.
-const TIMEOUT_DURATION: Duration = Duration::from_secs(3);
-
 // The maximum USB packet size that we can read or write. For full-speed devices
 // (like the Raspberry Pi Pico 2), this must be 8, 16, 32, or 64[1].
 //
 // 1: https://docs.embassy.dev/embassy-usb/git/default/class/cdc_acm/struct.CdcAcmClass.html#method.new
-const USB_MAX_PACKET_SIZE: u16 = 64;
+const USB_MAX_PACKET_SIZE: u8 = 64;
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    let p = embassy_rp::init(Default::default());
-    let mut uart = init_uart(p.UART0, p.PIN_16, p.PIN_17, Irqs, p.DMA_CH0, p.DMA_CH1);
-    let (mut sender, mut receiver, usb_device) = init_usb(p.USB);
+    let peripherals = embassy_rp::init(Default::default());
 
+    // Initialise the USB device and the CDC ACM sender/receiver.
+    let (usb_device, mut sender, mut receiver) = init_usb(peripherals.USB);
+
+    // Spawn a task to run the USB driver.
     spawner.spawn(usb_task(usb_device).unwrap());
 
-    let mut command = [0u8; 16];
-    let mut response = [0u8; 16];
+    // Initialise the UART driver for the Edwards ADC MkII (pressure gauge).
+    //
+    // This is connected to an RS-232 converter, so we can read/write as usual.
+    let mut uart0 = init_uart(
+        peripherals.UART0,
+        peripherals.PIN_16,
+        peripherals.PIN_17,
+        Irqs,
+        peripherals.DMA_CH0,
+        peripherals.DMA_CH1,
+    );
+
+    // Initialise the UART driver for the Pfeiffer TC 600 (TMP controller).
+    //
+    // This is connected to an RS-485 converter, so we can read/write as usual.
+    let mut uart1 = init_uart(
+        peripherals.UART1,
+        peripherals.PIN_4,
+        peripherals.PIN_5,
+        Irqs,
+        peripherals.DMA_CH2,
+        peripherals.DMA_CH3,
+    );
+
+    // The RS-485 converter contains a driver and a receiver, both connected to
+    // the same bus. To receive we want the driver disabled and the receiver
+    // enabled (otherwise the driver would drive the line high while idle). To
+    // transmit we want the opposite (otherwise we would receive our own
+    // transmission). Set this pin high to transmit and set it low to read.
+    let mut uart1_transmit_pin = Output::new(peripherals.PIN_3, Level::Low);
+
+    // USB packets that are exactly the maximum packet size aren't processed
+    // until a subsequent shorter packet is sent. We may not have a subsequent
+    // packet to send but we want all packets to be sent immediately. Set the
+    // buffer size to be 1 byte smaller than the maximum to avoid this problem.
+    let mut command = [0u8; USB_MAX_PACKET_SIZE as usize - 1];
+    let mut response = [0u8; USB_MAX_PACKET_SIZE as usize - 1];
 
     loop {
-        // Wait for a computer to connect.
+        // Wait for a USB host to connect.
+        info!("Waiting for USB host");
         receiver.wait_connection().await;
+        info!("USB host connected");
 
-        // Read a command from the computer, send it to the ADC, read its
-        // response, and send that back to the computer until it disconnects.
         loop {
-            let result: Result<(), UsbError> = (async {
+            let result: Result<(), Error> = (async {
+                // Read a command from the USB host.
                 let command_length = read_command(&mut receiver, &mut command).await?;
+
+                // Change the last character of the command to a carriage
+                // return, as is expected by both the ADC and the TMP.
                 command[command_length - 1] = b'\r';
-                send_command(&mut uart, &command[..command_length]).await?;
-                let response_length = read_response(&mut uart, &mut response).await?;
-                send_response(&mut sender, &response[..response_length]).await
+
+                // Split the command into destination and command.
+                let destination = &command[..3];
+                let command = &command[4..command_length];
+
+                let mut response_length: usize;
+                match destination {
+                    b"ADC" => {
+                        write_command(command, "ADC", &mut uart0).await?;
+                        response_length = read_response(&mut response, "ADC", &mut uart0).await?;
+                    }
+                    b"TMP" => {
+                        write_rs_485_command(
+                            command,
+                            "TMP",
+                            &mut uart1_transmit_pin,
+                            &mut uart1,
+                            &pac::UART1,
+                        )
+                        .await?;
+                        response_length = read_response(&mut response, "TMP", &mut uart1).await?;
+                    }
+                    _ => return Err(Error::UsbCommandUnknownDestination),
+                }
+
+                // Our response to the USB host must be terminated by a
+                // carriage return followed by a newline (\r\n). Both the ADC
+                // and the TMP terminate their responses with a carriage return
+                // (\r) so we just need to add a newline. Ensure there's enough
+                // space in the buffer to do that, then do it.
+                if response_length == response.len() {
+                    return Err(Error::UartResponseTooLong);
+                }
+                response[response_length] = b'\n';
+                response_length += 1;
+
+                // Send the response to the USB host.
+                send_response(&response[..response_length], &mut sender).await
             })
             .await;
 
             match result {
                 Ok(()) => {}
-                Err(UsbError::Disconnected) => break,
-                Err(UsbError::Generic(error_message)) => {
-                    send_response(&mut sender, error_message.as_bytes())
+                Err(Error::UsbDisconnected) => {
+                    info!("USB host disconnected");
+                    break;
+                }
+                Err(e) => {
+                    error!("Error: {}", e);
+                    send_response(e.to_response(), &mut sender)
                         .await
-                        .unwrap()
+                        .expect("couldn't send error response");
                 }
             }
         }
     }
 }
 
-fn init_uart<'a, T: uart::Instance>(
-    uart: Peri<'a, T>,
-    tx_pin: Peri<'a, impl uart::TxPin<T>>,
-    rx_pin: Peri<'a, impl uart::RxPin<T>>,
-    irq: impl Binding<T::Interrupt, uart::InterruptHandler<T>>,
-    tx_dma: Peri<'a, impl dma::Channel>,
-    rx_dma: Peri<'a, impl dma::Channel>,
-) -> uart::Uart<'a, uart::Async> {
-    let config = {
-        // Edwards' ADC MkII communicates via RS-232 at a rate of 9600 baud with
-        // 1 stop bit, 8 data bits, and no parity bit. The only default value of
-        // the UART configuration that doesn't match is the baud rate.
-        let mut config = uart::Config::default();
-        config.baudrate = 9600;
-        config
-    };
-
-    uart::Uart::new(uart, tx_pin, rx_pin, irq, tx_dma, rx_dma, config)
-}
-
-type StaticBufferedReceiver = BufferedReceiver<'static, StaticDriver>;
-type StaticDriver = usb::Driver<'static, peripherals::USB>;
-type StaticSender = Sender<'static, StaticDriver>;
-type StaticUsbDevice = UsbDevice<'static, StaticDriver>;
-
-fn init_usb(
-    usb: Peri<'static, peripherals::USB>,
-) -> (StaticSender, StaticBufferedReceiver, StaticUsbDevice) {
+/// Initialises a USB device and a CDC ACM sender/receiver.
+///
+/// # Panics
+///
+/// Panics if called more than once.
+fn init_usb<'a>(
+    usb: Peri<'static, USB>,
+) -> (
+    UsbDevice<'static, usb::Driver<'static, USB>>,
+    Sender<'static, usb::Driver<'static, USB>>,
+    BufferedReceiver<'static, usb::Driver<'static, USB>>,
+) {
     let driver = usb::Driver::new(usb, Irqs);
     let config = {
         // VID/PID taken from https://pid.codes/1209/0001/
         let mut config = embassy_usb::Config::new(0x1209, 0x0001);
         config.manufacturer = Some("Chris Doble");
+        config.max_packet_size_0 = USB_MAX_PACKET_SIZE;
         config.product = Some("SEM controller");
         config
     };
@@ -125,133 +191,292 @@ fn init_usb(
         static CONFIG_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
         static BOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
 
-        // The control buffer length must be equal to `config.max_packet_size_0`
-        // which defaults to 64. If we change it, this needs to be updated.
-        static CONTROL_BUFFER: StaticCell<[u8; 64]> = StaticCell::new();
+        // The control buffer length must be equal to `config.max_packet_size_0`.
+        static CONTROL_BUFFER: StaticCell<[u8; USB_MAX_PACKET_SIZE as usize]> = StaticCell::new();
 
         embassy_usb::Builder::new(
             driver,
             config,
-            CONFIG_DESCRIPTOR.init([0; 256]),
-            BOS_DESCRIPTOR.init([0; 256]),
-            &mut [], // No Microsoft OS descriptors
-            CONTROL_BUFFER.init([0; 64]),
+            CONFIG_DESCRIPTOR.init([0u8; 256]),
+            BOS_DESCRIPTOR.init([0u8; 256]),
+            // No Microsoft OS descriptors.
+            &mut [],
+            CONTROL_BUFFER.init([0; USB_MAX_PACKET_SIZE as usize]),
         )
     };
     let cdc_acm = {
         static STATE: StaticCell<State> = StaticCell::new();
-        CdcAcmClass::new(&mut builder, STATE.init(State::new()), USB_MAX_PACKET_SIZE)
+        CdcAcmClass::new(
+            &mut builder,
+            STATE.init(State::new()),
+            USB_MAX_PACKET_SIZE as u16,
+        )
     };
-    static RECEIVE_BUFFER: StaticCell<[u8; USB_MAX_PACKET_SIZE as usize]> = StaticCell::new();
     let (sender, receiver) = cdc_acm.split();
+    static RECEIVE_BUFFER: StaticCell<[u8; USB_MAX_PACKET_SIZE as usize]> = StaticCell::new();
     (
+        builder.build(),
         sender,
         receiver.into_buffered(RECEIVE_BUFFER.init([0u8; USB_MAX_PACKET_SIZE as usize])),
-        builder.build(),
     )
 }
 
+/// Runs the given `UsbDevice` forever.
 #[embassy_executor::task]
-async fn usb_task(mut usb_device: StaticUsbDevice) {
+async fn usb_task(mut usb_device: UsbDevice<'static, usb::Driver<'static, USB>>) {
     usb_device.run().await
 }
 
-#[derive(Debug)]
-enum UsbError {
-    /// The computer disconnected.
-    Disconnected,
+/// Initialises a UART driver using the given peripherals.
+///
+/// The driver communicates at 9600 baud with 1 stop bit, 8 data bits, and no
+/// parity bit (as used by the Edwards ADC MkII and the Pfeiffer TC 600).
+fn init_uart<T: uart::Instance>(
+    uart: Peri<'static, T>,
+    tx_pin: Peri<'static, impl uart::TxPin<T>>,
+    rx_pin: Peri<'static, impl uart::RxPin<T>>,
+    irq: impl Binding<T::Interrupt, uart::InterruptHandler<T>>,
+    tx_dma: Peri<'static, impl dma::Channel>,
+    rx_dma: Peri<'static, impl dma::Channel>,
+) -> Uart<'static, uart::Async> {
+    let config = {
+        // The only default `Config` value that doesn't match is the baud rate.
+        let mut config = uart::Config::default();
+        config.baudrate = 9600;
+        config
+    };
 
-    /// Any other error.
-    Generic(&'static str),
+    Uart::new(uart, tx_pin, rx_pin, irq, tx_dma, rx_dma, config)
 }
 
-impl From<&'static str> for UsbError {
-    fn from(val: &'static str) -> Self {
-        UsbError::Generic(val)
+#[derive(Debug, Format)]
+enum Error {
+    /// One of the devices send a response that was too long.
+    ///
+    /// The maximum length is determined by the size of the receive buffer.
+    UartResponseTooLong,
+
+    /// One of the devices took too long to send a response.
+    UartTimeout,
+
+    /// An unknown UART error (communicating with a device).
+    UartUnknown,
+
+    /// The USB host sent a command that was missing a destination prefix.
+    ///
+    /// Each command must include a three letter destination prefix followed by
+    /// a colon (e.g. "ADC:?GA1\r").
+    UsbCommandMissingDestination,
+
+    /// The USB host sent a command that was too long.
+    ///
+    /// The maximum length is determined by the size of the command buffer.
+    UsbCommandTooLong,
+
+    /// The USB host sent a command that was too short.
+    ///
+    /// Each command must include a three letter destination prefix, a colon, at
+    /// least one letter, and a terminator, making a minimum of 6 characters.
+    UsbCommandTooShort,
+
+    /// The USB host sent a command that contains an unknown destination prefix.
+    UsbCommandUnknownDestination,
+
+    /// The USB host disconnected.
+    UsbDisconnected,
+
+    /// The USB host took too long to send a command.
+    UsbTimeout,
+
+    /// An unknown USB error (communicating with the USB host).
+    UsbUnknown,
+}
+
+impl Error {
+    /// Converts the error into a response that can be sent to the USB host.
+    fn to_response(&self) -> &[u8] {
+        match self {
+            Error::UartResponseTooLong => "ERR:UART_RESPONSE_TOO_LONG\r\n",
+            Error::UartTimeout => "ERR:UART_TIMEOUT\r\n",
+            Error::UartUnknown => "ERR:UART_UNKNOWN\r\n",
+            Error::UsbCommandMissingDestination => "ERR:USB_COMMAND_MISSING_DESTINATION\r\n",
+            Error::UsbCommandTooLong => "ERR:USB_COMMAND_TOO_LONG\r\n",
+            Error::UsbCommandTooShort => "ERR:USB_COMMAND_TOO_SHORT\r\n",
+            Error::UsbCommandUnknownDestination => "ERR:USB_COMMAND_UNKNOWN_DESTINATION\r\n",
+            Error::UsbDisconnected => "ERR:USB_DISCONNECTED\r\n",
+            Error::UsbTimeout => "ERR:USB_TIMEOUT\r\n",
+            Error::UsbUnknown => "ERR:USB_UNKNOWN\r\n",
+        }
+        .as_bytes()
     }
 }
 
-/// Reads a command from the computer via USB.
+/// Reads a command from the USB host.
 ///
-/// A newline signals the end of the command. Returns the command length.
+/// A command may be terminated by a newline (\n), a carriage return (\r), or a
+/// carriage return followed by a newline (\r\n). If the last is used, only the
+/// carriage return (\r) is included in `command` — the newline (\n) is ignored.
+///
+/// If the command is successfully received and valid, its length is returned.
 async fn read_command(
-    buffered_receiver: &mut StaticBufferedReceiver,
+    receiver: &mut BufferedReceiver<'static, usb::Driver<'static, USB>>,
     command: &mut [u8],
-) -> Result<usize, UsbError> {
+) -> Result<usize, Error> {
     let mut char = [0u8; 1];
     let mut length = 0;
 
+    // Read one character at a time until we get to the end.
     loop {
-        match with_timeout(TIMEOUT_DURATION, buffered_receiver.read(&mut char)).await {
+        // Use a long timeout to support a human typing the command.
+        match with_timeout(Duration::from_secs(2), receiver.read(&mut char)).await {
             Ok(Ok(_)) => {
                 command[length] = char[0];
+
+                // If the first character is a newline, it's likely the end of
+                // the \r\n terminator of the previous command. Ignore it.
+                if char[0] == b'\n' && length == 0 {
+                    continue;
+                }
+
                 length += 1;
+
+                if length == command.len() {
+                    return Err(Error::UsbCommandTooLong);
+                }
             }
-            Ok(Err(EndpointError::Disabled)) => return Err(UsbError::Disconnected),
-            Ok(Err(_)) => {
-                return Err(UsbError::Generic(
-                    "Error while reading command from computer via USB\n",
-                ));
+            Ok(Err(EndpointError::Disabled)) => return Err(Error::UsbDisconnected),
+            Ok(Err(e)) => {
+                error!("USB error: {}", e);
+                return Err(Error::UsbUnknown);
             }
             Err(_) => {
-                return Err(UsbError::Generic(
-                    "Timeout while reading command from computer via USB\n",
-                ));
+                if length == 0 {
+                    // A command isn't being sent yet. Keep waiting.
+                    continue;
+                } else {
+                    return Err(Error::UsbTimeout);
+                }
             }
         }
 
-        if command[length - 1] == b'\n' {
-            return Ok(length);
+        if char[0] == b'\n' || char[0] == b'\r' {
+            break;
+        }
+    }
+
+    if length < 6 {
+        return Err(Error::UsbCommandTooShort);
+    }
+
+    if command[3] != b':' {
+        return Err(Error::UsbCommandMissingDestination);
+    }
+
+    info!("Received command: {=[u8]:a}", command[..length]);
+    Ok(length)
+}
+
+/// Writes a command to a UART driver.
+async fn write_command(
+    command: &[u8],
+    destination: &'static str,
+    uart: &mut Uart<'_, uart::Async>,
+) -> Result<(), Error> {
+    info!("Sending command to {}: {=[u8]:a}", destination, command);
+    match uart.write(command).await {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            error!("UART error: {}", e);
+            return Err(Error::UartUnknown);
         }
     }
 }
 
-/// Sends a command to the ADC via UART.
-async fn send_command(
-    uart: &mut Uart<'_, uart::Async>,
+/// Writes a command to a UART driver and toggles the RS-485 transmit pin.
+async fn write_rs_485_command(
     command: &[u8],
-) -> Result<(), &'static str> {
-    match uart.write(command).await {
-        Ok(_) => Ok(()),
-        Err(_) => Err("Error while sending command to ADC via UART\n"),
+    destination: &'static str,
+    transmit_pin: &mut Output<'_>,
+    uart_driver: &mut Uart<'_, uart::Async>,
+    uart_pac: &pac::uart::Uart,
+) -> Result<(), Error> {
+    transmit_pin.set_high();
+
+    // We must set the transmit pin low after writing, even on failure. Else the
+    // driver in the UART to RS-485 converter will hold the bus high and we
+    // won't be able to receive anything any more. Hold the result until then.
+    let result = write_command(command, destination, uart_driver).await;
+
+    // Wait until the transmission has truly finished. If we set the transmit
+    // pin low too early we might accidentally truncate the end of the command.
+    while uart_pac.uartfr().read().busy() {
+        // We don't want to wait too long per iteration or we might miss the
+        // response. 100 µs is around the time it takes to transmit 1 bit.
+        Timer::after_micros(100).await;
     }
+
+    transmit_pin.set_low();
+    result
 }
 
-/// Reads a response from the ADC via UART.
+/// Reads a response from a UART driver.
 ///
-/// A carriage return signals the end of the response. Returns the response length.
+/// A carriage return (\r) signals the end of the response.
+///
+/// If the command is successfully received and valid, its length is returned.
 async fn read_response(
-    uart: &mut Uart<'_, uart::Async>,
     response: &mut [u8],
-) -> Result<usize, &'static str> {
+    sender: &'static str,
+    uart: &mut Uart<'_, uart::Async>,
+) -> Result<usize, Error> {
     let mut char = [0u8; 1];
     let mut length = 0;
 
     loop {
-        match with_timeout(TIMEOUT_DURATION, uart.read(&mut char)).await {
+        // From experimentation, the ADC can take up to ~300 ms to respond. Set
+        // the timeout duration to 400 ms to give ourselves a bit of a buffer.
+        let duration = Duration::from_millis(400);
+        match with_timeout(duration, uart.read(&mut char)).await {
             Ok(Ok(_)) => {
                 response[length] = char[0];
                 length += 1;
+
+                if length == response.len() {
+                    return Err(Error::UartResponseTooLong);
+                }
             }
-            Ok(Err(_)) => return Err("Error while reading response from ADC via UART\n"),
-            Err(_) => return Err("Timeout while reading response from ADC via UART\n"),
+            Ok(Err(e)) => {
+                error!("UART error: {}", e);
+                return Err(Error::UartUnknown);
+            }
+            Err(_) => return Err(Error::UartTimeout),
         }
 
         if response[length - 1] == b'\r' {
-            // Replace the carriage return with a newline so it prints better.
-            response[length - 1] = b'\n';
-            return Ok(length);
+            break;
         }
     }
+
+    info!(
+        "Received response from {}: {=[u8]:a}",
+        sender,
+        response[..length]
+    );
+    Ok(length)
 }
 
-/// Sends a response to the computer via USB.
-async fn send_response(sender: &mut StaticSender, response: &[u8]) -> Result<(), UsbError> {
+/// Sends a response to the USB host.
+async fn send_response(
+    response: &[u8],
+    sender: &mut Sender<'static, usb::Driver<'static, USB>>,
+) -> Result<(), Error> {
+    info!("Sending response: {=[u8]:a}", response);
     match sender.write_packet(response).await {
         Ok(()) => Ok(()),
-        Err(EndpointError::Disabled) => Err(UsbError::Disconnected),
-        Err(_) => Err(UsbError::Generic(
-            "Error while sending response to computer via USB\n",
-        )),
+        Err(EndpointError::Disabled) => Err(Error::UsbDisconnected),
+        Err(e) => {
+            error!("USB error: {}", e);
+            return Err(Error::UsbUnknown);
+        }
     }
 }
