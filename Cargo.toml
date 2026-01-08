@@ -1,19 +1,8 @@
-[package]
+[workspace]
+members = ["common", "firmware"]
+resolver = "3"
+
+[workspace.package]
 edition = "2024"
-name = "scanning-electron-microscope"
 publish = false
 version = "0.1.0"
-
-[dependencies]
-cortex-m-rt = "0.7.5"
-defmt = "1.0.1"
-defmt-rtt = "1.1.0"
-# These are installed from a specific commit to fix an embassy-usb bug. They can
-# be changed to use a specific version once that commit has been released.
-embassy-executor = { features = ["arch-cortex-m", "defmt", "executor-interrupt", "executor-thread"], git = "https://github.com/embassy-rs/embassy.git", package = "embassy-executor", rev = "424522b0975b449bc62854c271b196cd9ed192d7" }
-embassy-rp = { features = ["binary-info", "critical-section-impl", "defmt", "rp235xa", "time-driver", "unstable-pac"], git = "https://github.com/embassy-rs/embassy.git", package = "embassy-rp", rev = "424522b0975b449bc62854c271b196cd9ed192d7" }
-embassy-time = { features = ["defmt", "defmt-timestamp-uptime"], git = "https://github.com/embassy-rs/embassy.git", package = "embassy-time", rev = "424522b0975b449bc62854c271b196cd9ed192d7" }
-embassy-usb = { features = ["defmt"], git = "https://github.com/embassy-rs/embassy.git", package = "embassy-usb", rev = "424522b0975b449bc62854c271b196cd9ed192d7" }
-embedded-io-async = "0.6.1"
-panic-probe = { features=["print-defmt"], version = "1.0.0" }
-static_cell = "2.1.1"
