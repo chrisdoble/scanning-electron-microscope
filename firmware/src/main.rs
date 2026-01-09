@@ -1,7 +1,7 @@
 #![no_main]
 #![no_std]
 
-use common::Error;
+use common::{Error, USB_MAX_PACKET_SIZE};
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_rp::{
@@ -39,12 +39,6 @@ pub static PICOTOOL_ENTRIES: [binary_info::EntryAddr; 3] = [
     binary_info::rp_program_description!(c"Controls my DIY SEM"),
     binary_info::rp_cargo_version!(),
 ];
-
-// The maximum USB packet size that we can read or write. For full-speed devices
-// (like the Raspberry Pi Pico 2), this must be 8, 16, 32, or 64[1].
-//
-// 1: https://docs.embassy.dev/embassy-usb/git/default/class/cdc_acm/struct.CdcAcmClass.html#method.new
-const USB_MAX_PACKET_SIZE: u8 = 64;
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -130,7 +124,7 @@ async fn main(spawner: Spawner) {
                         .await?;
                         response_length = read_response(&mut response, "TMP", &mut uart1).await?;
                     }
-                    _ => return Err(Error::UsbCommandUnknownDestination),
+                    _ => return Err(Error::UnknownDestination),
                 }
 
                 // Our response to the USB host must be terminated by a
@@ -139,7 +133,7 @@ async fn main(spawner: Spawner) {
                 // (\r) so we just need to add a newline. Ensure there's enough
                 // space in the buffer to do that, then do it.
                 if response_length == response.len() {
-                    return Err(Error::UartResponseTooLong);
+                    return Err(Error::ResponseTooLong);
                 }
                 response[response_length] = b'\n';
                 response_length += 1;
@@ -151,7 +145,7 @@ async fn main(spawner: Spawner) {
 
             match result {
                 Ok(()) => {}
-                Err(Error::UsbDisconnected) => {
+                Err(Error::Disconnected) => {
                     info!("USB host disconnected");
                     break;
                 }
@@ -280,20 +274,20 @@ async fn read_command(
                 length += 1;
 
                 if length == command.len() {
-                    return Err(Error::UsbCommandTooLong);
+                    return Err(Error::CommandTooLong);
                 }
             }
-            Ok(Err(EndpointError::Disabled)) => return Err(Error::UsbDisconnected),
+            Ok(Err(EndpointError::Disabled)) => return Err(Error::Disconnected),
             Ok(Err(e)) => {
                 error!("USB error: {}", e);
-                return Err(Error::UsbUnknown);
+                return Err(Error::Unknown);
             }
             Err(_) => {
                 if length == 0 {
                     // A command isn't being sent yet. Keep waiting.
                     continue;
                 } else {
-                    return Err(Error::UsbTimeout);
+                    return Err(Error::CommandTimeout);
                 }
             }
         }
@@ -304,11 +298,11 @@ async fn read_command(
     }
 
     if length < 6 {
-        return Err(Error::UsbCommandTooShort);
+        return Err(Error::CommandTooShort);
     }
 
     if command[3] != b':' {
-        return Err(Error::UsbCommandMissingDestination);
+        return Err(Error::CommandMissingDestination);
     }
 
     info!("Received command: {=[u8]:a}", command[..length]);
@@ -326,7 +320,7 @@ async fn write_command(
         Ok(_) => Ok(()),
         Err(e) => {
             error!("UART error: {}", e);
-            return Err(Error::UartUnknown);
+            return Err(Error::Unknown);
         }
     }
 }
@@ -381,14 +375,14 @@ async fn read_response(
                 length += 1;
 
                 if length == response.len() {
-                    return Err(Error::UartResponseTooLong);
+                    return Err(Error::ResponseTooLong);
                 }
             }
             Ok(Err(e)) => {
                 error!("UART error: {}", e);
-                return Err(Error::UartUnknown);
+                return Err(Error::Unknown);
             }
-            Err(_) => return Err(Error::UartTimeout),
+            Err(_) => return Err(Error::ResponseTimeout),
         }
 
         if response[length - 1] == b'\r' {
@@ -412,10 +406,10 @@ async fn send_response(
     info!("Sending response: {=[u8]:a}", response);
     match sender.write_packet(response).await {
         Ok(()) => Ok(()),
-        Err(EndpointError::Disabled) => Err(Error::UsbDisconnected),
+        Err(EndpointError::Disabled) => Err(Error::Disconnected),
         Err(e) => {
             error!("USB error: {}", e);
-            return Err(Error::UsbUnknown);
+            return Err(Error::Unknown);
         }
     }
 }

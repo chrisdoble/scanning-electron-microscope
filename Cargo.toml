@@ -1,5 +1,6 @@
 [workspace]
-members = ["common", "firmware"]
+default-members = []
+members = ["common", "firmware", "host"]
 resolver = "3"
 
 [workspace.package]
