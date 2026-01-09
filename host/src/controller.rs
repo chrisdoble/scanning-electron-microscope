@@ -3,6 +3,16 @@ use log::*;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// The destination for a command sent to the controller.
+#[derive(Debug)]
+pub enum Destination {
+    /// The Edwards ADC MkII pressure gauge controller.
+    ADC,
+
+    // The Pfeiffer TC 600 TMP controller.
+    TMP,
+}
+
 pub struct Controller {
     port: Arc<Mutex<Box<dyn serialport::SerialPort>>>,
 }
@@ -20,8 +30,21 @@ impl Controller {
         })
     }
 
-    pub async fn send_command(&self, command: &[u8], response: &mut [u8]) -> Result<usize, Error> {
-        let command = command.to_vec();
+    /// Sends a command to a particular destination and returns the response.
+    ///
+    /// `command` doesn't need to include the destination prefix or the `\r\n`
+    /// terminator. `response` won't include the `\r\n` terminator.
+    pub async fn send_command(
+        &self,
+        destination: Destination,
+        command: &[u8],
+        response: &mut [u8],
+    ) -> Result<usize, Error> {
+        let command = format!(
+            "{:?}:{}\r\n",
+            destination,
+            str::from_utf8(command).map_err(|_| Error::CommandNotUtf8)?
+        );
         let port = Arc::clone(&self.port);
 
         let result = tokio::task::spawn_blocking(move || {
@@ -33,11 +56,8 @@ impl Controller {
             })?;
 
             // Send the command.
-            debug!(
-                "Sending command to controller: {:?}",
-                str::from_utf8(&*command).expect("controller command isn't valid utf-8")
-            );
-            port.write_all(&command).map_err(|e| {
+            debug!("Sending command to controller: {:?}", command);
+            port.write_all(command.as_bytes()).map_err(|e| {
                 error!("failed to send controller command: {}", e);
                 Error::Unknown
             })?;
@@ -56,7 +76,7 @@ impl Controller {
 
             debug!(
                 "Received response from controller: {:?}",
-                str::from_utf8(&*response).expect("controller response isn't valid utf-8")
+                str::from_utf8(&*response).map_err(|_| Error::ResponseNotUtf8)?
             );
             Ok(response) as Result<Vec<u8>, Error>
         })

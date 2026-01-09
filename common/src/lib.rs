@@ -20,6 +20,9 @@ pub enum Error {
     /// a colon (e.g. "ADC:?GA1\r").
     CommandMissingDestination,
 
+    /// A command wasn't valid UTF-8.
+    CommandNotUtf8,
+
     /// The USB host took too long to send a command.
     CommandTimeout,
 
@@ -36,6 +39,9 @@ pub enum Error {
 
     /// The USB host disconnected.
     Disconnected,
+
+    /// A response wasn't valid UTF-8.
+    ResponseNotUtf8,
 
     /// One of the devices took too long to send a response.
     ResponseTimeout,
@@ -57,10 +63,12 @@ impl Error {
     pub fn to_response(&self) -> &[u8] {
         match self {
             Error::CommandMissingDestination => "ERR:COMMAND_MISSING_DESTINATION\r\n",
+            Error::CommandNotUtf8 => "ERRO:COMMAND_NOT_UTF8\r\n",
             Error::CommandTimeout => "ERR:COMMAND_TIMEOUT\r\n",
             Error::CommandTooLong => "ERR:COMMAND_TOO_LONG\r\n",
             Error::CommandTooShort => "ERR:COMMAND_TOO_SHORT\r\n",
             Error::Disconnected => "ERR:DISCONNECTED\r\n",
+            Error::ResponseNotUtf8 => "ERR:RESPONSE_NOT_UTF8\r\n",
             Error::ResponseTimeout => "ERR:RESPONSE_TIMEOUT\r\n",
             Error::ResponseTooLong => "ERR:RESPONSE_TOO_LONG\r\n",
             Error::Unknown => "ERR:UNKNOWN\r\n",
