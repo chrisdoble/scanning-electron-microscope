@@ -58,30 +58,21 @@ pub enum Error {
     UnknownDestination,
 }
 
-impl Error {
-    /// Converts the error into a response that can be sent to the USB host.
-    pub fn to_response(&self) -> &[u8] {
-        match self {
-            Error::CommandMissingDestination => "ERR:COMMAND_MISSING_DESTINATION\r\n",
-            Error::CommandNotUtf8 => "ERRO:COMMAND_NOT_UTF8\r\n",
-            Error::CommandTimeout => "ERR:COMMAND_TIMEOUT\r\n",
-            Error::CommandTooLong => "ERR:COMMAND_TOO_LONG\r\n",
-            Error::CommandTooShort => "ERR:COMMAND_TOO_SHORT\r\n",
-            Error::Disconnected => "ERR:DISCONNECTED\r\n",
-            Error::ResponseNotUtf8 => "ERR:RESPONSE_NOT_UTF8\r\n",
-            Error::ResponseTimeout => "ERR:RESPONSE_TIMEOUT\r\n",
-            Error::ResponseTooLong => "ERR:RESPONSE_TOO_LONG\r\n",
-            Error::Unknown => "ERR:UNKNOWN\r\n",
-            Error::UnknownDestination => "ERR:UNKNOWN_DESTINATION\r\n",
-        }
-        .as_bytes()
-    }
-}
-
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO
-        core::write!(f, "")
+        f.write_str(match self {
+            Error::CommandMissingDestination => "COMMAND_MISSING_DESTINATION",
+            Error::CommandNotUtf8 => "ECOMMAND_NOT_UTF8",
+            Error::CommandTimeout => "COMMAND_TIMEOUT",
+            Error::CommandTooLong => "COMMAND_TOO_LONG",
+            Error::CommandTooShort => "COMMAND_TOO_SHORT",
+            Error::Disconnected => "DISCONNECTED",
+            Error::ResponseNotUtf8 => "RESPONSE_NOT_UTF8",
+            Error::ResponseTimeout => "RESPONSE_TIMEOUT",
+            Error::ResponseTooLong => "RESPONSE_TOO_LONG",
+            Error::Unknown => "UNKNOWN",
+            Error::UnknownDestination => "NKNOWN_DESTINATION",
+        })
     }
 }
 

@@ -2,6 +2,7 @@
 #![no_std]
 
 use common::{Error, USB_MAX_PACKET_SIZE};
+use core::fmt::Write;
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_rp::{
@@ -21,6 +22,7 @@ use embassy_usb::{
 };
 use embedded_io_async::Read;
 use static_cell::StaticCell;
+use string_buffer::StringBuffer;
 use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
@@ -28,6 +30,8 @@ bind_interrupts!(struct Irqs {
     UART1_IRQ => uart::InterruptHandler<UART1>;
     USBCTRL_IRQ => usb::InterruptHandler<USB>;
 });
+
+mod string_buffer;
 
 // This data appears in the output of `pictool info`[1].
 //
@@ -150,10 +154,22 @@ async fn main(spawner: Spawner) {
                     break;
                 }
                 Err(e) => {
-                    error!("Error: {}", e);
-                    send_response(e.to_response(), &mut sender)
-                        .await
-                        .expect("couldn't send error response");
+                    // See the comment above the `command` and `response`
+                    // variables for an explanation of the subtraction of 1.
+                    const LENGTH: usize = USB_MAX_PACKET_SIZE as usize - 1;
+                    let mut buffer = StringBuffer::<LENGTH>::new();
+                    core::write!(&mut buffer, "ERR:{}\r\n", e)
+                        .expect("couldn't format error response");
+
+                    send_response(
+                        buffer
+                            .to_str()
+                            .expect("error response wasn't valid utf-8")
+                            .as_bytes(),
+                        &mut sender,
+                    )
+                    .await
+                    .expect("couldn't send error response");
                 }
             }
         }
