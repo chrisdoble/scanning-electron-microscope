@@ -1,6 +1,6 @@
 #![no_std]
 
-use core::{error, fmt};
+use core::{error, fmt, str};
 #[cfg(feature = "defmt")]
 use defmt::*;
 
@@ -58,6 +58,8 @@ pub enum Error {
     UnknownDestination,
 }
 
+impl error::Error for Error {}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
@@ -71,9 +73,27 @@ impl fmt::Display for Error {
             Error::ResponseTimeout => "RESPONSE_TIMEOUT",
             Error::ResponseTooLong => "RESPONSE_TOO_LONG",
             Error::Unknown => "UNKNOWN",
-            Error::UnknownDestination => "NKNOWN_DESTINATION",
+            Error::UnknownDestination => "UNKNOWN_DESTINATION",
         })
     }
 }
 
-impl error::Error for Error {}
+impl str::FromStr for Error {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "COMMAND_MISSING_DESTINATION" => Error::CommandMissingDestination,
+            "ECOMMAND_NOT_UTF8" => Error::CommandNotUtf8,
+            "COMMAND_TIMEOUT" => Error::CommandTimeout,
+            "COMMAND_TOO_LONG" => Error::CommandTooLong,
+            "COMMAND_TOO_SHORT" => Error::CommandTooShort,
+            "DISCONNECTED" => Error::Disconnected,
+            "RESPONSE_NOT_UTF8" => Error::ResponseNotUtf8,
+            "RESPONSE_TIMEOUT" => Error::ResponseTimeout,
+            "RESPONSE_TOO_LONG" => Error::ResponseTooLong,
+            "UNKNOWN_DESTINATION" => Error::UnknownDestination,
+            _ => Error::Unknown,
+        })
+    }
+}

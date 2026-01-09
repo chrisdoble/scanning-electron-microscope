@@ -1,5 +1,6 @@
 use common::{Error, USB_MAX_PACKET_SIZE};
 use log::*;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -74,11 +75,9 @@ impl Controller {
                 response.extend_from_slice(&chunk[..n]);
             }
 
-            debug!(
-                "Received response from controller: {:?}",
-                str::from_utf8(&*response).map_err(|_| Error::ResponseNotUtf8)?
-            );
-            Ok(response) as Result<Vec<u8>, Error>
+            let response = String::from_utf8(response).map_err(|_| Error::ResponseNotUtf8)?;
+            debug!("Received response from controller: {:?}", response);
+            Ok(response) as Result<String, Error>
         })
         .await
         .map_err(|e| {
@@ -89,12 +88,17 @@ impl Controller {
             Error::Unknown
         })??;
 
+        if result.starts_with("ERR:") {
+            // Parse the error string between "ERR:" and the terminating "\r\n".
+            return Err(Error::from_str(&result[4..result.len() - 2])?);
+        }
+
         let length = result.len();
         if length > response.len() {
             return Err(Error::ResponseTooLong);
         }
 
-        response[..length].copy_from_slice(&result[..length]);
+        response[..length].copy_from_slice(result.as_bytes());
         Ok(length)
     }
 }
