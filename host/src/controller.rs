@@ -1,4 +1,4 @@
-use common::{Error, USB_MAX_PACKET_SIZE};
+use common::{ControllerError, USB_MAX_PACKET_SIZE};
 use log::*;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -40,11 +40,11 @@ impl Controller {
         destination: Destination,
         command: &[u8],
         response: &mut [u8],
-    ) -> Result<usize, Error> {
+    ) -> Result<usize, ControllerError> {
         let command = format!(
             "{:?}:{}\r\n",
             destination,
-            str::from_utf8(command).map_err(|_| Error::CommandNotUtf8)?
+            str::from_utf8(command).map_err(|_| ControllerError::CommandNotUtf8)?
         );
         let port = Arc::clone(&self.port);
 
@@ -53,14 +53,14 @@ impl Controller {
             // the mutex to ensure no other commands are sent until we're done.
             let mut port = port.lock().map_err(|e| {
                 error!("failed to acquire mutex to send controller command: {}", e);
-                Error::Unknown
+                ControllerError::Unknown
             })?;
 
             // Send the command.
             debug!("Sending command to controller: {:?}", command);
             port.write_all(command.as_bytes()).map_err(|e| {
                 error!("failed to send controller command: {}", e);
-                Error::Unknown
+                ControllerError::Unknown
             })?;
 
             // Read the response until we see the \r\n terminator.
@@ -70,14 +70,15 @@ impl Controller {
             while !response.ends_with(b"\r\n") {
                 let n = port.read(&mut chunk).map_err(|e| {
                     error!("failed to read controller response: {}", e);
-                    Error::Unknown
+                    ControllerError::Unknown
                 })?;
                 response.extend_from_slice(&chunk[..n]);
             }
 
-            let response = String::from_utf8(response).map_err(|_| Error::ResponseNotUtf8)?;
+            let response =
+                String::from_utf8(response).map_err(|_| ControllerError::ResponseNotUtf8)?;
             debug!("Received response from controller: {:?}", response);
-            Ok(response) as Result<String, Error>
+            Ok(response) as Result<String, ControllerError>
         })
         .await
         .map_err(|e| {
@@ -85,17 +86,17 @@ impl Controller {
                 "failed to spawn blocking task to send controller command: {}",
                 e
             );
-            Error::Unknown
+            ControllerError::Unknown
         })??;
 
         if result.starts_with("ERR:") {
             // Parse the error string between "ERR:" and the terminating "\r\n".
-            return Err(Error::from_str(&result[4..result.len() - 2])?);
+            return Err(ControllerError::from_str(&result[4..result.len() - 2])?);
         }
 
         let length = result.len();
         if length > response.len() {
-            return Err(Error::ResponseTooLong);
+            return Err(ControllerError::ResponseTooLong);
         }
 
         response[..length].copy_from_slice(result.as_bytes());

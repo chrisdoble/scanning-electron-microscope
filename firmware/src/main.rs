@@ -1,7 +1,7 @@
 #![no_main]
 #![no_std]
 
-use common::{Error, USB_MAX_PACKET_SIZE};
+use common::{ControllerError, USB_MAX_PACKET_SIZE};
 use core::fmt::Write;
 use defmt::*;
 use embassy_executor::Spawner;
@@ -99,7 +99,7 @@ async fn main(spawner: Spawner) {
         info!("USB host connected");
 
         loop {
-            let result: Result<(), Error> = (async {
+            let result: Result<(), ControllerError> = (async {
                 // Read a command from the USB host.
                 let command_length = read_command(&mut receiver, &mut command).await?;
 
@@ -128,7 +128,7 @@ async fn main(spawner: Spawner) {
                         .await?;
                         response_length = read_response(&mut response, "TMP", &mut uart1).await?;
                     }
-                    _ => return Err(Error::UnknownDestination),
+                    _ => return Err(ControllerError::UnknownDestination),
                 }
 
                 // Our response to the USB host must be terminated by a
@@ -137,7 +137,7 @@ async fn main(spawner: Spawner) {
                 // (\r) so we just need to add a newline. Ensure there's enough
                 // space in the buffer to do that, then do it.
                 if response_length == response.len() {
-                    return Err(Error::ResponseTooLong);
+                    return Err(ControllerError::ResponseTooLong);
                 }
                 response[response_length] = b'\n';
                 response_length += 1;
@@ -149,7 +149,7 @@ async fn main(spawner: Spawner) {
 
             match result {
                 Ok(()) => {}
-                Err(Error::Disconnected) => {
+                Err(ControllerError::Disconnected) => {
                     info!("USB host disconnected");
                     break;
                 }
@@ -270,7 +270,7 @@ fn init_uart<T: uart::Instance>(
 async fn read_command(
     receiver: &mut BufferedReceiver<'static, usb::Driver<'static, USB>>,
     command: &mut [u8],
-) -> Result<usize, Error> {
+) -> Result<usize, ControllerError> {
     let mut char = [0u8; 1];
     let mut length = 0;
 
@@ -290,20 +290,20 @@ async fn read_command(
                 length += 1;
 
                 if length == command.len() {
-                    return Err(Error::CommandTooLong);
+                    return Err(ControllerError::CommandTooLong);
                 }
             }
-            Ok(Err(EndpointError::Disabled)) => return Err(Error::Disconnected),
+            Ok(Err(EndpointError::Disabled)) => return Err(ControllerError::Disconnected),
             Ok(Err(e)) => {
                 error!("USB error: {}", e);
-                return Err(Error::Unknown);
+                return Err(ControllerError::Unknown);
             }
             Err(_) => {
                 if length == 0 {
                     // A command isn't being sent yet. Keep waiting.
                     continue;
                 } else {
-                    return Err(Error::CommandTimeout);
+                    return Err(ControllerError::CommandTimeout);
                 }
             }
         }
@@ -314,11 +314,11 @@ async fn read_command(
     }
 
     if length < 6 {
-        return Err(Error::CommandTooShort);
+        return Err(ControllerError::CommandTooShort);
     }
 
     if command[3] != b':' {
-        return Err(Error::CommandMissingDestination);
+        return Err(ControllerError::CommandMissingDestination);
     }
 
     info!("Received command: {=[u8]:a}", command[..length]);
@@ -330,13 +330,13 @@ async fn write_command(
     command: &[u8],
     destination: &'static str,
     uart: &mut Uart<'_, uart::Async>,
-) -> Result<(), Error> {
+) -> Result<(), ControllerError> {
     info!("Sending command to {}: {=[u8]:a}", destination, command);
     match uart.write(command).await {
         Ok(_) => Ok(()),
         Err(e) => {
             error!("UART error: {}", e);
-            return Err(Error::Unknown);
+            return Err(ControllerError::Unknown);
         }
     }
 }
@@ -348,7 +348,7 @@ async fn write_rs_485_command(
     transmit_pin: &mut Output<'_>,
     uart_driver: &mut Uart<'_, uart::Async>,
     uart_pac: &pac::uart::Uart,
-) -> Result<(), Error> {
+) -> Result<(), ControllerError> {
     transmit_pin.set_high();
 
     // We must set the transmit pin low after writing, even on failure. Else the
@@ -377,7 +377,7 @@ async fn read_response(
     response: &mut [u8],
     sender: &'static str,
     uart: &mut Uart<'_, uart::Async>,
-) -> Result<usize, Error> {
+) -> Result<usize, ControllerError> {
     let mut char = [0u8; 1];
     let mut length = 0;
 
@@ -391,14 +391,14 @@ async fn read_response(
                 length += 1;
 
                 if length == response.len() {
-                    return Err(Error::ResponseTooLong);
+                    return Err(ControllerError::ResponseTooLong);
                 }
             }
             Ok(Err(e)) => {
                 error!("UART error: {}", e);
-                return Err(Error::Unknown);
+                return Err(ControllerError::Unknown);
             }
-            Err(_) => return Err(Error::ResponseTimeout),
+            Err(_) => return Err(ControllerError::ResponseTimeout),
         }
 
         if response[length - 1] == b'\r' {
@@ -418,14 +418,14 @@ async fn read_response(
 async fn send_response(
     response: &[u8],
     sender: &mut Sender<'static, usb::Driver<'static, USB>>,
-) -> Result<(), Error> {
+) -> Result<(), ControllerError> {
     info!("Sending response: {=[u8]:a}", response);
     match sender.write_packet(response).await {
         Ok(()) => Ok(()),
-        Err(EndpointError::Disabled) => Err(Error::Disconnected),
+        Err(EndpointError::Disabled) => Err(ControllerError::Disconnected),
         Err(e) => {
             error!("USB error: {}", e);
-            return Err(Error::Unknown);
+            return Err(ControllerError::Unknown);
         }
     }
 }

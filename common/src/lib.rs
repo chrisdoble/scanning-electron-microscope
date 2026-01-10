@@ -10,10 +10,10 @@ use defmt::*;
 // 1: https://docs.embassy.dev/embassy-usb/git/default/class/cdc_acm/struct.CdcAcmClass.html#method.new
 pub const USB_MAX_PACKET_SIZE: u8 = 64;
 
-/// An error that occurred on the vacuum system controller.
+/// A vacuum system controller error.
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(Format))]
-pub enum Error {
+pub enum ControllerError {
     /// A command was missing a destination prefix.
     ///
     /// Each command must include a three letter destination prefix followed by
@@ -28,7 +28,7 @@ pub enum Error {
 
     /// A command was too long.
     ///
-    /// The maximum length is determined by the size of the command buffer.
+    /// The maximum length is the length of the firmware's command buffer.
     CommandTooLong,
 
     /// A command was too short.
@@ -48,7 +48,7 @@ pub enum Error {
 
     /// One of the devices send a response that was too long.
     ///
-    /// The maximum length is determined by the size of the receive buffer.
+    /// The maximum length is the length of the firmware's response buffer.
     ResponseTooLong,
 
     /// An unknown error.
@@ -58,42 +58,42 @@ pub enum Error {
     UnknownDestination,
 }
 
-impl error::Error for Error {}
+impl error::Error for ControllerError {}
 
-impl fmt::Display for Error {
+impl fmt::Display for ControllerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Error::CommandMissingDestination => "COMMAND_MISSING_DESTINATION",
-            Error::CommandNotUtf8 => "ECOMMAND_NOT_UTF8",
-            Error::CommandTimeout => "COMMAND_TIMEOUT",
-            Error::CommandTooLong => "COMMAND_TOO_LONG",
-            Error::CommandTooShort => "COMMAND_TOO_SHORT",
-            Error::Disconnected => "DISCONNECTED",
-            Error::ResponseNotUtf8 => "RESPONSE_NOT_UTF8",
-            Error::ResponseTimeout => "RESPONSE_TIMEOUT",
-            Error::ResponseTooLong => "RESPONSE_TOO_LONG",
-            Error::Unknown => "UNKNOWN",
-            Error::UnknownDestination => "UNKNOWN_DESTINATION",
+            ControllerError::CommandMissingDestination => "COMMAND_MISSING_DESTINATION",
+            ControllerError::CommandNotUtf8 => "ECOMMAND_NOT_UTF8",
+            ControllerError::CommandTimeout => "COMMAND_TIMEOUT",
+            ControllerError::CommandTooLong => "COMMAND_TOO_LONG",
+            ControllerError::CommandTooShort => "COMMAND_TOO_SHORT",
+            ControllerError::Disconnected => "DISCONNECTED",
+            ControllerError::ResponseNotUtf8 => "RESPONSE_NOT_UTF8",
+            ControllerError::ResponseTimeout => "RESPONSE_TIMEOUT",
+            ControllerError::ResponseTooLong => "RESPONSE_TOO_LONG",
+            ControllerError::Unknown => "UNKNOWN",
+            ControllerError::UnknownDestination => "UNKNOWN_DESTINATION",
         })
     }
 }
 
-impl str::FromStr for Error {
-    type Err = Error;
+impl str::FromStr for ControllerError {
+    type Err = ControllerError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
-            "COMMAND_MISSING_DESTINATION" => Error::CommandMissingDestination,
-            "ECOMMAND_NOT_UTF8" => Error::CommandNotUtf8,
-            "COMMAND_TIMEOUT" => Error::CommandTimeout,
-            "COMMAND_TOO_LONG" => Error::CommandTooLong,
-            "COMMAND_TOO_SHORT" => Error::CommandTooShort,
-            "DISCONNECTED" => Error::Disconnected,
-            "RESPONSE_NOT_UTF8" => Error::ResponseNotUtf8,
-            "RESPONSE_TIMEOUT" => Error::ResponseTimeout,
-            "RESPONSE_TOO_LONG" => Error::ResponseTooLong,
-            "UNKNOWN_DESTINATION" => Error::UnknownDestination,
-            _ => Error::Unknown,
+            "COMMAND_MISSING_DESTINATION" => ControllerError::CommandMissingDestination,
+            "ECOMMAND_NOT_UTF8" => ControllerError::CommandNotUtf8,
+            "COMMAND_TIMEOUT" => ControllerError::CommandTimeout,
+            "COMMAND_TOO_LONG" => ControllerError::CommandTooLong,
+            "COMMAND_TOO_SHORT" => ControllerError::CommandTooShort,
+            "DISCONNECTED" => ControllerError::Disconnected,
+            "RESPONSE_NOT_UTF8" => ControllerError::ResponseNotUtf8,
+            "RESPONSE_TIMEOUT" => ControllerError::ResponseTimeout,
+            "RESPONSE_TOO_LONG" => ControllerError::ResponseTooLong,
+            "UNKNOWN_DESTINATION" => ControllerError::UnknownDestination,
+            _ => ControllerError::Unknown,
         })
     }
 }
