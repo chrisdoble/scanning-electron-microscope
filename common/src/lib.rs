@@ -20,9 +20,6 @@ pub enum ControllerError {
     /// a colon (e.g. "ADC:?GA1\r").
     CommandMissingDestination,
 
-    /// A command wasn't valid UTF-8.
-    CommandNotUtf8,
-
     /// The USB host took too long to send a command.
     CommandTimeout,
 
@@ -64,7 +61,6 @@ impl fmt::Display for ControllerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             ControllerError::CommandMissingDestination => "COMMAND_MISSING_DESTINATION",
-            ControllerError::CommandNotUtf8 => "ECOMMAND_NOT_UTF8",
             ControllerError::CommandTimeout => "COMMAND_TIMEOUT",
             ControllerError::CommandTooLong => "COMMAND_TOO_LONG",
             ControllerError::CommandTooShort => "COMMAND_TOO_SHORT",
@@ -84,7 +80,6 @@ impl str::FromStr for ControllerError {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "COMMAND_MISSING_DESTINATION" => ControllerError::CommandMissingDestination,
-            "ECOMMAND_NOT_UTF8" => ControllerError::CommandNotUtf8,
             "COMMAND_TIMEOUT" => ControllerError::CommandTimeout,
             "COMMAND_TOO_LONG" => ControllerError::CommandTooLong,
             "COMMAND_TOO_SHORT" => ControllerError::CommandTooShort,

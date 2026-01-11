@@ -34,21 +34,16 @@ impl Controller {
     /// Sends a command to a particular destination and returns the response.
     ///
     /// `command` doesn't need to include the destination prefix or the `\r\n`
-    /// terminator. `response` won't include the `\r\n` terminator.
+    /// terminator. The response won't include the `\r\n` terminator.
     pub async fn send_command(
         &self,
         destination: Destination,
-        command: &[u8],
-        response: &mut [u8],
-    ) -> Result<usize, ControllerError> {
-        let command = format!(
-            "{:?}:{}\r\n",
-            destination,
-            str::from_utf8(command).map_err(|_| ControllerError::CommandNotUtf8)?
-        );
+        command: &str,
+    ) -> Result<String, ControllerError> {
+        let command = format!("{:?}:{}\r\n", destination, command);
         let port = Arc::clone(&self.port);
 
-        let result = tokio::task::spawn_blocking(move || {
+        let response = tokio::task::spawn_blocking(move || {
             // The controller can only handle one command at a time, so acquire
             // the mutex to ensure no other commands are sent until we're done.
             let mut port = port.lock().map_err(|e| {
@@ -67,6 +62,9 @@ impl Controller {
             let mut response: Vec<u8> = Vec::new();
             let mut chunk = [0u8; USB_MAX_PACKET_SIZE as usize];
 
+            // Its safe to continually read chunks (i.e. we won't read past the
+            // terminator and into another response) because the controller only
+            // handles one command at a time so there will only be one response.
             while !response.ends_with(b"\r\n") {
                 let n = port.read(&mut chunk).map_err(|e| {
                     error!("failed to read controller response: {}", e);
@@ -89,17 +87,11 @@ impl Controller {
             ControllerError::Unknown
         })??;
 
-        if result.starts_with("ERR:") {
+        if response.starts_with("ERR:") {
             // Parse the error string between "ERR:" and the terminating "\r\n".
-            return Err(ControllerError::from_str(&result[4..result.len() - 2])?);
+            return Err(ControllerError::from_str(&response[4..response.len() - 2])?);
         }
 
-        let length = result.len();
-        if length > response.len() {
-            return Err(ControllerError::ResponseTooLong);
-        }
-
-        response[..length].copy_from_slice(result.as_bytes());
-        Ok(length)
+        Ok(response)
     }
 }
