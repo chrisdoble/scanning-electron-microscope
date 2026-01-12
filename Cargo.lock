@@ -847,6 +847,7 @@ dependencies = [
  "env_logger",
  "log",
  "serialport",
+ "thiserror",
  "tokio",
 ]
 

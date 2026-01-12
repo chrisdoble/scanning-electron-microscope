@@ -1,7 +1,9 @@
-use controller::{Controller, Destination};
+use adc::{Adc, PressureUnit};
+use controller::Controller;
 use log::*;
 use std::sync::Arc;
 
+mod adc;
 mod controller;
 
 #[tokio::main(flavor = "current_thread")]
@@ -13,10 +15,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .inspect_err(|_| error!("failed to create controller"))?,
     );
 
-    controller.send_command(Destination::ADC, "?GA1").await?;
-    controller
-        .send_command(Destination::TMP, "0010031102=?100")
-        .await?;
+    let adc = Adc::new(Arc::clone(&controller));
+    adc.set_pressure_unit(PressureUnit::Millibar).await?;
+    let pressure = adc.get_pressure(1).await?;
+    println!("{:?}", pressure);
 
     Ok(())
 }

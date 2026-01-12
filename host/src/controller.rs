@@ -73,6 +73,9 @@ impl Controller {
                 response.extend_from_slice(&chunk[..n]);
             }
 
+            // Remove the \r\n terminator.
+            response.truncate(response.len() - 2);
+
             let response =
                 String::from_utf8(response).map_err(|_| ControllerError::ResponseNotUtf8)?;
             debug!("Received response from controller: {:?}", response);
@@ -88,8 +91,8 @@ impl Controller {
         })??;
 
         if response.starts_with("ERR:") {
-            // Parse the error string between "ERR:" and the terminating "\r\n".
-            return Err(ControllerError::from_str(&response[4..response.len() - 2])?);
+            // Parse the error string after "ERR:".
+            return Err(ControllerError::from_str(&response[4..])?);
         }
 
         Ok(response)
