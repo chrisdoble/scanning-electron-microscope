@@ -1,7 +1,7 @@
 use crate::controller::{Controller, Destination};
 use common::ControllerError;
 use log::*;
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 use thiserror::Error;
 
 /// An error returned from the ADC.
@@ -129,11 +129,28 @@ pub enum PressureUnit {
     Volt,
 }
 
+impl Display for PressureUnit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PressureUnit::Millibar => f.write_str("mbar"),
+            PressureUnit::Pascal => f.write_str("Pa"),
+            PressureUnit::Torr => f.write_str("Torr"),
+            PressureUnit::Volt => f.write_str("V"),
+        }
+    }
+}
+
 /// A pressure measurement, e.g. 1.00 x 10^3 mbar.
 #[derive(Clone, Copy, Debug)]
 pub struct Pressure {
     pub unit: PressureUnit,
     pub value: f64,
+}
+
+impl Display for Pressure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.value, self.unit)
+    }
 }
 
 struct AdcState {
@@ -144,16 +161,16 @@ struct AdcState {
     pressure_unit: Option<PressureUnit>,
 }
 
-pub struct Adc {
-    state: tokio::sync::Mutex<AdcState>,
-}
-
 /// Interacts with the Edwards ADC MkII pressure gauge controller.
 ///
 /// Only some commands and queries are implemented. See the controller manual
 /// for a list of all supported commands and queries.
+pub struct Adc {
+    state: tokio::sync::Mutex<AdcState>,
+}
+
 impl Adc {
-    pub fn new(controller: Arc<Controller>) -> Adc {
+    pub fn new(controller: Arc<Controller>) -> Self {
         Self {
             state: tokio::sync::Mutex::new(AdcState {
                 controller,
