@@ -6,7 +6,7 @@ use std::{
     f64, fs,
     sync::Arc,
     thread,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 mod adc;
 mod controller;
@@ -63,7 +63,11 @@ fn graph_measurements(measurements: &Vec<(f64, f64)>) -> Result<(), Box<dyn std:
     }
 
     // Graph the measurements.
-    let root = BitMapBackend::new("out/graph.png", (1024, 768)).into_drawing_area();
+    //
+    // If we overwrite the existing graph file (`out/graph.png`), killing the
+    // program can sometimes leave the file in an invalid state. To avoid this,
+    // temporarily write to another file and rename it once we're done.
+    let root = BitMapBackend::new("out/graph_new.png", (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
 
     let mut chart = ChartBuilder::on(&root)
@@ -71,33 +75,48 @@ fn graph_measurements(measurements: &Vec<(f64, f64)>) -> Result<(), Box<dyn std:
         .margin(10)
         .set_label_area_size(LabelAreaPosition::Left, 60)
         .set_label_area_size(LabelAreaPosition::Bottom, 60)
-        .build_cartesian_2d(0.0..measurements.last().unwrap().0, min..max)?;
+        .build_cartesian_2d(
+            // Convert seconds to minutes.
+            0.0..measurements.last().unwrap().0 / 60.0,
+            min..max,
+        )?;
 
     chart
         .configure_mesh()
         .axis_desc_style(("sans-serif", 18))
         .disable_x_mesh()
         .max_light_lines(5)
-        .x_desc("Time (s)")
+        .x_desc("Time (min)")
         .x_label_formatter(&|x| format!("{:.0}", x))
         .x_label_style(("sans-serif", 16))
         .y_desc("Pressure (mbar)")
         .y_label_style(("sans-serif", 16))
         .draw()?;
 
-    chart.draw_series(LineSeries::new(measurements.iter().copied(), &BLUE))?;
+    chart.draw_series(LineSeries::new(
+        // Convert seconds to minutes.
+        measurements.iter().map(|&(t, p)| (t / 60.0, p)),
+        &BLUE,
+    ))?;
     root.present()?;
+    fs::rename("out/graph_new.png", "out/graph.png")?;
+
+    // Update the file's modified time so VS Code refreshes it.
+    fs::File::open("out/graph.png")?.set_modified(SystemTime::now())?;
+
     Ok(())
 }
 
 fn log_measurements(measurements: &Vec<(f64, f64)>) -> Result<(), Box<dyn std::error::Error>> {
     fs::write(
-        "out/log.txt",
-        measurements
-            .iter()
-            .map(|(t, p)| format!("{},{}", t, p))
-            .collect::<Vec<String>>()
-            .join("\n"),
+        "out/log_new.csv",
+        String::from("Time (s),Pressure (mbar)\n")
+            + &measurements
+                .iter()
+                .map(|(t, p)| format!("{},{}", t, p))
+                .collect::<Vec<String>>()
+                .join("\n"),
     )?;
+    fs::rename("out/log_new.csv", "out/log.csv")?;
     Ok(())
 }
