@@ -1,2 +1,14 @@
+# Cargo files
 **/target
+
+# KiCad files
+**/*-backups
+*.bak
+*.kicad_prl
+~*.lck
+\#auto_saved_files#
+_autosave*
+fp-info-cache
+
+# MacOS files
 .DS_Store
