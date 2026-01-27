@@ -12,3 +12,7 @@ fp-info-cache
 
 # MacOS files
 .DS_Store
+
+# Python files
+.mypy_cache
+.venv

@@ -11,8 +11,9 @@ I'm currently building a vacuum system along with a device to control it from a 
 
 The repository structure is as follows:
 
+- [`case`](case): A Python package containing code to generate an STL file of the controller's 3D-printable case.
 - [`common`](common): A Rust crate containing code common to `firmware` and `host`.
-- [`electronics`](electronics): KiCad files for the controller PCB.
+- [`electronics`](electronics): Contains KiCad files for the controller PCB.
 - [`firmware`](firmware): A Rust crate containing the [Embassy](https://github.com/embassy-rs/embassy)-based firmware for the controller.
 - [`host`](host): A Rust crate containing code to interface with the controller from a host computer.
 
@@ -32,6 +33,7 @@ The repository structure is as follows:
 
 - [probe-rs](https://probe.rs/)
 - [Rust](https://rust-lang.org/)
+- [uv](https://docs.astral.sh/uv/)
 
 # Developing
 
