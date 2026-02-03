@@ -11,6 +11,7 @@ I'm currently building a vacuum system along with a device to control it from a 
 
 The repository structure is as follows:
 
+- [`case`](case): 3D models of the controller case for 3D printing.
 - [`common`](common): A Rust crate containing code common to `firmware` and `host`.
 - [`electronics`](electronics): KiCad files for the controller PCB.
 - [`firmware`](firmware): A Rust crate containing the [Embassy](https://github.com/embassy-rs/embassy)-based firmware for the controller.
