@@ -1,5 +1,7 @@
-use adc::{Adc, PressureUnit};
-use controller::Controller;
+use host::{
+    adc::{Adc, PressureUnit},
+    controller::Controller,
+};
 use log::*;
 use plotters::prelude::*;
 use std::{
@@ -8,9 +10,6 @@ use std::{
     thread,
     time::{Duration, Instant, SystemTime},
 };
-mod adc;
-mod controller;
-mod tmp;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -32,6 +32,7 @@ pub enum TmpError {
 }
 
 /// Describes the action of a telegram (command or response).
+#[allow(dead_code)]
 enum Action {
     /// The telegram contains a description of a parameter (its value).
     ///
