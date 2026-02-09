@@ -121,8 +121,9 @@ impl AdcError {
 }
 
 /// The unit in which pressure is being reported by the ADC.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum PressureUnit {
+    #[default]
     Millibar,
     Pascal,
     Torr,
@@ -141,7 +142,7 @@ impl Display for PressureUnit {
 }
 
 /// A pressure measurement, e.g. 1.00 x 10^3 mbar.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Pressure {
     pub unit: PressureUnit,
     pub value: f64,
@@ -153,8 +154,11 @@ impl Display for Pressure {
     }
 }
 
+#[derive(Debug)]
 struct AdcState {
     controller: Arc<Controller>,
+    /// The gauge to interact with.
+    gauge_number: u8,
     /// The pressure unit currently being used by the ADC.
     ///
     /// Starts as `None` and is set when we first read/write the units.
@@ -165,15 +169,17 @@ struct AdcState {
 ///
 /// Only some commands and queries are implemented. See the controller manual
 /// for a list of all supported commands and queries.
+#[derive(Debug)]
 pub struct Adc {
     state: tokio::sync::Mutex<AdcState>,
 }
 
 impl Adc {
-    pub fn new(controller: Arc<Controller>) -> Self {
+    pub fn new(controller: Arc<Controller>, gauge_number: u8) -> Self {
         Self {
             state: tokio::sync::Mutex::new(AdcState {
                 controller,
+                gauge_number,
                 pressure_unit: None,
             }),
         }
@@ -182,7 +188,7 @@ impl Adc {
     /// Gets the pressure currently reported by the specified gauge number.
     ///
     /// The pressure is returned in the ADC's current units.
-    pub async fn get_pressure(&self, gauge_number: u8) -> Result<Pressure, AdcError> {
+    pub async fn get_pressure(&self) -> Result<Pressure, AdcError> {
         let mut state = self.state.lock().await;
 
         // If we don't know the ADC's current pressure units, query them.
@@ -202,7 +208,7 @@ impl Adc {
         }
 
         let response = self
-            .send_command(&state.controller, &format!("?GA{}", gauge_number))
+            .send_command(&state.controller, &format!("?GA{}", state.gauge_number))
             .await?;
 
         let unit = state.pressure_unit.unwrap();

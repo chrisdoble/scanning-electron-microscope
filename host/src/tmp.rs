@@ -50,6 +50,7 @@ enum Action {
 ///
 /// Only some parameters are supported. See the "Pumping Operations With DCU"
 /// document for a full list of all parameters supported by the TC 600.
+#[derive(Debug)]
 pub struct Tmp {
     address: String,
     controller: tokio::sync::Mutex<Arc<Controller>>,
@@ -63,14 +64,75 @@ impl Tmp {
         }
     }
 
-    pub async fn get_operating_hours(&self) -> Result<i32, TmpError> {
+    /// Gets the pump's current draw in amperes.
+    pub async fn get_current(&self) -> Result<f32, TmpError> {
+        // Real numbers are expressed using 6 digits: the first four are before
+        // the decimal place and the last two are after, e.g. 123456 is 1234.56.
+        // Thus, we multiply the result by 0.01 to get the actual value.
+        Ok(self.read_parameter::<f32>("310").await? * 0.01)
+    }
+
+    /// Gets the pump's current rotation speed in hertz.
+    pub async fn get_current_rotation_speed(&self) -> Result<u16, TmpError> {
+        self.read_parameter("309").await
+    }
+
+    /// Gets the pump's total operating time in hours.
+    pub async fn get_operating_time(&self) -> Result<u32, TmpError> {
+        self.read_parameter("311").await
+    }
+
+    /// Gets the pump's target rotation speed in hertz.
+    pub async fn get_target_rotation_speed(&self) -> Result<u16, TmpError> {
+        self.read_parameter("308").await
+    }
+
+    /// Gets whether the pump is running.
+    pub async fn is_running(&self) -> Result<bool, TmpError> {
+        Ok(self.read_parameter::<String>("010").await? == "111111")
+    }
+
+    /// Reads a parameter from the pump.
+    ///
+    /// The response is parsed into a value of type `T`.
+    async fn read_parameter<T: std::str::FromStr>(
+        &self,
+        parameter_number: &str,
+    ) -> Result<T, TmpError> {
         let controller = self.controller.lock().await;
         let response = self
-            .send_command(&controller, Action::Read, "311", "=?")
+            .send_command(&controller, Action::Read, parameter_number, "=?")
             .await?;
         Ok(response
-            .parse::<i32>()
+            .parse::<T>()
             .map_err(|_| TmpError::InvalidResponse)?)
+    }
+
+    /// Turns the pump on or off.
+    ///
+    /// IMPORTANT: The pump's forevacuum pressure must be lower than 18 mbar
+    /// before turning it on, otherwise it may be catastrophically damaged.
+    pub async fn set_running(&self, running: bool) -> Result<(), TmpError> {
+        let value = if running { "111111" } else { "000000" };
+        self.set_parameter("010", value).await
+    }
+
+    /// Sets a parameter on the pump.
+    ///
+    /// The value must be as described in the Pfeiffer Vacuum Control document,
+    /// e.g. booleans must be "000000" for false or "111111" for true. Other
+    /// values, e.g. "0" or "1", will be ignored resulting in a timeout error.
+    async fn set_parameter(&self, parameter_number: &str, value: &str) -> Result<(), TmpError> {
+        let controller = self.controller.lock().await;
+        let response = self
+            .send_command(&controller, Action::Describe, parameter_number, value)
+            .await?;
+        // The TMP confirms the request by returning the set value.
+        if response == value {
+            Ok(())
+        } else {
+            Err(TmpError::InvalidResponse)
+        }
     }
 
     async fn send_command(

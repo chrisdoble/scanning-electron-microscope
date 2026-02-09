@@ -14,6 +14,7 @@ pub enum Destination {
     TMP,
 }
 
+#[derive(Debug)]
 pub struct Controller {
     port: Arc<Mutex<Box<dyn serialport::SerialPort>>>,
 }
