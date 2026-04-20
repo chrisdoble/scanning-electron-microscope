@@ -91,9 +91,8 @@ impl Controller {
             ControllerError::Unknown
         })??;
 
-        if response.starts_with("ERR:") {
-            // Parse the error string after "ERR:".
-            return Err(ControllerError::from_str(&response[4..])?);
+        if let Some(e) = response.strip_prefix("ERR:") {
+            return Err(ControllerError::from_str(e)?);
         }
 
         Ok(response)

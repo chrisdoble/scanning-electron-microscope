@@ -103,9 +103,7 @@ impl Tmp {
         let response = self
             .send_command(&controller, Action::Read, parameter_number, "=?")
             .await?;
-        Ok(response
-            .parse::<T>()
-            .map_err(|_| TmpError::InvalidResponse)?)
+        response.parse::<T>().map_err(|_| TmpError::InvalidResponse)
     }
 
     /// Turns the pump on or off.

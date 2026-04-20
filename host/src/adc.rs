@@ -232,7 +232,7 @@ impl Adc {
                     .parse::<i32>()
                     .map_err(|_| AdcError::InvalidPressureFormat)?;
 
-                mantissa * (10.0 as f64).powi(exponent)
+                mantissa * 10.0_f64.powi(exponent)
             }
         };
 

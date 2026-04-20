@@ -90,7 +90,7 @@ async fn main() -> Result<(), AnyError> {
         // will return when the user has requested to quit the application.
         {
             let app = Arc::clone(&app);
-            let _ = tokio::spawn(async move {
+            tokio::spawn(async move {
                 loop {
                     match app.update_ui(&mut terminal).await {
                         Ok(exit) => {
@@ -170,7 +170,7 @@ impl App {
     async fn graph_pressure(&self) -> Result<(), AnyError> {
         let state = self.state.lock().await;
 
-        if state.pressures.len() == 0 {
+        if state.pressures.is_empty() {
             return Ok(());
         }
 
