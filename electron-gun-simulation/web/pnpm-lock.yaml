@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      wasm-api:
+        specifier: file:../crates/wasm-api/pkg
+        version: file:../crates/wasm-api/pkg
     devDependencies:
       typescript:
         specifier: 6.0.3
@@ -298,6 +302,9 @@ packages:
       yaml:
         optional: true
 
+  wasm-api@file:../crates/wasm-api/pkg:
+    resolution: {directory: ../crates/wasm-api/pkg, type: directory}
+
 snapshots:
 
   '@emnapi/core@1.9.2':
@@ -493,3 +500,5 @@ snapshots:
       tinyglobby: 0.2.16
     optionalDependencies:
       fsevents: 2.3.3
+
+  wasm-api@file:../crates/wasm-api/pkg: {}

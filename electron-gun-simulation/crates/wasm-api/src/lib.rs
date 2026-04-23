@@ -56,6 +56,37 @@ pub struct GunParameters {
     pub anode_voltage_v: f64,
 }
 
+impl Default for GunParameters {
+    fn default() -> Self {
+        Self {
+            filament_radius_mm: 0.15,
+            filament_thickness_mm: 0.05,
+            filament_z_mm: 10.0,
+            filament_voltage_v: -10_000.0,
+            wehnelt_outer_radius_mm: 3.0,
+            wehnelt_inner_radius_mm: 2.5,
+            wehnelt_z_mm: 8.0,
+            wehnelt_height_mm: 6.0,
+            wehnelt_cap_thickness_mm: 0.5,
+            wehnelt_aperture_radius_mm: 0.5,
+            wehnelt_bias_v: -200.0,
+            anode_z_mm: 3.0,
+            anode_thickness_mm: 1.0,
+            anode_outer_radius_mm: 3.0,
+            anode_aperture_radius_mm: 0.5,
+            anode_voltage_v: 0.0,
+        }
+    }
+}
+
+#[wasm_bindgen]
+impl GunParameters {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 #[wasm_bindgen(getter_with_clone)]
 pub struct GunSolution {
     #[wasm_bindgen(readonly)]
