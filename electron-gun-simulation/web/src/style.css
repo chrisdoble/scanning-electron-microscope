@@ -1,0 +1,70 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  display: flex;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+#controls {
+  width: 300px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 1rem;
+  border-right: 1px solid #ddd;
+  background: #f8f8f8;
+}
+
+#visualisation {
+  flex: 1;
+  background: #111;
+}
+
+.electrode-group {
+  margin-bottom: 1.5rem;
+}
+
+.electrode-group:last-child {
+  margin-bottom: 0;
+}
+
+.electrode-group h2 {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  margin: 0 0 0.6rem;
+}
+
+.slider-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.slider-row label {
+  color: #333;
+}
+
+.slider-value {
+  font-variant-numeric: tabular-nums;
+  color: #555;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.slider-row input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0.2rem 0 0;
+  cursor: pointer;
+}
+

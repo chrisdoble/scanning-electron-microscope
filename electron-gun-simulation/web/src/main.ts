@@ -1,17 +1,18 @@
-import init, { GunParameters, solve_electron_gun } from 'wasm-api';
+import init, { GunParameters } from 'wasm-api';
+import { buildControls } from './sliders';
+import type { AppState } from './state';
 
 await init();
 
-const params = new GunParameters();
-const solution = solve_electron_gun(params);
+const state: AppState = {
+  gunParameters: new GunParameters(),
+};
 
-console.log('GunSolution', {
-  n_r: solution.n_r,
-  n_z: solution.n_z,
-  h_m: solution.h_m,
-  iterations: solution.iterations,
-  potential_v_length: solution.potential_v.length,
-  e_r_v_per_m_length: solution.e_r_v_per_m.length,
-  e_z_v_per_m_length: solution.e_z_v_per_m.length,
-  mask_length: solution.mask.length,
+buildControls(state, () => {
+  console.log('GunParameters updated', {
+    filament_radius_mm: state.gunParameters.filament_radius_mm,
+    filament_voltage_v: state.gunParameters.filament_voltage_v,
+    wehnelt_bias_v: state.gunParameters.wehnelt_bias_v,
+    anode_voltage_v: state.gunParameters.anode_voltage_v,
+  });
 });
