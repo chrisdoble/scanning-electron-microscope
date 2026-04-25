@@ -1,4 +1,4 @@
-use solver::{Cell, Grid, Mask, SolverConfig, compute_electric_field, solve_laplace_cylindrical};
+use solver::{compute_electric_field, solve_laplace_cylindrical, Cell, Grid, Mask, SolverConfig};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -87,7 +87,7 @@ impl GunParameters {
     }
 }
 
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen]
 pub struct GunSolution {
     #[wasm_bindgen(readonly)]
     pub n_r: usize,
@@ -100,14 +100,39 @@ pub struct GunSolution {
 
     // All grids are length n_r * n_z, row-major as per PHYSICS.md §2.2.
     // Accessing these from JS returns a copy (clone) of the data.
-    #[wasm_bindgen(readonly)]
-    pub potential_v: Vec<f64>, // potential in volts
-    #[wasm_bindgen(readonly)]
-    pub e_r_v_per_m: Vec<f64>, // radial E-field component in V/m
-    #[wasm_bindgen(readonly)]
-    pub e_z_v_per_m: Vec<f64>, // axial E-field component in V/m
-    #[wasm_bindgen(readonly)]
-    pub mask: Vec<u8>, // 0 = Free, 1 = Fixed; useful for UI overlays
+    potential_v: Vec<f64>, // potential in volts
+    e_r_v_per_m: Vec<f64>, // radial E-field component in V/m
+    e_z_v_per_m: Vec<f64>, // axial E-field component in V/m
+    mask: Vec<u8>,         // 0 = Free, 1 = Fixed; useful for UI overlays
+}
+
+// By default, wasm-bindgen expresses Vec<f64> as Float64Array and Vec<u8> as
+// Uint8Array in TypeScript. Those types are generic on the type of ArrayBuffer
+// backing them (ArrayBuffer or SharedArrayBuffer). The latter is only used
+// when multithreading is enabled (which we're not using) so the types are
+// unnecessarily generic which causes errors with (de)serialisation. Define
+// getters here with custom return types to work around this.
+#[wasm_bindgen]
+impl GunSolution {
+    #[wasm_bindgen(getter, unchecked_return_type = "Float64Array<ArrayBuffer>")]
+    pub fn potential_v(&self) -> Vec<f64> {
+        self.potential_v.clone()
+    }
+
+    #[wasm_bindgen(getter, unchecked_return_type = "Float64Array<ArrayBuffer>")]
+    pub fn e_r_v_per_m(&self) -> Vec<f64> {
+        self.e_r_v_per_m.clone()
+    }
+
+    #[wasm_bindgen(getter, unchecked_return_type = "Float64Array<ArrayBuffer>")]
+    pub fn e_z_v_per_m(&self) -> Vec<f64> {
+        self.e_z_v_per_m.clone()
+    }
+
+    #[wasm_bindgen(getter, unchecked_return_type = "Uint8Array<ArrayBuffer>")]
+    pub fn mask(&self) -> Vec<u8> {
+        self.mask.clone()
+    }
 }
 
 /// Solve the electron gun potential field.

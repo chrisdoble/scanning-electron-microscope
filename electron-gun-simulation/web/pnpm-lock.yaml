@@ -11,6 +11,9 @@ importers:
       wasm-api:
         specifier: file:../crates/wasm-api/pkg
         version: file:../crates/wasm-api/pkg
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       typescript:
         specifier: 6.0.3
@@ -305,6 +308,9 @@ packages:
   wasm-api@file:../crates/wasm-api/pkg:
     resolution: {directory: ../crates/wasm-api/pkg, type: directory}
 
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
 snapshots:
 
   '@emnapi/core@1.9.2':
@@ -502,3 +508,5 @@ snapshots:
       fsevents: 2.3.3
 
   wasm-api@file:../crates/wasm-api/pkg: {}
+
+  zod@4.3.6: {}

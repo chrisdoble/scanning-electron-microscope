@@ -7,7 +7,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "wasm-api": "file:../crates/wasm-api/pkg"
+    "wasm-api": "file:../crates/wasm-api/pkg",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "typescript": "6.0.3",

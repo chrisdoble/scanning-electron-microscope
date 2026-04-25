@@ -1,11 +1,7 @@
-import type { GunParameters } from 'wasm-api';
+import type { GunParameters } from './worker-protocol';
 import type { AppState } from './state';
 
-// All keys of GunParameters whose value type is number.
-// Derived from the class so it stays in sync if fields are added or renamed.
-type GunParameterKey = {
-  [K in keyof GunParameters]: GunParameters[K] extends number ? K : never;
-}[keyof GunParameters];
+type GunParameterKey = keyof GunParameters;
 
 interface SliderDefinition {
   label: string;
@@ -55,7 +51,6 @@ const GROUPS: GroupDefinition[] = [
   },
 ];
 
-// Returns decimal places needed to display a value at the given step resolution.
 function decimalsForStep(step: number): number {
   return Math.max(0, -Math.floor(Math.log10(step)));
 }
@@ -66,10 +61,11 @@ function formatValue(value: number, step: number): string {
 
 function buildSliderRow(
   definition: SliderDefinition,
-  parameters: GunParameters,
-  onChange: () => void,
+  params: GunParameters,
+  onInput: () => void,
+  onCommit: () => void,
 ): HTMLElement {
-  const initialValue: number = parameters[definition.field];
+  const initialValue: number = params[definition.field];
 
   const row = document.createElement('div');
   row.className = 'slider-row';
@@ -90,9 +86,18 @@ function buildSliderRow(
 
   input.addEventListener('input', () => {
     const value = Number(input.value);
-    parameters[definition.field] = value;
+    params[definition.field] = value;
     valueSpan.textContent = `${formatValue(value, definition.step)} ${definition.unit}`;
-    onChange();
+    onInput();
+  });
+
+  // 'change' fires on slider release — trigger an immediate solve instead of
+  // waiting for the debounce timer that 'input' events use.
+  input.addEventListener('change', () => {
+    const value = Number(input.value);
+    params[definition.field] = value;
+    valueSpan.textContent = `${formatValue(value, definition.step)} ${definition.unit}`;
+    onCommit();
   });
 
   row.appendChild(label);
@@ -101,7 +106,11 @@ function buildSliderRow(
   return row;
 }
 
-export function buildControls(state: AppState, onChange: () => void): void {
+export function buildControls(
+  state: AppState,
+  onInput: () => void,
+  onCommit: () => void,
+): void {
   const panel = document.getElementById('controls');
   if (!panel) throw new Error('#controls element not found');
 
@@ -114,7 +123,7 @@ export function buildControls(state: AppState, onChange: () => void): void {
     section.appendChild(heading);
 
     for (const def of group.sliders) {
-      section.appendChild(buildSliderRow(def, state.gunParameters, onChange));
+      section.appendChild(buildSliderRow(def, state.parameters, onInput, onCommit));
     }
 
     panel.appendChild(section);
