@@ -1,4 +1,5 @@
 import { buildControls } from './sliders';
+import { renderSolution } from './render';
 import type { AppState } from './state';
 import { DEFAULT_GUN_PARAMETERS, WorkerResponseSchema } from './worker-protocol';
 
@@ -8,6 +9,11 @@ const state: AppState = {
   solution: null,
   solving: false,
 };
+
+const canvas = document.querySelector('#visualisation > canvas');
+if (!(canvas instanceof HTMLCanvasElement)) {
+  throw new Error('Visualisation canvas not found');
+}
 
 const worker = new Worker(new URL('./solver-worker.ts', import.meta.url), { type: 'module' });
 
@@ -22,6 +28,7 @@ worker.addEventListener('message', (event: MessageEvent) => {
 
   if (msg.type === 'success') {
     state.solution = msg.solution;
+    renderSolution(canvas, msg.solution);
     console.log('Solve result:', {
       n_r: msg.solution.n_r,
       n_z: msg.solution.n_z,

@@ -139,8 +139,23 @@ impl GunSolution {
 #[wasm_bindgen]
 pub fn solve_electron_gun(_params: &GunParameters) -> Result<GunSolution, JsError> {
     // TODO: rasterise geometry from _params (ARCHITECTURE.md §4.3).
-    let mut potential = Grid::new(10, 10, 1e-3);
-    let mask = Mask::new(10, 10);
+    //
+    // Stub geometry: a horizontal band fixed at -1 000 V, running from the
+    // axis (i_r = 0) to i_r = 24 (just past half the grid width) at rows
+    // i_z = 18–21.  This exercises the mirrored cross-section rendering
+    // without needing a real gun geometry.
+    let n_r: usize = 50;
+    let n_z: usize = 40;
+    let mut potential = Grid::new(n_r, n_z, 1e-3);
+    let mut mask = Mask::new(n_r, n_z);
+
+    for i_z in 18..22_usize {
+        for i_r in 0..25_usize {
+            let idx = mask.idx(i_r, i_z);
+            mask.data[idx] = Cell::Fixed;
+            potential.data[idx] = -1_000.0;
+        }
+    }
 
     let result = solve_laplace_cylindrical(&mut potential, &mask, &SolverConfig::default())
         .map_err(|e| JsError::new(&e.to_string()))?;
