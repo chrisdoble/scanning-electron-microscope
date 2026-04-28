@@ -91,12 +91,34 @@ pub enum SolverError {
     InvalidOmega(f64),
     #[error("tolerance {0} is not strictly positive")]
     InvalidTolerance(f64),
-    #[error("solver did not converge after {iterations} iterations; final residual {residual_v} V")]
+    #[error("outer boundary point (i_r={i_r}, i_z={i_z}) must be Fixed")]
+    InvalidOuterBoundary { i_r: usize, i_z: usize },
+    #[error(
+        "solver did not converge after {iterations} iterations; final residual {residual_v} V"
+    )]
     MaxIterationsExceeded { iterations: usize, residual_v: f64 },
 }
 
 /// Solves Laplace's equation in place on `potential`, updating only `Free`
-/// points. See PHYSICS.md §4 and ARCHITECTURE.md §3.3.
+/// points as marked in `mask`. Uses SOR as specified in PHYSICS.md §4.
+///
+/// The function validates the following before solving and returns the
+/// corresponding `SolverError` if any check fails (without modifying the
+/// potential grid):
+/// - `potential` and `mask` have the same dimensions.
+/// - The grid has at least 3 points in each direction.
+/// - `config.omega` is in the range (0, 2).
+/// - `config.tolerance_v` is strictly positive (> 0).
+/// - All outer boundary points (i_r = N_r−1, i_z = 0, i_z = N_z−1) are
+///   `Fixed` (any potential is allowed).
+///
+/// If the solver does not converge within `config.max_iterations`, it
+/// returns `SolverError::MaxIterationsExceeded`.
+///
+/// The caller is responsible for:
+/// - Pre-setting Dirichlet values on `Fixed` electrode points in the
+///   potential grid.
+/// - Leaving the axis (i_r = 0) as `Free` unless it lies on an electrode.
 pub fn solve_laplace_cylindrical(
     potential: &mut Grid,
     mask: &Mask,
@@ -121,10 +143,89 @@ pub fn solve_laplace_cylindrical(
         return Err(SolverError::InvalidTolerance(config.tolerance_v));
     }
 
-    // TODO: implement SOR iteration (PHYSICS.md §4).
-    Ok(SolverResult {
-        iterations: 0,
-        final_residual_v: 0.0,
+    let n_r = potential.n_r;
+    let n_z = potential.n_z;
+
+    // Validate outer boundary: every cell on i_z=0, i_z=n_z-1, and
+    // i_r=n_r-1 must be Fixed (far-field Dirichlet, PHYSICS.md §2.5).
+    for i_r in 0..n_r {
+        for i_z in [0, n_z - 1] {
+            let idx = potential.idx(i_r, i_z);
+            if mask.data[idx] != Cell::Fixed {
+                return Err(SolverError::InvalidOuterBoundary { i_r, i_z });
+            }
+        }
+    }
+    for i_z in 0..n_z {
+        let idx = potential.idx(n_r - 1, i_z);
+        if mask.data[idx] != Cell::Fixed {
+            return Err(SolverError::InvalidOuterBoundary { i_r: n_r - 1, i_z });
+        }
+    }
+
+    let omega = config.omega;
+
+    // Retained across iterations so MaxIterationsExceeded can report it.
+    let mut max_residual = 0.0_f64;
+
+    for iteration in 0..config.max_iterations {
+        max_residual = 0.0;
+
+        // Row-major sweep: z is the slow axis, r the fast axis (PHYSICS.md §2.2).
+        //
+        // We only visit i_z in 1..n_z-1 and i_r in 0..n_r-1.  The outer
+        // boundary rows/columns (i_z=0, i_z=n_z-1, i_r=n_r-1) have no valid
+        // stencil and must be Fixed by the caller (ARCHITECTURE.md §3.3).
+        for i_z in 1..n_z - 1 {
+            // --- Axis (i_r = 0): equation (4), PHYSICS.md §2.4 ---
+            {
+                let idx = potential.idx(0, i_z);
+                if mask.data[idx] == Cell::Free {
+                    // V_GS = (1/6) [4 V[1,j] + V[0,j+1] + V[0,j−1]]
+                    let v_gs = (4.0 * potential.data[potential.idx(1, i_z)]
+                        + potential.data[potential.idx(0, i_z + 1)]
+                        + potential.data[potential.idx(0, i_z - 1)])
+                        / 6.0;
+                    let v_old = potential.data[idx];
+                    let v_new = (1.0 - omega) * v_old + omega * v_gs;
+                    potential.data[idx] = v_new;
+                    max_residual = max_residual.max((v_new - v_old).abs());
+                }
+            }
+
+            // --- Interior (1 ≤ i_r ≤ N_r−2): equation (2), PHYSICS.md §2.3 ---
+            for i_r in 1..n_r - 1 {
+                let idx = potential.idx(i_r, i_z);
+                if mask.data[idx] == Cell::Free {
+                    let i = i_r as f64;
+                    // V_GS = (1/4) [ V[i+1,j] (1+1/(2i))
+                    //              + V[i−1,j] (1−1/(2i))
+                    //              + V[i,j+1] + V[i,j−1] ]
+                    let v_gs = (potential.data[potential.idx(i_r + 1, i_z)]
+                        * (1.0 + 1.0 / (2.0 * i))
+                        + potential.data[potential.idx(i_r - 1, i_z)] * (1.0 - 1.0 / (2.0 * i))
+                        + potential.data[potential.idx(i_r, i_z + 1)]
+                        + potential.data[potential.idx(i_r, i_z - 1)])
+                        / 4.0;
+                    let v_old = potential.data[idx];
+                    let v_new = (1.0 - omega) * v_old + omega * v_gs;
+                    potential.data[idx] = v_new;
+                    max_residual = max_residual.max((v_new - v_old).abs());
+                }
+            }
+        }
+
+        if max_residual < config.tolerance_v {
+            return Ok(SolverResult {
+                iterations: iteration + 1,
+                final_residual_v: max_residual,
+            });
+        }
+    }
+
+    Err(SolverError::MaxIterationsExceeded {
+        iterations: config.max_iterations,
+        residual_v: max_residual,
     })
 }
 
