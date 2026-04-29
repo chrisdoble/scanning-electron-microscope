@@ -149,6 +149,22 @@ pub fn solve_electron_gun(_params: &GunParameters) -> Result<GunSolution, JsErro
     let mut potential = Grid::new(n_r, n_z, 1e-3);
     let mut mask = Mask::new(n_r, n_z);
 
+    // Fix outer boundary at V = 0 (far-field Dirichlet condition).
+    for i_r in 0..n_r {
+        let idx_bottom = mask.idx(i_r, 0);
+        let idx_top = mask.idx(i_r, n_z - 1);
+        mask.data[idx_bottom] = Cell::Fixed;
+        potential.data[idx_bottom] = 0.0;
+        mask.data[idx_top] = Cell::Fixed;
+        potential.data[idx_top] = 0.0;
+    }
+    for i_z in 0..n_z {
+        let idx = mask.idx(n_r - 1, i_z);
+        mask.data[idx] = Cell::Fixed;
+        potential.data[idx] = 0.0;
+    }
+
+    // Stub interior electrode: a horizontal band fixed at -1 000 V.
     for i_z in 18..22_usize {
         for i_r in 0..25_usize {
             let idx = mask.idx(i_r, i_z);

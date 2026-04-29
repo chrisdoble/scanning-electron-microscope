@@ -1,7 +1,9 @@
 import type { GunSolution } from './worker-protocol';
+import { interpolate } from './turbo_colormap';
 
 /**
- * Renders the electrode mask from `solution` onto `canvas`.
+ * Renders the potential field from `solution` onto `canvas` using the Turbo
+ * colormap. Electrode cells (Fixed) are drawn black.
  *
  * Layout (UI.md §6.1):
  *   - Full cross-section: the r ≥ 0 half is mirrored about the z-axis.
@@ -9,18 +11,17 @@ import type { GunSolution } from './worker-protocol';
  *   - Canvas height = n_z.
  *   - i_z = 0 (z = 0) is at the bottom of the canvas (array row 0 → canvas row n_z − 1).
  *
- * Fixed cells are drawn in black; Free cells in white.
+ * The potential range is mapped linearly to [0, 1] across the full colormap.
  */
 export function renderSolution(
   canvas: HTMLCanvasElement,
   solution: GunSolution,
 ): void {
-  const { n_r, n_z, mask } = solution;
+  const { n_r, n_z, mask, potential_v } = solution;
 
   const width = 2 * n_r - 1;
   const height = n_z;
 
-  // Setting width/height clears the canvas and updates its coordinate space.
   canvas.width = width;
   canvas.height = height;
 
@@ -29,30 +30,40 @@ export function renderSolution(
     throw new Error('Couldn\'t get visualisation canvas context');
   }
 
+  // Find potential range across all cells for colormap normalisation.
+  let minV = Infinity;
+  let maxV = -Infinity;
+  for (let i = 0; i < potential_v.length; i++) {
+    const v = potential_v[i];
+    if (v < minV) minV = v;
+    if (v > maxV) maxV = v;
+  }
+  const range = maxV - minV;
+
   const imageData = ctx.createImageData(width, height);
   const pixels = imageData.data; // Uint8ClampedArray, RGBA
 
-  // Fill white background.
-  for (let i = 0; i < pixels.length; i += 4) {
-    pixels[i + 0] = 255; // R
-    pixels[i + 1] = 255; // G
-    pixels[i + 2] = 255; // B
-    pixels[i + 3] = 255; // A
-  }
-
   for (let i_z = 0; i_z < n_z; i_z++) {
-    // Flip vertically: i_z = 0 is z = 0 (bottom), but canvas y = 0 is top.
-    const canvasY = n_z - 1 - i_z;
+    const canvasY = n_z - 1 - i_z; // flip: i_z=0 is bottom, canvas y=0 is top
 
     for (let i_r = 0; i_r < n_r; i_r++) {
-      if (mask[i_z * n_r + i_r] !== 1) continue;
+      const idx = i_z * n_r + i_r;
+      const isFixed = mask[idx] === 1;
 
-      // Right half: r = 0 is at the canvas centre (x = n_r − 1).
-      setBlack(pixels, canvasY, (n_r - 1) + i_r, width);
+      let r: number, g: number, b: number;
+      if (isFixed) {
+        r = g = b = 0; // electrodes: black
+      } else {
+        const t = range > 0 ? (potential_v[idx] - minV) / range : 0;
+        [r, g, b] = interpolate(t);
+      }
 
-      // Left half: mirror, but skip i_r = 0 so the axis column is drawn once.
+      // Right half: r = 0 is at canvas centre (x = n_r − 1).
+      setPixel(pixels, canvasY, (n_r - 1) + i_r, width, r, g, b);
+
+      // Left half: mirror, skip i_r = 0 so axis column is drawn once.
       if (i_r > 0) {
-        setBlack(pixels, canvasY, (n_r - 1) - i_r, width);
+        setPixel(pixels, canvasY, (n_r - 1) - i_r, width, r, g, b);
       }
     }
   }
@@ -60,15 +71,18 @@ export function renderSolution(
   ctx.putImageData(imageData, 0, 0);
 }
 
-function setBlack(
+function setPixel(
   pixels: Uint8ClampedArray,
   y: number,
   x: number,
   width: number,
+  r: number,
+  g: number,
+  b: number,
 ): void {
   const base = (y * width + x) * 4;
-  pixels[base + 0] = 0;
-  pixels[base + 1] = 0;
-  pixels[base + 2] = 0;
-  // Alpha already 255.
+  pixels[base + 0] = r;
+  pixels[base + 1] = g;
+  pixels[base + 2] = b;
+  pixels[base + 3] = 255;
 }
