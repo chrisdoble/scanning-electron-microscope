@@ -69,6 +69,49 @@ export function renderSolution(
   }
 
   ctx.putImageData(imageData, 0, 0);
+  drawLegend(ctx, minV, maxV);
+}
+
+const LEGEND_X = 9.5;
+const LEGEND_Y = 9.5;
+const LEGEND_W = 300;
+const LEGEND_H = 30;
+
+function drawLegend(ctx: CanvasRenderingContext2D, minV: number, maxV: number): void {
+  const gradient = ctx.createLinearGradient(LEGEND_X, 0, LEGEND_X + LEGEND_W, 0);
+  const colorStopCount = 20;
+  for (let i = 0; i <= colorStopCount; i++) {
+    const t = i / colorStopCount;
+    const [r, g, b] = interpolate(t);
+    gradient.addColorStop(t, `rgb(${r},${g},${b})`);
+  }
+  ctx.fillStyle = gradient;
+  ctx.fillRect(LEGEND_X, LEGEND_Y, LEGEND_W, LEGEND_H);
+
+  ctx.strokeStyle = 'black';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(LEGEND_X, LEGEND_Y, LEGEND_W, LEGEND_H);
+
+  ctx.fillStyle = 'white';
+  ctx.font = '14px monospace';
+  ctx.textBaseline = 'top';
+  const labelY = LEGEND_Y + LEGEND_H + 3;
+
+  ctx.textAlign = 'left';
+  ctx.fillText(formatVoltage(minV), LEGEND_X, labelY);
+
+  ctx.textAlign = 'center';
+  ctx.fillText(formatVoltage((minV + maxV) / 2), LEGEND_X + LEGEND_W / 2, labelY);
+
+  ctx.textAlign = 'right';
+  ctx.fillText(formatVoltage(maxV), LEGEND_X + LEGEND_W, labelY);
+}
+
+function formatVoltage(v: number): string {
+  const abs = Math.abs(v);
+  if (abs >= 100) return `${v.toFixed(0)} V`;
+  if (abs >= 10) return `${v.toFixed(1)} V`;
+  return `${v.toFixed(2)} V`;
 }
 
 function setPixel(
