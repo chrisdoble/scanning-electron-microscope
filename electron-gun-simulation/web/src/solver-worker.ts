@@ -24,6 +24,7 @@ if (pendingMessage !== null) {
 }
 
 function handleMessage(event: MessageEvent): void {
+  const t0 = performance.now();
   const parseResult = WorkerRequestSchema.safeParse(event.data);
   if (!parseResult.success) {
     const out: WorkerResponse = { type: 'error', message: `Invalid message: ${parseResult.error.message}` };
@@ -65,7 +66,7 @@ function handleMessage(event: MessageEvent): void {
     };
     result.free();
     p.free();
-    const out: WorkerResponse = { type: 'success', solution };
+    const out: WorkerResponse = { type: 'success', solution, duration_ms: performance.now() - t0 };
     postMessage(out, {
       transfer: [
         solution.potential_v.buffer,

@@ -137,48 +137,169 @@ impl GunSolution {
 
 /// Solve the electron gun potential field.
 #[wasm_bindgen]
-pub fn solve_electron_gun(_params: &GunParameters) -> Result<GunSolution, JsError> {
-    // TODO: rasterise geometry from _params (ARCHITECTURE.md §4.3).
-    //
-    // Stub geometry: a horizontal band fixed at -1 000 V, running from the
-    // axis (i_r = 0) to i_r = 24 (just past half the grid width) at rows
-    // i_z = 18–21.  This exercises the mirrored cross-section rendering
-    // without needing a real gun geometry.
-    let n_r: usize = 50;
-    let n_z: usize = 40;
-    let mut potential = Grid::new(n_r, n_z, 1e-3);
+pub fn solve_electron_gun(params: &GunParameters) -> Result<GunSolution, JsError> {
+    // 1. Convert mm → m (ARCHITECTURE.md §4.2 convention).
+    let fil_r = params.filament_radius_mm * 1e-3;
+    let fil_t = params.filament_thickness_mm * 1e-3;
+    let fil_z = params.filament_z_mm * 1e-3;
+    let fil_v = params.filament_voltage_v;
+
+    let weh_outer_r = params.wehnelt_outer_radius_mm * 1e-3;
+    let weh_inner_r = params.wehnelt_inner_radius_mm * 1e-3;
+    let weh_z = params.wehnelt_z_mm * 1e-3;
+    let weh_height = params.wehnelt_height_mm * 1e-3;
+    let weh_cap_t = params.wehnelt_cap_thickness_mm * 1e-3;
+    let weh_ap_r = params.wehnelt_aperture_radius_mm * 1e-3;
+    let weh_v = params.filament_voltage_v + params.wehnelt_bias_v;
+
+    let an_z = params.anode_z_mm * 1e-3;
+    let an_t = params.anode_thickness_mm * 1e-3;
+    let an_outer_r = params.anode_outer_radius_mm * 1e-3;
+    let an_ap_r = params.anode_aperture_radius_mm * 1e-3;
+    let an_v = params.anode_voltage_v;
+
+    // 2. Validate geometry (ARCHITECTURE.md §4.3).
+    if weh_inner_r >= weh_outer_r {
+        return Err(JsError::new(
+            "Wehnelt inner radius must be less than outer radius",
+        ));
+    }
+    if weh_ap_r >= weh_outer_r {
+        return Err(JsError::new(
+            "Wehnelt aperture radius must be less than outer radius",
+        ));
+    }
+    if an_ap_r >= an_outer_r {
+        return Err(JsError::new(
+            "Anode aperture radius must be less than outer radius",
+        ));
+    }
+    if fil_r >= weh_inner_r {
+        return Err(JsError::new(
+            "Filament radius must be less than Wehnelt inner radius",
+        ));
+    }
+
+    // 3. Electrode z-extents.
+    let fil_z_lo = fil_z - fil_t / 2.0;
+    let fil_z_hi = fil_z + fil_t / 2.0;
+    let weh_wall_z_lo = weh_z - weh_height / 2.0;
+    let weh_wall_z_hi = weh_z + weh_height / 2.0;
+    let weh_cap_z_lo = weh_wall_z_lo - weh_cap_t;
+    let weh_cap_z_hi = weh_wall_z_lo;
+    let an_z_lo = an_z - an_t / 2.0;
+    let an_z_hi = an_z + an_t / 2.0;
+
+    // 4. Bounding box of all electrodes.
+    let elec_r_max = weh_outer_r.max(an_outer_r);
+    let elec_z_min = fil_z_lo.min(weh_wall_z_lo).min(weh_cap_z_lo).min(an_z_lo);
+    let elec_z_max = fil_z_hi.max(weh_wall_z_hi).max(an_z_hi);
+
+    // Largest single-electrode dimension sets the far-field margin
+    // (ARCHITECTURE.md §4.3 step 2, PHYSICS.md §3.2).
+    let largest_dim = [
+        fil_r,
+        fil_t,
+        weh_outer_r,
+        weh_height + weh_cap_t,
+        an_outer_r,
+        an_t,
+    ]
+    .into_iter()
+    .fold(0.0_f64, f64::max);
+
+    let margin = 3.0 * largest_dim;
+    let r_max = elec_r_max + margin;
+    let z_lo = elec_z_min - margin; // physical z at i_z = 0
+    let z_range = (elec_z_max + margin) - z_lo;
+
+    // 5. Grid spacing h = min(smallest electrode dimension) / 10
+    //    (PHYSICS.md §2.1).  Floored at 50 µm so the default filament
+    //    thickness (50 µm) always gets at least one rasterised cell.
+    let smallest_dim = [
+        fil_r,
+        fil_t,
+        weh_outer_r - weh_inner_r,
+        weh_cap_t,
+        weh_ap_r,
+        weh_outer_r - weh_ap_r,
+        an_outer_r - an_ap_r,
+        an_t,
+        an_ap_r,
+    ]
+    .into_iter()
+    .filter(|&x| x > 0.0)
+    .fold(f64::INFINITY, f64::min);
+
+    let h = (smallest_dim / 10.0).max(5e-5);
+
+    let n_r = (r_max / h).ceil() as usize + 1;
+    let n_z = (z_range / h).ceil() as usize + 1;
+
+    // 6. Allocate grid and mask; fix outer boundary at V = 0 (ARCHITECTURE.md §4.3 step 5).
+    let mut potential = Grid::new(n_r, n_z, h);
     let mut mask = Mask::new(n_r, n_z);
 
-    // Fix outer boundary at V = 0 (far-field Dirichlet condition).
     for i_r in 0..n_r {
-        let idx_bottom = mask.idx(i_r, 0);
-        let idx_top = mask.idx(i_r, n_z - 1);
-        mask.data[idx_bottom] = Cell::Fixed;
-        potential.data[idx_bottom] = 0.0;
-        mask.data[idx_top] = Cell::Fixed;
-        potential.data[idx_top] = 0.0;
+        mask.data[potential.idx(i_r, 0)] = Cell::Fixed; // z = z_lo (bottom)
+        mask.data[potential.idx(i_r, n_z - 1)] = Cell::Fixed; // z = z_hi (top)
     }
     for i_z in 0..n_z {
-        let idx = mask.idx(n_r - 1, i_z);
-        mask.data[idx] = Cell::Fixed;
-        potential.data[idx] = 0.0;
+        mask.data[potential.idx(n_r - 1, i_z)] = Cell::Fixed; // r = r_max (outer)
     }
 
-    // Stub interior electrode: a horizontal band fixed at -1 000 V.
-    for i_z in 18..22_usize {
-        for i_r in 0..25_usize {
-            let idx = mask.idx(i_r, i_z);
-            mask.data[idx] = Cell::Fixed;
-            potential.data[idx] = -1_000.0;
+    // 7. Rasterise electrodes (ARCHITECTURE.md §4.3 steps 6-7).
+    //    Physical coords: r = i_r * h, z = z_lo + i_z * h.
+    //    Later electrodes overwrite earlier ones (last-wins).
+    for i_z in 0..n_z {
+        let z = z_lo + i_z as f64 * h;
+        for i_r in 0..n_r {
+            let r = i_r as f64 * h;
+            let idx = potential.idx(i_r, i_z);
+
+            // Filament: solid disk, r ≤ fil_r, |z − fil_z| ≤ fil_t/2.
+            if r <= fil_r && z >= fil_z_lo && z <= fil_z_hi {
+                mask.data[idx] = Cell::Fixed;
+                potential.data[idx] = fil_v;
+            }
+            // Wehnelt wall: weh_inner_r ≤ r ≤ weh_outer_r, wall z-range.
+            if r >= weh_inner_r && r <= weh_outer_r && z >= weh_wall_z_lo && z <= weh_wall_z_hi {
+                mask.data[idx] = Cell::Fixed;
+                potential.data[idx] = weh_v;
+            }
+            // Wehnelt cap (aperture excluded): weh_ap_r ≤ r ≤ weh_outer_r, cap z-range.
+            if r >= weh_ap_r && r <= weh_outer_r && z >= weh_cap_z_lo && z <= weh_cap_z_hi {
+                mask.data[idx] = Cell::Fixed;
+                potential.data[idx] = weh_v;
+            }
+            // Anode (aperture excluded): an_ap_r ≤ r ≤ an_outer_r, |z − an_z| ≤ an_t/2.
+            if r >= an_ap_r && r <= an_outer_r && z >= an_z_lo && z <= an_z_hi {
+                mask.data[idx] = Cell::Fixed;
+                potential.data[idx] = an_v;
+            }
         }
     }
 
-    let result = solve_laplace_cylindrical(&mut potential, &mask, &SolverConfig::default())
-        .map_err(|e| JsError::new(&e.to_string()))?;
+    // 8. Tolerance = 1e-6 × V_max (PHYSICS.md §4.2).
+    let v_max = [fil_v.abs(), weh_v.abs(), an_v.abs()]
+        .into_iter()
+        .fold(0.0_f64, f64::max);
+    let tolerance_v = if v_max > 0.0 { 1e-6 * v_max } else { 1e-6 };
+
+    // 9. Solve.
+    let result = solve_laplace_cylindrical(
+        &mut potential,
+        &mask,
+        &SolverConfig {
+            tolerance_v,
+            ..SolverConfig::default()
+        },
+    )
+    .map_err(|e| JsError::new(&e.to_string()))?;
 
     let (e_r, e_z) = compute_electric_field(&potential);
 
-    let mask_u8 = mask
+    let mask_u8: Vec<u8> = mask
         .data
         .iter()
         .map(|c| if *c == Cell::Free { 0u8 } else { 1u8 })

@@ -61,7 +61,7 @@ export const WorkerRequestSchema = z.discriminatedUnion('type', [
 export type WorkerRequest = z.infer<typeof WorkerRequestSchema>;
 
 export const WorkerResponseSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('success'), solution: GunSolutionSchema }),
+  z.object({ type: z.literal('success'), solution: GunSolutionSchema, duration_ms: z.number() }),
   z.object({ type: z.literal('error'), message: z.string() }),
 ]);
 

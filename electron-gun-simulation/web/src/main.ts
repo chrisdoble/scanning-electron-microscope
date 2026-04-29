@@ -29,11 +29,10 @@ worker.addEventListener('message', (event: MessageEvent) => {
   if (msg.type === 'success') {
     state.solution = msg.solution;
     renderSolution(canvas, msg.solution);
-    console.log('Solve result:', {
-      n_r: msg.solution.n_r,
-      n_z: msg.solution.n_z,
-      iterations: msg.solution.iterations,
-    });
+    console.log(
+      `Solve: ${msg.solution.iterations} iterations, ${msg.duration_ms.toFixed(1)} ms` +
+      ` (${msg.solution.n_r}×${msg.solution.n_z} grid)`,
+    );
   } else {
     console.error('Solve error:', msg.message);
     alert(msg.message);
