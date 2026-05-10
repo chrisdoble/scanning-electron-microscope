@@ -6,3 +6,4 @@ version.workspace = true
 
 [dependencies]
 thiserror = "2.0.18"
+faer = { version = "0.24", default-features = false, features = ["std", "sparse-linalg"] }

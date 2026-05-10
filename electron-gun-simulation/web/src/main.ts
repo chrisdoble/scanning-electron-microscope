@@ -30,7 +30,7 @@ worker.addEventListener('message', (event: MessageEvent) => {
     state.solution = msg.solution;
     renderSolution(canvas, msg.solution);
     console.log(
-      `Solve: ${msg.solution.iterations} iterations, ${msg.duration_ms.toFixed(1)} ms` +
+      `Solve: ${msg.duration_ms.toFixed(1)} ms` +
       ` (${msg.solution.n_r}×${msg.solution.n_z} grid)`,
     );
   } else {

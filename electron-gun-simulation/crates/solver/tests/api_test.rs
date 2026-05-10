@@ -1,5 +1,5 @@
 use solver::{
-    compute_electric_field, solve_laplace_cylindrical, Cell, Grid, Mask, SolverConfig, SolverError,
+    compute_electric_field, solve_laplace_cylindrical, Cell, Grid, Mask, SolverError,
 };
 
 fn grid(n_r: usize, n_z: usize) -> Grid {
@@ -30,66 +30,26 @@ fn solve_valid_inputs_returns_ok() {
     let mut potential = grid(5, 5);
     let mut mask = mask(5, 5);
     fix_outer_boundary(&potential, &mut mask);
-    let result = solve_laplace_cylindrical(&mut potential, &mask, &SolverConfig::default());
+    let result = solve_laplace_cylindrical(&mut potential, &mask);
     assert!(result.is_ok());
 }
 
 #[test]
 fn solve_dimension_mismatch() {
-    let result = solve_laplace_cylindrical(&mut grid(5, 5), &mask(4, 5), &SolverConfig::default());
+    let result = solve_laplace_cylindrical(&mut grid(5, 5), &mask(4, 5));
     assert!(matches!(result, Err(SolverError::DimensionMismatch { .. })));
 }
 
 #[test]
 fn solve_grid_too_small_r() {
-    let result = solve_laplace_cylindrical(&mut grid(2, 5), &mask(2, 5), &SolverConfig::default());
+    let result = solve_laplace_cylindrical(&mut grid(2, 5), &mask(2, 5));
     assert!(matches!(result, Err(SolverError::GridTooSmall { .. })));
 }
 
 #[test]
 fn solve_grid_too_small_z() {
-    let result = solve_laplace_cylindrical(&mut grid(5, 2), &mask(5, 2), &SolverConfig::default());
+    let result = solve_laplace_cylindrical(&mut grid(5, 2), &mask(5, 2));
     assert!(matches!(result, Err(SolverError::GridTooSmall { .. })));
-}
-
-#[test]
-fn solve_omega_too_large() {
-    let config = SolverConfig {
-        omega: 2.0,
-        ..SolverConfig::default()
-    };
-    let result = solve_laplace_cylindrical(&mut grid(5, 5), &mask(5, 5), &config);
-    assert!(matches!(result, Err(SolverError::InvalidOmega(_))));
-}
-
-#[test]
-fn solve_omega_zero() {
-    let config = SolverConfig {
-        omega: 0.0,
-        ..SolverConfig::default()
-    };
-    let result = solve_laplace_cylindrical(&mut grid(5, 5), &mask(5, 5), &config);
-    assert!(matches!(result, Err(SolverError::InvalidOmega(_))));
-}
-
-#[test]
-fn solve_negative_tolerance() {
-    let config = SolverConfig {
-        tolerance_v: -1.0,
-        ..SolverConfig::default()
-    };
-    let result = solve_laplace_cylindrical(&mut grid(5, 5), &mask(5, 5), &config);
-    assert!(matches!(result, Err(SolverError::InvalidTolerance(_))));
-}
-
-#[test]
-fn solve_zero_tolerance() {
-    let config = SolverConfig {
-        tolerance_v: 0.0,
-        ..SolverConfig::default()
-    };
-    let result = solve_laplace_cylindrical(&mut grid(5, 5), &mask(5, 5), &config);
-    assert!(matches!(result, Err(SolverError::InvalidTolerance(_))));
 }
 
 // --- outer boundary validation ---
@@ -101,7 +61,7 @@ fn solve_boundary_not_fixed_on_bottom() {
     fix_outer_boundary(&potential, &mut mask);
     // Free one cell on the bottom row.
     mask.data[potential.idx(2, 0)] = Cell::Free;
-    let result = solve_laplace_cylindrical(&mut potential, &mask, &SolverConfig::default());
+    let result = solve_laplace_cylindrical(&mut potential, &mask);
     assert!(matches!(
         result,
         Err(SolverError::InvalidOuterBoundary { i_z: 0, .. })
@@ -115,7 +75,7 @@ fn solve_boundary_not_fixed_on_top() {
     fix_outer_boundary(&potential, &mut mask);
     // Free one cell on the top row.
     mask.data[potential.idx(2, 4)] = Cell::Free;
-    let result = solve_laplace_cylindrical(&mut potential, &mask, &SolverConfig::default());
+    let result = solve_laplace_cylindrical(&mut potential, &mask);
     assert!(matches!(
         result,
         Err(SolverError::InvalidOuterBoundary { i_z: 4, .. })
@@ -129,7 +89,7 @@ fn solve_boundary_not_fixed_on_outer_radius() {
     fix_outer_boundary(&potential, &mut mask);
     // Free one interior-z cell on the outer radial column.
     mask.data[potential.idx(4, 2)] = Cell::Free;
-    let result = solve_laplace_cylindrical(&mut potential, &mask, &SolverConfig::default());
+    let result = solve_laplace_cylindrical(&mut potential, &mask);
     assert!(matches!(
         result,
         Err(SolverError::InvalidOuterBoundary { i_r: 4, .. })
@@ -188,11 +148,7 @@ fn solve_concentric_cylinders_matches_analytical() {
 
     // All other cells are Free (i_r=0..a-1 inside conductor, i_r=a+1..b-1 in the gap).
 
-    let config = SolverConfig {
-        tolerance_v: 1e-10,
-        ..SolverConfig::default()
-    };
-    solve_laplace_cylindrical(&mut potential, &mut mask, &config).unwrap();
+    solve_laplace_cylindrical(&mut potential, &mut mask).unwrap();
 
     // Cells inside the conductor should converge to v_a (uniform potential).
     for i_z in 1..n_z - 1 {
@@ -217,33 +173,6 @@ fn solve_concentric_cylinders_matches_analytical() {
             );
         }
     }
-}
-
-#[test]
-fn solve_max_iterations_exceeded() {
-    let n_r = 5_usize;
-    let n_z = 5_usize;
-    let mut potential = Grid::new(n_r, n_z, 1e-3);
-    let mut mask = Mask::new(n_r, n_z);
-    fix_outer_boundary(&potential, &mut mask);
-
-    // Interior electrode at 1 V ensures the solver has non-trivial work; the
-    // adjacent Free cells will be updated on the first iteration, producing a
-    // non-zero residual that cannot satisfy tolerance 1e-30 in a single pass.
-    let electrode_idx = potential.idx(2, 2);
-    potential.data[electrode_idx] = 1.0;
-    mask.data[electrode_idx] = Cell::Fixed;
-
-    let config = SolverConfig {
-        max_iterations: 1,
-        tolerance_v: 1e-30,
-        ..SolverConfig::default()
-    };
-    let result = solve_laplace_cylindrical(&mut potential, &mut mask, &config);
-    assert!(matches!(
-        result,
-        Err(SolverError::MaxIterationsExceeded { iterations: 1, .. })
-    ));
 }
 
 // --- compute_electric_field ---

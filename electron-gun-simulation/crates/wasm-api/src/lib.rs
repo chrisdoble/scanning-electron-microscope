@@ -1,4 +1,4 @@
-use solver::{compute_electric_field, solve_laplace_cylindrical, Cell, Grid, Mask, SolverConfig};
+use solver::{compute_electric_field, solve_laplace_cylindrical, Cell, Grid, Mask};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -95,9 +95,6 @@ pub struct GunSolution {
     pub n_z: usize,
     #[wasm_bindgen(readonly)]
     pub h_m: f64, // grid spacing in metres
-    #[wasm_bindgen(readonly)]
-    pub iterations: u32,
-
     // All grids are length n_r * n_z, row-major as per PHYSICS.md §2.2.
     // Accessing these from JS returns a copy (clone) of the data.
     potential_v: Vec<f64>, // potential in volts
@@ -280,22 +277,9 @@ pub fn solve_electron_gun(params: &GunParameters) -> Result<GunSolution, JsError
         }
     }
 
-    // 8. Tolerance = 1e-6 × V_max (PHYSICS.md §4.2).
-    let v_max = [fil_v.abs(), weh_v.abs(), an_v.abs()]
-        .into_iter()
-        .fold(0.0_f64, f64::max);
-    let tolerance_v = if v_max > 0.0 { 1e-6 * v_max } else { 1e-6 };
-
-    // 9. Solve.
-    let result = solve_laplace_cylindrical(
-        &mut potential,
-        &mask,
-        &SolverConfig {
-            tolerance_v,
-            ..SolverConfig::default()
-        },
-    )
-    .map_err(|e| JsError::new(&e.to_string()))?;
+    // 8. Solve.
+    solve_laplace_cylindrical(&mut potential, &mask)
+        .map_err(|e| JsError::new(&e.to_string()))?;
 
     let (e_r, e_z) = compute_electric_field(&potential);
 
@@ -309,7 +293,6 @@ pub fn solve_electron_gun(params: &GunParameters) -> Result<GunSolution, JsError
         n_r: potential.n_r,
         n_z: potential.n_z,
         h_m: potential.h_m,
-        iterations: result.iterations as u32,
         potential_v: potential.data,
         e_r_v_per_m: e_r.data,
         e_z_v_per_m: e_z.data,

@@ -45,7 +45,6 @@ export const GunSolutionSchema = z.object({
   n_r: z.number().int(),
   n_z: z.number().int(),
   h_m: z.number(),
-  iterations: z.number().int(),
   potential_v: z.instanceof(Float64Array),
   e_r_v_per_m: z.instanceof(Float64Array),
   e_z_v_per_m: z.instanceof(Float64Array),

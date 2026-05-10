@@ -58,7 +58,6 @@ function handleMessage(event: MessageEvent): void {
       n_r: result.n_r,
       n_z: result.n_z,
       h_m: result.h_m,
-      iterations: result.iterations,
       potential_v: result.potential_v,
       e_r_v_per_m: result.e_r_v_per_m,
       e_z_v_per_m: result.e_z_v_per_m,
