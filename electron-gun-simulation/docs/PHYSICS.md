@@ -38,7 +38,7 @@ Once V is solved, **E** = −∇V. In axisymmetric cylindrical coordinates:
     E_z = −∂V/∂z
     E_φ = 0
 
-These are computed on the same grid by central differences after the solve converges (§2.6).
+These are computed on the same grid by central differences after the solve (§2.6).
 
 ## 2. Discretisation
 
@@ -80,14 +80,15 @@ Second-order central finite differences applied to equation (1):
     ∂²V/∂z² ≈ (V[i, j+1] − 2 V[i, j] + V[i, j−1]) / h²
     ∂V/∂r  ≈ (V[i+1, j] − V[i−1, j]) / (2h)
 
-with r = i · h. Substituting into (1) and solving for V[i, j]:
+with r = i · h. Substituting into (1) and multiplying through by h²:
 
-    V[i, j] = (1/4) [ V[i+1, j] (1 + 1/(2i))
-                     + V[i−1, j] (1 − 1/(2i))
-                     + V[i, j+1]
-                     + V[i, j−1] ]                       (2)
+    V[i+1, j] (1 + 1/(2i))
+  + V[i−1, j] (1 − 1/(2i))
+  + V[i, j+1]
+  + V[i, j−1]
+  − 4 V[i, j] = 0                                       (2)
 
-This is the update rule used by Gauss-Seidel for interior points at i ≥ 1.
+Equation (2) is the finite-difference equation for interior points at i ≥ 1. Each Free point contributes one equation of this form to the linear system.
 
 ### 2.4 Axis (r = 0) — the special case
 
@@ -99,22 +100,25 @@ Discretising: because of axisymmetry, V(−h, z) = V(+h, z), so the central seco
 
     ∂²V/∂r²|_{r=0} ≈ 2 (V[1, j] − V[0, j]) / h²
 
-Substituting into (3):
+Substituting into (3) and multiplying through by h²:
 
-    V[0, j] = (1/6) [ 4 V[1, j] + V[0, j+1] + V[0, j−1] ]   (4)
+    4 V[1, j]
+  + V[0, j+1]
+  + V[0, j−1]
+  − 6 V[0, j] = 0                                       (4)
 
-Equation (4) is the update rule for i = 0. **This must be treated explicitly as a separate code path — applying equation (2) at i=0 is a bug that silently produces wrong answers near the axis**, which is exactly where the beam lives. Tests must cover this.
+Equation (4) is the finite-difference equation for i = 0. **This must be treated explicitly as a separate code path — applying equation (2) at i=0 is a bug that silently produces wrong answers near the axis**, which is exactly where the beam lives. Tests must cover this.
 
 ### 2.5 Boundary conditions
 
-- **Electrode surfaces (Dirichlet).** Points that lie on the filament, Wehnelt, or anode are held at the electrode voltage and never updated during iteration. These points are stored in the potential array at their fixed voltage and marked in the mask as `Fixed`. When a stencil at an adjacent interior point references a boundary neighbour, it simply reads the stored value — no special-case code needed near electrodes. See §3.1 for rasterisation.
+- **Electrode surfaces (Dirichlet).** Points that lie on the filament, Wehnelt, or anode are held at the electrode voltage and never updated during iteration. These points are stored in the potential array at their fixed voltage and marked in the mask as `Fixed`. See §3.1 for rasterisation.
 - **Axis (r = 0).** Neumann ∂V/∂r = 0 is enforced implicitly by the symmetric stencil in equation (4). No separate code needed.
 - **Outer radial boundary (r = R_max).** **Decision: Dirichlet V = 0.** These boundary points are stored in the array as 0.0 and marked `Fixed(0.0)`. Valid only if R_max is large enough that the true potential has decayed to ≈0 there. See §3.2 on box sizing. An alternative is Neumann ∂V/∂n = 0 (field lines parallel to the boundary), which is more forgiving of a tight box but less accurate for a localised charge distribution. We start with Dirichlet; revisit if box-size sensitivity studies show problems.
 - **Axial boundaries (z = 0 and z = Z_max).** **Decision: Dirichlet V = 0** for the same reason.
 
 ### 2.6 Electric field extraction
 
-After the potential solve converges, compute **E** on the same grid. In all formulas below, i is shorthand for i_r and j for i_z.
+After the potential solve, compute **E** on the same grid. In all formulas below, i is shorthand for i_r and j for i_z.
 
 **Interior** (1 ≤ i ≤ N_r−2, 1 ≤ j ≤ N_z−2) — central differences:
 
@@ -152,7 +156,7 @@ E_r = 0 because V is symmetric about the axis (V is an even function of r, so �
 
 These edge and corner formulas are only first-order accurate (O(h)), but the domain edges are deliberately placed far from the electrodes where the field is small, so the reduced accuracy is inconsequential.
 
-**E** is computed once after convergence, not inside the iteration loop.
+**E** is computed once after the solve, not during the solve.
 
 ## 3. Geometry rasterisation
 
@@ -178,21 +182,99 @@ The simulation box must extend far enough that the Dirichlet V=0 far-field bound
 
 ### 4.1 Method
 
-**Decision: Successive Over-Relaxation (SOR).** Gauss-Seidel is simple and correct; SOR is Gauss-Seidel plus a relaxation factor ω ∈ (1, 2) that accelerates convergence substantially (often 10–50× for this class of problem). The update becomes:
+**Decision: Sparse direct solve via Cholesky factorisation.** The discretised Laplace equation forms a sparse linear system **Ax = b** where each Free point contributes one equation (from equation (2) or (4)) and one unknown (the potential at that point). The system is solved in one shot by sparse Cholesky factorisation, which is vastly faster than iterative methods (SOR, Gauss-Seidel) for grids of this size.
 
-    V_new[i, j] = (1 − ω) V_old[i, j] + ω · V_GS[i, j]
+### 4.2 Linear system assembly
 
-where V_GS is the right-hand side of equation (2) or (4). **Decision: start with ω = 1.9** and tune empirically; the optimal ω for a 2D Laplacian on an N×N grid is approximately 2 / (1 + π/N), which for N ~ 400 gives ω ≈ 1.985. If SOR performance becomes a bottleneck, consider switching to a direct sparse solve (e.g. via `faer`). The solver lives behind a trait in `crates/solver/` so swapping is cheap later.
+Number the Free points 0 through N_free−1. This numbering maps each Free grid point (i_r, i_z) to an equation/variable index k. The mapping must be built before assembly and is used to translate between grid coordinates and matrix indices.
 
-### 4.2 Iteration and convergence
+For each Free point k at grid position (i, j):
 
-Iterate in-place over all `Free` points in row-major order (i.e. Gauss-Seidel, not Jacobi — we use updated values as soon as they're available).
+**If i > 0** (interior, equation (2)):
 
-Track convergence inline: each time a point is updated, compute the absolute change |V_new − V_old| and keep a running maximum across all points in the current iteration. At the end of each iteration, if this maximum residual is below the tolerance, stop. This adds negligible cost (one comparison per point per iteration).
+The stencil coefficients are:
 
-**Decision: tol = 1e-6 × V_max**, where V_max is the largest electrode voltage magnitude. This makes the tolerance relative to the problem's voltage scale: both a 100 V gun and a 30 kV gun converge to the same relative precision (~1 part per million of V_max), rather than a fixed absolute threshold that would be unnecessarily tight for high-voltage guns or too loose for low-voltage ones.
+    self:       −4
+    r+1 (i+1, j):  1 + 1/(2i)
+    r−1 (i−1, j):  1 − 1/(2i)
+    z+1 (i, j+1):  1
+    z−1 (i, j−1):  1
 
-Also impose a hard iteration cap (e.g. 50000) and return an error if hit — hitting the cap means something is wrong, not that more iterations would help.
+**If i = 0** (axis, equation (4)):
+
+The stencil coefficients are:
+
+    self:       −6
+    r+1 (1, j):     4
+    z+1 (0, j+1):   1
+    z−1 (0, j−1):   1
+
+(There is no r−1 neighbour at i=0; the symmetric ghost point is already folded into the coefficient on r+1.)
+
+For each neighbour in the stencil:
+- If the neighbour is **Free**: add `coefficient` to matrix entry A[k, neighbour_k] where neighbour_k is the Free-point index of the neighbour.
+- If the neighbour is **Fixed** (a Dirichlet boundary with known voltage V_boundary): move its contribution to the right-hand side: `b[k] -= coefficient * V_boundary`.
+
+The diagonal entry A[k, k] is always the self-coefficient (−4 or −6).
+
+### 4.3 Matrix properties
+
+The matrix A as assembled above has negative diagonal and non-negative off-diagonal entries. To obtain a symmetric positive definite (SPD) matrix suitable for Cholesky factorisation, negate the entire system: solve **(-A)x = -b**. The negated matrix -A has positive diagonal and non-positive off-diagonal entries and is SPD by the properties of the discrete Laplacian.
+
+The matrix is sparse: each row has at most 5 non-zero entries (the point itself and up to 4 neighbours). For a 452 × 952 grid with ~400,000 Free points, the matrix has ~2 million non-zero entries total.
+
+### 4.4 Solving
+
+1. Build the sparse matrix in triplet (COO) format: a list of (row, col, value) entries.
+2. Convert to compressed sparse column (CSC) format as required by `faer`.
+3. Compute the Cholesky factorisation of -A.
+4. Solve for x using the factorisation and -b.
+5. Write the solution values back into the potential grid at the corresponding Free points.
+
+The factorisation is the expensive step (typically 0.5–2 seconds for this grid size). The back-substitution is cheap (milliseconds). Both happen once per solve — there is no iteration.
+
+### 4.5 Symmetry verification
+
+The stencil for i > 0 is not obviously symmetric: the coefficient on the r+1 neighbour is (1 + 1/(2i)) while the coefficient on the r−1 neighbour is (1 − 1/(2i)). However, the assembled matrix **is** symmetric because the entry A[k, k'] (from point k referencing neighbour k') equals A[k', k] (from point k' referencing neighbour k). This can be verified:
+
+Point at index i references its r+1 neighbour at index i+1 with coefficient (1 + 1/(2i)). Point at index i+1 references its r−1 neighbour at index i with coefficient (1 − 1/(2(i+1))). These are **not** equal, so the raw stencil does **not** produce a symmetric matrix.
+
+To obtain a symmetric system, multiply each equation by a symmetrising weight. For the cylindrical Laplacian, the appropriate weight for the equation at grid index i is `w(i) = r = i · h` (or equivalently just `i`, since h is a constant factor). For i = 0, the weight from the L'Hôpital-derived stencil is handled separately.
+
+**Weighted stencil for i > 0:** Multiply equation (2) by i:
+
+    i · (1 + 1/(2i)) V[i+1, j] + i · (1 − 1/(2i)) V[i−1, j] + i · V[i, j+1] + i · V[i, j−1] − 4i · V[i, j] = 0
+
+Simplifying:
+
+    (i + 1/2) V[i+1, j] + (i − 1/2) V[i−1, j] + i · V[i, j+1] + i · V[i, j−1] − 4i · V[i, j] = 0     (5)
+
+Now check symmetry: point i references i+1 with coefficient (i + 1/2). Point i+1 references i with coefficient ((i+1) − 1/2) = (i + 1/2). These match — the matrix is symmetric.
+
+**Weighted stencil for i = 0:** The r = 0 equation (4) is already self-consistent (it has no r−1 neighbour), but its coefficients must be compatible with the i = 1 equation's reference back to i = 0. The i = 1 weighted equation references i = 0 with coefficient (1 − 1/2) = 1/2. So the i = 0 equation must reference i = 1 with coefficient 1/2. Scale equation (4) by 1/8:
+
+    (1/2) V[1, j] + (1/8) V[0, j+1] + (1/8) V[0, j−1] − (6/8) V[0, j] = 0                             (6)
+
+Check: point i=0 references i=1 with coefficient 1/2. Point i=1 references i=0 with coefficient (1 − 1/2) = 1/2. Symmetric.
+
+**Summary of weighted stencil coefficients for matrix assembly:**
+
+For i > 0 (equation (5)):
+
+    self:           −4i
+    r+1 (i+1, j):   i + 1/2
+    r−1 (i−1, j):   i − 1/2
+    z+1 (i, j+1):   i
+    z−1 (i, j−1):   i
+
+For i = 0 (equation (6)):
+
+    self:           −6/8
+    r+1 (1, j):      1/2
+    z+1 (0, j+1):    1/8
+    z−1 (0, j−1):    1/8
+
+Use these weighted coefficients when assembling the sparse matrix. The resulting matrix is symmetric positive definite (after negation) and suitable for Cholesky factorisation.
 
 ## 5. Out of scope
 
@@ -213,7 +295,11 @@ The following are explicitly not part of the current solver. They are listed her
 | h        | Grid spacing (dr = dz)                      | m     |
 | N_r      | Number of grid points along r               | —     |
 | N_z      | Number of grid points along z               | —     |
+| N_free   | Number of Free grid points                  | —     |
 | i_r, i_z | Grid point indices (r, z direction)         | —     |
 | i, j     | Shorthand for i_r, i_z in stencil equations | —     |
-| ω        | SOR relaxation factor                       | —     |
+| k        | Linear index into the Free-point numbering  | —     |
+| A        | Sparse coefficient matrix (N_free × N_free) | —     |
+| b        | Right-hand side vector (length N_free)      | V     |
+| x        | Solution vector (length N_free)             | V     |
 | ε₀       | Vacuum permittivity                         | F/m   |

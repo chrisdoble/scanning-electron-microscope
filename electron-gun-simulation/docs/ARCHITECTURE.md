@@ -1,6 +1,6 @@
 # Architecture
 
-This document specifies the code structure, crate layout, and interfaces between components. It is the authoritative reference for how the codebase is organised. `PHYSICS.md` specifies *what* the solver computes; this document specifies *how* the code is arranged and how components communicate.
+This document specifies the code structure, crate layout, and interfaces between components. It is the authoritative reference for how the codebase is organised. `PHYSICS.md` specifies _what_ the solver computes; this document specifies _how_ the code is arranged and how components communicate.
 
 ## 1. Overview
 
@@ -31,7 +31,7 @@ sem-gun-sim/
 
 Three layers, each with a clear responsibility:
 
-1. **`solver`** — pure Rust library. Knows about grids, stencils, SOR, convergence. Knows nothing about electron guns. Native-testable with `cargo test`. No wasm dependencies.
+1. **`solver`** — pure Rust library. Knows about grids, stencils, sparse matrix assembly, and Cholesky factorisation. Knows nothing about electron guns. Native-testable with `cargo test`. No wasm dependencies.
 2. **`wasm-api`** — thin Rust crate exposed to JavaScript via `wasm-bindgen`. Knows about `GunParameters`, electrode rasterisation, and the JS-facing API. Calls into `solver` for the potential solve and E-field extraction. Depends on `solver`.
 3. **`web`** — Vite-based TypeScript application. Knows about UI state, sliders, visualisation, and the debounce/preview strategy. Consumes the wasm package.
 
@@ -49,11 +49,15 @@ The `solver` and `wasm-api` are deliberately separate crates:
 
 ### 3.1 Responsibility
 
-Solves Laplace's equation on a 2D axisymmetric grid, given a grid of initial potential values and a mask marking which points are fixed (Dirichlet) versus free. Returns the converged potential grid. Also provides E-field extraction from a converged potential grid.
+Solves Laplace's equation on a 2D axisymmetric grid via sparse direct solve, given a grid of initial potential values and a mask marking which points are fixed (Dirichlet) versus free. Returns the solved potential grid. Also provides E-field extraction from a solved potential grid.
 
 `solver` has no knowledge of electron guns, filaments, Wehnelts, or anodes. It sees only grids, masks, and numbers.
 
-### 3.2 Core types
+### 3.2 Dependencies
+
+- **`faer`** — sparse Cholesky factorisation. This is the only significant dependency of the solver crate.
+
+### 3.3 Core types
 
 ```rust
 /// A 2D grid of f64 values stored in row-major order with z as the row index
@@ -79,62 +83,48 @@ pub struct Mask {
 }
 ```
 
-The `Grid` is used for both input (initial V with Dirichlet values set on `Fixed` points) and output (converged V). E-field grids (`E_r`, `E_z`) are also `Grid` values.
+The `Grid` is used for both input (initial V with Dirichlet values set on `Fixed` points) and output (solved V). E-field grids (`E_r`, `E_z`) are also `Grid` values.
 
-### 3.3 Core functions
+### 3.4 Core functions
 
 ```rust
-pub struct SolverConfig {
-    pub omega: f64,                // SOR relaxation factor, default 1.9
-    pub tolerance_v: f64,          // absolute convergence threshold in volts
-    pub max_iterations: usize,     // hard cap, default 50_000
-}
-
 pub struct SolverResult {
-    pub iterations: usize,
-    pub final_residual_v: f64,     // final max residual in volts
+    pub n_free: usize,             // number of Free points solved for
 }
 
-/// Solves Laplace's equation in place on `potential`, updating only Free
-/// points as marked in `mask`. Uses SOR as specified in PHYSICS.md §4.
+/// Solves Laplace's equation in place on `potential`, computing the
+/// values at Free points as marked in `mask`. Uses sparse Cholesky
+/// factorisation as specified in PHYSICS.md §4.
 ///
 /// The function validates the following before solving and returns the
 /// corresponding SolverError if any check fails (without modifying the
 /// potential grid):
 /// - `potential` and `mask` have the same dimensions.
 /// - The grid has at least 3 points in each direction.
-/// - `config.omega` is in the range (0, 2).
-/// - `config.tolerance_v` is strictly positive (> 0).
-///
-/// If the solver does not converge within `config.max_iterations`, it
-/// returns `SolverError::MaxIterationsExceeded`.
 ///
 /// The caller is responsible for:
 /// - Pre-setting Dirichlet values on Fixed points in the potential grid.
 /// - Marking the outer boundary (i_r = N_r-1, i_z = 0, i_z = N_z-1) as
-///   Fixed with V=0 for far-field Dirichlet. The axis (i_r = 0) should
-///   be Free unless a point lies on an electrode.
+///   Fixed (any potential is allowed). The axis (i_r = 0) should be Free
+///   unless a point lies on an electrode.
 pub fn solve_laplace_cylindrical(
     potential: &mut Grid,
     mask: &Mask,
-    config: &SolverConfig,
 ) -> Result<SolverResult, SolverError>;
 
-/// Computes E_r and E_z from a converged potential grid using the formulas
+/// Computes E_r and E_z from a solved potential grid using the formulas
 /// in PHYSICS.md §2.6. Returns (e_r, e_z) where both are Grid values with
 /// the same dimensions as the input. Values are in V/m.
 pub fn compute_electric_field(potential: &Grid) -> (Grid, Grid);
 ```
 
-### 3.4 Error handling
+### 3.5 Error handling
 
 ```rust
 pub enum SolverError {
     DimensionMismatch { grid: (usize, usize), mask: (usize, usize) },
     GridTooSmall { n_r: usize, n_z: usize },
-    InvalidOmega(f64),
-    InvalidTolerance(f64),
-    MaxIterationsExceeded { iterations: usize, residual_v: f64 },
+    FactorisationFailed(String),
 }
 ```
 
@@ -223,10 +213,10 @@ Rasterisation converts `GunParameters` into a `Grid` (with Dirichlet voltages se
 4. Allocate a `Grid` (all zeros) and `Mask` (all `Free`).
 5. Mark the outer boundary as `Fixed`: all points where i_r = N_r−1, i_z = 0, or i_z = N_z−1 are set to `Fixed` in the mask and 0.0 in the potential grid. (Points at i_r = 0 are left `Free` — they are axis points handled by the r=0 stencil, unless they happen to lie on an electrode.)
 6. For each grid point, test whether its physical location (r, z) lies inside any electrode's (r, z) cross-section. Each electrode's cross-section is one or more axis-aligned rectangles:
-    - **Filament:** a single rectangle. Point (r, z) is inside if `r ≤ filament_radius` AND `|z − filament_z| ≤ filament_thickness / 2`.
-    - **Wehnelt wall:** a single rectangle. Point (r, z) is inside if `wehnelt_inner_radius ≤ r ≤ wehnelt_outer_radius` AND `wehnelt_z − wehnelt_height/2 ≤ z ≤ wehnelt_z + wehnelt_height/2`.
-    - **Wehnelt cap:** a single rectangle (with the aperture excluded). Point (r, z) is inside if `wehnelt_aperture_radius ≤ r ≤ wehnelt_outer_radius` AND `wehnelt_z − wehnelt_height/2 − wehnelt_cap_thickness ≤ z ≤ wehnelt_z − wehnelt_height/2`.
-    - **Anode:** a single rectangle (with the aperture excluded). Point (r, z) is inside if `anode_aperture_radius ≤ r ≤ anode_outer_radius` AND `|z − anode_z| ≤ anode_thickness / 2`.
+   - **Filament:** a single rectangle. Point (r, z) is inside if `r ≤ filament_radius` AND `|z − filament_z| ≤ filament_thickness / 2`.
+   - **Wehnelt wall:** a single rectangle. Point (r, z) is inside if `wehnelt_inner_radius ≤ r ≤ wehnelt_outer_radius` AND `wehnelt_z − wehnelt_height/2 ≤ z ≤ wehnelt_z + wehnelt_height/2`.
+   - **Wehnelt cap:** a single rectangle (with the aperture excluded). Point (r, z) is inside if `wehnelt_aperture_radius ≤ r ≤ wehnelt_outer_radius` AND `wehnelt_z − wehnelt_height/2 − wehnelt_cap_thickness ≤ z ≤ wehnelt_z − wehnelt_height/2`.
+   - **Anode:** a single rectangle (with the aperture excluded). Point (r, z) is inside if `anode_aperture_radius ≤ r ≤ anode_outer_radius` AND `|z − anode_z| ≤ anode_thickness / 2`.
 7. If a point lies inside an electrode, set the mask to `Fixed` and set the potential grid value to the electrode's voltage. The Wehnelt's absolute voltage is `filament_voltage_v + wehnelt_bias_v`. If a point lies inside multiple electrodes (which should not happen for valid geometry), the last one checked wins.
 
 All dimension comparisons use physical coordinates in metres.
@@ -235,10 +225,10 @@ All dimension comparisons use physical coordinates in metres.
 
 The solution struct returned to JS. Contains the potential and field grids plus metadata. The solver-internal `Grid` and `Mask` types are not `#[wasm_bindgen]`-compatible, so this struct unpacks them into flat `Vec`s exposed to JS.
 
-The `#[wasm_bindgen(getter_with_clone)]` attribute on the struct tells wasm-bindgen to auto-generate cloning getters for all `pub` fields, including `Vec` types that can't be simply copied across the boundary. `Vec<f64>` fields become JS `Float64Array` properties, and `Vec<u8>` becomes `Uint8Array`. The `#[wasm_bindgen(readonly)]` attribute on each field prevents JS from setting them.
+The `#[wasm_bindgen(getter_with_clone)]` attribute on the grid fields tells wasm-bindgen to auto-generate cloning getters for `Vec` types that can't be simply copied across the boundary. `Vec<f64>` fields become JS `Float64Array` properties, and `Vec<u8>` becomes `Uint8Array`. The `#[wasm_bindgen(readonly)]` attribute on each field prevents JS from setting them.
 
 ```rust
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen]
 pub struct GunSolution {
     #[wasm_bindgen(readonly)]
     pub n_r: usize,
@@ -246,18 +236,16 @@ pub struct GunSolution {
     pub n_z: usize,
     #[wasm_bindgen(readonly)]
     pub h_m: f64,                // grid spacing in metres
-    #[wasm_bindgen(readonly)]
-    pub iterations: u32,
 
     // All grids are length n_r * n_z, row-major as per PHYSICS.md §2.2.
     // Accessing these from JS returns a copy (clone) of the data.
-    #[wasm_bindgen(readonly)]
+    #[wasm_bindgen(getter_with_clone, readonly)]
     pub potential_v: Vec<f64>,   // potential in volts
-    #[wasm_bindgen(readonly)]
+    #[wasm_bindgen(getter_with_clone, readonly)]
     pub e_r_v_per_m: Vec<f64>,  // radial E-field component in V/m
-    #[wasm_bindgen(readonly)]
+    #[wasm_bindgen(getter_with_clone, readonly)]
     pub e_z_v_per_m: Vec<f64>,  // axial E-field component in V/m
-    #[wasm_bindgen(readonly)]
+    #[wasm_bindgen(getter_with_clone, readonly)]
     pub mask: Vec<u8>,           // 0 = Free, 1 = Fixed; useful for UI overlays
 }
 ```
@@ -279,10 +267,9 @@ Internal steps:
 1. Validate `params` (geometric consistency).
 2. Determine domain size and grid spacing (see §4.3 steps 1-3).
 3. Rasterise electrodes into grid and mask (see §4.3 steps 4-7).
-4. Compute solver tolerance: `1e-6 × V_max` where V_max is the largest electrode voltage magnitude (PHYSICS.md §4.2).
-5. Call `solver::solve_laplace_cylindrical`.
-6. Call `solver::compute_electric_field`.
-7. Package into `GunSolution` and return.
+4. Call `solver::solve_laplace_cylindrical`.
+5. Call `solver::compute_electric_field`.
+6. Package into `GunSolution` and return.
 
 ### 4.6 Error handling across the wasm boundary
 
@@ -337,10 +324,10 @@ wasm-pack build --target web crates/wasm-api
 cargo watch -s 'wasm-pack build --target web crates/wasm-api'
 
 # Run the web dev server
-cd web && npm run dev
+cd web && pnpm run dev
 
 # Production build of the web app
-cd web && npm run build
+cd web && pnpm run build
 ```
 
 ### 6.3 Workspace configuration
