@@ -21,6 +21,7 @@ body {
 }
 
 #visualisation {
+  position: relative;
   flex: 1;
   background: #111;
   display: flex;
@@ -30,7 +31,32 @@ body {
   container-type: size;
 }
 
-#visualisation canvas {
+#legend {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  font-family: monospace;
+  font-size: 12px;
+  color: white;
+}
+
+#legend-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: right;
+}
+
+#legend-scale {
+  display: block;
+  width: 20px;
+  height: 200px;
+}
+
+#visualisation > canvas {
   display: block;
   /* Scale to fill the container while preserving the canvas aspect ratio.
      --aspect-ratio is set from JS after each render. Falls back to 1 (square)

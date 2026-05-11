@@ -1,5 +1,6 @@
 import { buildControls } from './sliders';
-import { renderSolution } from './render';
+import { computeVoltageRange, renderSolution } from './render';
+import { initLegendScale, updateLegendLabels } from './legend';
 import type { AppState } from './state';
 import { DEFAULT_GUN_PARAMETERS, WorkerResponseSchema } from './worker-protocol';
 
@@ -15,6 +16,21 @@ if (!(canvas instanceof HTMLCanvasElement)) {
   throw new Error('Visualisation canvas not found');
 }
 
+const legendScale = document.querySelector('#legend-scale');
+const legendMax = document.querySelector('#legend-label-max');
+const legendMid = document.querySelector('#legend-label-mid');
+const legendMin = document.querySelector('#legend-label-min');
+if (
+  !(legendScale instanceof HTMLCanvasElement) ||
+  !(legendMax instanceof HTMLElement) ||
+  !(legendMid instanceof HTMLElement) ||
+  !(legendMin instanceof HTMLElement)
+) {
+  throw new Error('Legend elements not found');
+}
+
+initLegendScale(legendScale);
+
 const worker = new Worker(new URL('./solver-worker.ts', import.meta.url), { type: 'module' });
 
 worker.addEventListener('message', (event: MessageEvent) => {
@@ -28,7 +44,9 @@ worker.addEventListener('message', (event: MessageEvent) => {
 
   if (msg.type === 'success') {
     state.solution = msg.solution;
-    renderSolution(canvas, msg.solution, !isPreview);
+    const { minV, maxV } = computeVoltageRange(msg.solution);
+    renderSolution(canvas, msg.solution, minV, maxV);
+    updateLegendLabels(legendMax, legendMid, legendMin, minV, maxV);
     canvas.style.setProperty('--aspect-ratio', String(canvas.width / canvas.height));
     console.log(
       `Solve: ${msg.duration_ms.toFixed(1)} ms` +
@@ -48,10 +66,7 @@ worker.addEventListener('message', (event: MessageEvent) => {
 
 const PREVIEW_H_SCALE = 4.0;
 
-let isPreview = false;
-
 function postToWorker(): void {
-  state.parameters.h_scale = isPreview ? PREVIEW_H_SCALE : 1.0;
   worker.postMessage({ type: 'solve', parameters: { ...state.parameters } });
   state.solving = true;
   state.pendingParameters = false;
@@ -70,13 +85,13 @@ function triggerSolve(): void {
 // mechanism ensures a new solve starts immediately after each completes,
 // always using the latest parameters — no debounce needed.
 function onInput(): void {
-  isPreview = true;
+  state.parameters.h_scale = PREVIEW_H_SCALE;
   triggerSolve();
 }
 
 // Called on slider 'change' (release) — triggers a full-resolution solve.
 function onCommit(): void {
-  isPreview = false;
+  state.parameters.h_scale = 1.0;
   triggerSolve();
 }
 

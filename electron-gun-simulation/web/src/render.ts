@@ -1,6 +1,18 @@
 import type { GunSolution } from './worker-protocol';
 import { interpolate } from './turbo_colormap';
 
+export function computeVoltageRange(solution: GunSolution): { minV: number; maxV: number } {
+  const { potential_v } = solution;
+  let minV = Infinity;
+  let maxV = -Infinity;
+  for (let i = 0; i < potential_v.length; i++) {
+    const v = potential_v[i];
+    if (v < minV) minV = v;
+    if (v > maxV) maxV = v;
+  }
+  return { minV, maxV };
+}
+
 /**
  * Renders the potential field from `solution` onto `canvas` using the Turbo
  * colormap. Electrode cells (Fixed) are drawn black.
@@ -11,12 +23,13 @@ import { interpolate } from './turbo_colormap';
  *   - Canvas height = n_z.
  *   - i_z = 0 (z = 0) is at the bottom of the canvas (array row 0 → canvas row n_z − 1).
  *
- * The potential range is mapped linearly to [0, 1] across the full colormap.
+ * The potential range [minV, maxV] is mapped linearly to [0, 1] across the full colormap.
  */
 export function renderSolution(
   canvas: HTMLCanvasElement,
   solution: GunSolution,
-  showLegend = true,
+  minV: number,
+  maxV: number,
 ): void {
   const { n_r, n_z, mask, potential_v } = solution;
 
@@ -31,14 +44,6 @@ export function renderSolution(
     throw new Error('Couldn\'t get visualisation canvas context');
   }
 
-  // Find potential range across all cells for colormap normalisation.
-  let minV = Infinity;
-  let maxV = -Infinity;
-  for (let i = 0; i < potential_v.length; i++) {
-    const v = potential_v[i];
-    if (v < minV) minV = v;
-    if (v > maxV) maxV = v;
-  }
   const range = maxV - minV;
 
   const imageData = ctx.createImageData(width, height);
@@ -70,49 +75,6 @@ export function renderSolution(
   }
 
   ctx.putImageData(imageData, 0, 0);
-  if (showLegend) drawLegend(ctx, minV, maxV);
-}
-
-const LEGEND_X = 9.5;
-const LEGEND_Y = 9.5;
-const LEGEND_W = 300;
-const LEGEND_H = 30;
-
-function drawLegend(ctx: CanvasRenderingContext2D, minV: number, maxV: number): void {
-  const gradient = ctx.createLinearGradient(LEGEND_X, 0, LEGEND_X + LEGEND_W, 0);
-  const colorStopCount = 20;
-  for (let i = 0; i <= colorStopCount; i++) {
-    const t = i / colorStopCount;
-    const [r, g, b] = interpolate(t);
-    gradient.addColorStop(t, `rgb(${r},${g},${b})`);
-  }
-  ctx.fillStyle = gradient;
-  ctx.fillRect(LEGEND_X, LEGEND_Y, LEGEND_W, LEGEND_H);
-
-  ctx.strokeStyle = 'black';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(LEGEND_X, LEGEND_Y, LEGEND_W, LEGEND_H);
-
-  ctx.fillStyle = 'white';
-  ctx.font = '14px monospace';
-  ctx.textBaseline = 'top';
-  const labelY = LEGEND_Y + LEGEND_H + 3;
-
-  ctx.textAlign = 'left';
-  ctx.fillText(formatVoltage(minV), LEGEND_X, labelY);
-
-  ctx.textAlign = 'center';
-  ctx.fillText(formatVoltage((minV + maxV) / 2), LEGEND_X + LEGEND_W / 2, labelY);
-
-  ctx.textAlign = 'right';
-  ctx.fillText(formatVoltage(maxV), LEGEND_X + LEGEND_W, labelY);
-}
-
-function formatVoltage(v: number): string {
-  const abs = Math.abs(v);
-  if (abs >= 100) return `${v.toFixed(0)} V`;
-  if (abs >= 10) return `${v.toFixed(1)} V`;
-  return `${v.toFixed(2)} V`;
 }
 
 function setPixel(
