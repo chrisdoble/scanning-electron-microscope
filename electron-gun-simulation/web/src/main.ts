@@ -97,5 +97,8 @@ function onCommit(): void {
 
 buildControls(state, onInput, onCommit);
 
-// Kick off the initial solve with the default parameters.
+// Start with a fast preview, then queue a full-res solve immediately after.
+state.parameters.h_scale = PREVIEW_H_SCALE;
 postToWorker();
+state.parameters.h_scale = 1.0;
+state.pendingParameters = true;
