@@ -192,3 +192,97 @@ fn electric_field_spacing_matches_potential() {
     assert_eq!(e_r.h_m, potential.h_m);
     assert_eq!(e_z.h_m, potential.h_m);
 }
+
+// All finite-difference stencils (central and one-sided) are exact for linear
+// potentials, so these tests hold at every grid point including edges and corners.
+
+#[test]
+fn electric_field_uniform_z() {
+    // V[i_r, i_z] = i_z => E_z = -1 everywhere, E_r = 0 everywhere.
+    let n_r = 4;
+    let n_z = 5;
+    let h = 1.0_f64;
+    let mut potential = Grid::new(n_r, n_z, h);
+    for i_z in 0..n_z {
+        for i_r in 0..n_r {
+            let k = potential.idx(i_r, i_z);
+            potential.data[k] = i_z as f64;
+        }
+    }
+    let (e_r, e_z) = compute_electric_field(&potential);
+    for i_z in 0..n_z {
+        for i_r in 0..n_r {
+            let k = e_r.idx(i_r, i_z);
+            assert!(
+                e_r.data[k].abs() < 1e-12,
+                "E_r non-zero at ({i_r},{i_z}): {}",
+                e_r.data[k],
+            );
+            assert!(
+                (e_z.data[k] + 1.0).abs() < 1e-12,
+                "E_z wrong at ({i_r},{i_z}): {}",
+                e_z.data[k],
+            );
+        }
+    }
+}
+
+#[test]
+fn electric_field_uniform_r() {
+    // V[i_r, i_z] = i_r => E_r = -1 for i_r >= 1 (axis forced to 0), E_z = 0 everywhere.
+    let n_r = 5;
+    let n_z = 4;
+    let h = 1.0_f64;
+    let mut potential = Grid::new(n_r, n_z, h);
+    for i_z in 0..n_z {
+        for i_r in 0..n_r {
+            let k = potential.idx(i_r, i_z);
+            potential.data[k] = i_r as f64;
+        }
+    }
+    let (e_r, e_z) = compute_electric_field(&potential);
+    for i_z in 0..n_z {
+        for i_r in 0..n_r {
+            let k = e_r.idx(i_r, i_z);
+            let expected_r = if i_r == 0 { 0.0 } else { -1.0 };
+            assert!(
+                (e_r.data[k] - expected_r).abs() < 1e-12,
+                "E_r wrong at ({i_r},{i_z}): {} (expected {expected_r})",
+                e_r.data[k],
+            );
+            assert!(
+                e_z.data[k].abs() < 1e-12,
+                "E_z non-zero at ({i_r},{i_z}): {}",
+                e_z.data[k],
+            );
+        }
+    }
+}
+
+#[test]
+fn electric_field_constant_potential() {
+    // V = 5 everywhere => E_r = E_z = 0 everywhere.
+    let n_r = 4;
+    let n_z = 4;
+    let h = 1.0_f64;
+    let mut potential = Grid::new(n_r, n_z, h);
+    for v in potential.data.iter_mut() {
+        *v = 5.0;
+    }
+    let (e_r, e_z) = compute_electric_field(&potential);
+    for i_z in 0..n_z {
+        for i_r in 0..n_r {
+            let k = e_r.idx(i_r, i_z);
+            assert!(
+                e_r.data[k].abs() < 1e-12,
+                "E_r non-zero at ({i_r},{i_z}): {}",
+                e_r.data[k],
+            );
+            assert!(
+                e_z.data[k].abs() < 1e-12,
+                "E_z non-zero at ({i_r},{i_z}): {}",
+                e_z.data[k],
+            );
+        }
+    }
+}
