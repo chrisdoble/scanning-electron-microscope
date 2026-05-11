@@ -28,7 +28,11 @@ body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  container-type: size;
+  cursor: grab;
+}
+
+#visualisation.dragging {
+  cursor: grabbing;
 }
 
 #legend {
@@ -56,14 +60,16 @@ body {
   height: 200px;
 }
 
-#visualisation > canvas {
+#solution {
   display: block;
-  /* Scale to fill the container while preserving the canvas aspect ratio.
-     --aspect-ratio is set from JS after each render. Falls back to 1 (square)
-     before the first solve. cqw/cqh are container query width/height units. */
-  width: min(100cqw, 100cqh * var(--aspect-ratio, 1));
-  height: min(100cqh, 100cqw / var(--aspect-ratio, 1));
   image-rendering: pixelated;
+  /* Size and position are controlled entirely by JS transform. */
+}
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 .electrode-group {
