@@ -16,6 +16,7 @@ import { interpolate } from './turbo_colormap';
 export function renderSolution(
   canvas: HTMLCanvasElement,
   solution: GunSolution,
+  showLegend = true,
 ): void {
   const { n_r, n_z, mask, potential_v } = solution;
 
@@ -69,7 +70,7 @@ export function renderSolution(
   }
 
   ctx.putImageData(imageData, 0, 0);
-  drawLegend(ctx, minV, maxV);
+  if (showLegend) drawLegend(ctx, minV, maxV);
 }
 
 const LEGEND_X = 9.5;

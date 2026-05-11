@@ -28,7 +28,8 @@ worker.addEventListener('message', (event: MessageEvent) => {
 
   if (msg.type === 'success') {
     state.solution = msg.solution;
-    renderSolution(canvas, msg.solution);
+    renderSolution(canvas, msg.solution, !isPreview);
+    canvas.style.setProperty('--aspect-ratio', String(canvas.width / canvas.height));
     console.log(
       `Solve: ${msg.duration_ms.toFixed(1)} ms` +
       ` (${msg.solution.n_r}×${msg.solution.n_z} grid)`,
@@ -45,7 +46,12 @@ worker.addEventListener('message', (event: MessageEvent) => {
   }
 });
 
+const PREVIEW_H_SCALE = 4.0;
+
+let isPreview = false;
+
 function postToWorker(): void {
+  state.parameters.h_scale = isPreview ? PREVIEW_H_SCALE : 1.0;
   worker.postMessage({ type: 'solve', parameters: { ...state.parameters } });
   state.solving = true;
   state.pendingParameters = false;
@@ -59,24 +65,18 @@ function triggerSolve(): void {
   }
 }
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-// Called on slider 'input' events — debounced to avoid flooding the worker.
+// Called on slider 'input' events (fires continuously while dragging).
+// Uses a coarser grid so previews complete fast. The pendingParameters
+// mechanism ensures a new solve starts immediately after each completes,
+// always using the latest parameters — no debounce needed.
 function onInput(): void {
-  if (debounceTimer !== null) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    debounceTimer = null;
-    triggerSolve();
-  }, 500);
+  isPreview = true;
+  triggerSolve();
 }
 
-// Called on slider 'change' (release) — fires immediately, cancels any
-// pending debounce so the worker always gets the committed value promptly.
+// Called on slider 'change' (release) — triggers a full-resolution solve.
 function onCommit(): void {
-  if (debounceTimer !== null) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
+  isPreview = false;
   triggerSolve();
 }
 

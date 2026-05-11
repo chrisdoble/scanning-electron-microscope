@@ -54,6 +54,11 @@ pub struct GunParameters {
     /// Voltage applied to the anode, referenced to ground
     /// (typically 0 V / ground; defaults to 0 V).
     pub anode_voltage_v: f64,
+
+    /// Multiplier applied to the computed grid spacing h. Values > 1.0
+    /// produce a coarser grid that solves faster (useful for live preview
+    /// while dragging). Default 1.0 = full resolution.
+    pub h_scale: f64,
 }
 
 impl Default for GunParameters {
@@ -75,6 +80,7 @@ impl Default for GunParameters {
             anode_outer_radius_mm: 3.0,
             anode_aperture_radius_mm: 0.5,
             anode_voltage_v: 0.0,
+            h_scale: 1.0,
         }
     }
 }
@@ -228,7 +234,7 @@ pub fn solve_electron_gun(params: &GunParameters) -> Result<GunSolution, JsError
     .filter(|&x| x > 0.0)
     .fold(f64::INFINITY, f64::min);
 
-    let h = (smallest_dim / 10.0).max(5e-5);
+    let h = (smallest_dim / 10.0).max(5e-5) * params.h_scale;
 
     let n_r = (r_max / h).ceil() as usize + 1;
     let n_z = (z_range / h).ceil() as usize + 1;
@@ -278,8 +284,7 @@ pub fn solve_electron_gun(params: &GunParameters) -> Result<GunSolution, JsError
     }
 
     // 8. Solve.
-    solve_laplace_cylindrical(&mut potential, &mask)
-        .map_err(|e| JsError::new(&e.to_string()))?;
+    solve_laplace_cylindrical(&mut potential, &mask).map_err(|e| JsError::new(&e.to_string()))?;
 
     let (e_r, e_z) = compute_electric_field(&potential);
 

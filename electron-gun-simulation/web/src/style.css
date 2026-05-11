@@ -27,12 +27,16 @@ body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  container-type: size;
 }
 
 #visualisation canvas {
   display: block;
-  max-width: 100%;
-  max-height: 100%;
+  /* Scale to fill the container while preserving the canvas aspect ratio.
+     --aspect-ratio is set from JS after each render. Falls back to 1 (square)
+     before the first solve. cqw/cqh are container query width/height units. */
+  width: min(100cqw, 100cqh * var(--aspect-ratio, 1));
+  height: min(100cqh, 100cqw / var(--aspect-ratio, 1));
   image-rendering: pixelated;
 }
 

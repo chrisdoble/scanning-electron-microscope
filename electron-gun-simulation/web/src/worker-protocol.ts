@@ -17,6 +17,7 @@ export const GunParametersSchema = z.object({
   anode_outer_radius_mm: z.number(),
   anode_aperture_radius_mm: z.number(),
   anode_voltage_v: z.number(),
+  h_scale: z.number(),
 });
 
 export type GunParameters = z.infer<typeof GunParametersSchema>;
@@ -39,6 +40,7 @@ export const DEFAULT_GUN_PARAMETERS: GunParameters = {
   anode_outer_radius_mm: 3.0,
   anode_aperture_radius_mm: 0.5,
   anode_voltage_v: 0.0,
+  h_scale: 1.0,
 };
 
 export const GunSolutionSchema = z.object({
