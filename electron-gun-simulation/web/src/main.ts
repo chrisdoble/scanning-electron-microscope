@@ -9,6 +9,7 @@ import {
   handleWheel,
   handleDrag,
 } from './view';
+import { renderArrows } from './arrows';
 import type { AppState } from './state';
 import { DEFAULT_GUN_PARAMETERS, WorkerResponseSchema } from './worker-protocol';
 
@@ -45,11 +46,18 @@ initLegendScale(legendScale);
 let viewState: ViewState = { zoom: 1, translationX: 0, translationY: 0 };
 let fitScale = 1;
 
+function drawOverlay(): void {
+  if (!state.solution) return;
+  renderArrows(overlay, state.solution, viewState, fitScale,
+    visualisation.clientWidth, visualisation.clientHeight);
+}
+
 function updateView(): void {
   const containerW = visualisation.clientWidth;
   const containerH = visualisation.clientHeight;
   viewState = clampTranslation(viewState, fitScale, containerW, containerH, canvas.width, canvas.height);
   applyTransform(canvas, overlay, viewState, fitScale, containerW, containerH);
+  drawOverlay();
 }
 
 // Recompute fitScale and re-apply transform. Called after each new solve
@@ -80,6 +88,7 @@ visualisation.addEventListener('wheel', (event: WheelEvent) => {
     viewState, fitScale, containerW, containerH, canvas.width, canvas.height,
   );
   applyTransform(canvas, overlay, viewState, fitScale, containerW, containerH);
+  drawOverlay();
 }, { passive: false });
 
 // ---- Pan (mouse drag) ----
@@ -98,6 +107,7 @@ function onMouseMove(event: MouseEvent): void {
     canvas.width, canvas.height,
   );
   applyTransform(canvas, overlay, viewState, fitScale, visualisation.clientWidth, visualisation.clientHeight);
+  drawOverlay();
 }
 
 function onMouseUp(): void {
