@@ -35,6 +35,22 @@ body {
   cursor: grabbing;
 }
 
+#viz-controls {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  cursor: default;
+}
+
 #legend {
   position: absolute;
   bottom: 12px;

@@ -31,67 +31,65 @@ const state: AppState = {
   solving: false,
 };
 
-const visualisation = requireElement('#visualisation', HTMLElement);
+const visualisation  = requireElement('#visualisation', HTMLElement);
 const canvas         = requireElement('#solution', HTMLCanvasElement);
 const overlay        = requireElement('#overlay', HTMLCanvasElement);
+const legend         = requireElement('#legend', HTMLElement);
 const legendScale    = requireElement('#legend-scale', HTMLCanvasElement);
 const legendMax      = requireElement('#legend-label-max', HTMLElement);
 const legendMid      = requireElement('#legend-label-mid', HTMLElement);
 const legendMin      = requireElement('#legend-label-min', HTMLElement);
+const showPotential  = requireElement('#show-potential', HTMLInputElement);
+const showEField     = requireElement('#show-efield', HTMLInputElement);
 
 initLegendScale(legendScale);
 
-// ---- View state ----
+// ---- Render functions ----
 
 let viewState: ViewState = { zoom: 1, translationX: 0, translationY: 0 };
 let fitScale = 1;
 
-function drawOverlay(): void {
-  if (!state.solution) return;
-  renderArrows(overlay, state.solution, viewState, fitScale,
-    visualisation.clientWidth, visualisation.clientHeight);
-}
-
-function updateView(): void {
+function renderViewport(): void {
+  if (canvas.width === 0 || canvas.height === 0) return;
   const containerW = visualisation.clientWidth;
   const containerH = visualisation.clientHeight;
+  fitScale = computeFitScale(containerW, containerH, canvas.width, canvas.height);
   viewState = clampTranslation(viewState, fitScale, containerW, containerH, canvas.width, canvas.height);
   applyTransform(canvas, overlay, viewState, fitScale, containerW, containerH);
-  drawOverlay();
+  if (state.solution && showEField.checked) {
+    renderArrows(overlay, state.solution, viewState, fitScale, containerW, containerH);
+  }
 }
 
-// Recompute fitScale and re-apply transform. Called after each new solve
-// (canvas dimensions may have changed) and when the container is resized.
-function onViewportChanged(): void {
-  if (canvas.width === 0 || canvas.height === 0) return;
-  fitScale = computeFitScale(
-    visualisation.clientWidth, visualisation.clientHeight,
-    canvas.width, canvas.height,
-  );
-  updateView();
+function renderScene(): void {
+  if (!state.solution) return;
+  const { minV, maxV } = computeVoltageRange(state.solution);
+  renderSolution(canvas, state.solution, minV, maxV, showPotential.checked);
+  if (showPotential.checked) {
+    updateLegendLabels(legendMax, legendMid, legendMin, minV, maxV);
+    legend.style.display = 'flex';
+  } else {
+    legend.style.display = 'none';
+  }
+  renderViewport();
 }
 
-new ResizeObserver(onViewportChanged).observe(visualisation);
+// ---- Event handlers ----
 
-// ---- Zoom (mouse wheel) ----
+new ResizeObserver(renderViewport).observe(visualisation);
 
 visualisation.addEventListener('wheel', (event: WheelEvent) => {
   if (canvas.width === 0) return;
   event.preventDefault();
   const rect = visualisation.getBoundingClientRect();
-  const containerW = rect.width;
-  const containerH = rect.height;
   viewState = handleWheel(
     event.deltaY,
-    event.clientX - rect.left - containerW / 2,
-    event.clientY - rect.top  - containerH / 2,
-    viewState, fitScale, containerW, containerH, canvas.width, canvas.height,
+    event.clientX - rect.left - rect.width / 2,
+    event.clientY - rect.top  - rect.height / 2,
+    viewState, fitScale, rect.width, rect.height, canvas.width, canvas.height,
   );
-  applyTransform(canvas, overlay, viewState, fitScale, containerW, containerH);
-  drawOverlay();
+  renderViewport();
 }, { passive: false });
-
-// ---- Pan (mouse drag) ----
 
 let dragLastX = 0;
 let dragLastY = 0;
@@ -106,8 +104,7 @@ function onMouseMove(event: MouseEvent): void {
     visualisation.clientWidth, visualisation.clientHeight,
     canvas.width, canvas.height,
   );
-  applyTransform(canvas, overlay, viewState, fitScale, visualisation.clientWidth, visualisation.clientHeight);
-  drawOverlay();
+  renderViewport();
 }
 
 function onMouseUp(): void {
@@ -124,6 +121,9 @@ visualisation.addEventListener('mousedown', (event: MouseEvent) => {
   window.addEventListener('mouseup', onMouseUp);
 });
 
+showPotential.addEventListener('change', renderScene);
+showEField.addEventListener('change', renderScene);
+
 // ---- Solver worker ----
 
 const worker = new Worker(new URL('./solver-worker.ts', import.meta.url), { type: 'module' });
@@ -139,10 +139,7 @@ worker.addEventListener('message', (event: MessageEvent) => {
 
   if (msg.type === 'success') {
     state.solution = msg.solution;
-    const { minV, maxV } = computeVoltageRange(msg.solution);
-    renderSolution(canvas, msg.solution, minV, maxV);
-    updateLegendLabels(legendMax, legendMid, legendMin, minV, maxV);
-    onViewportChanged();
+    renderScene();
     console.log(
       `Solve: ${msg.duration_ms.toFixed(1)} ms` +
       ` (${msg.solution.n_r}×${msg.solution.n_z} grid)`,

@@ -30,6 +30,7 @@ export function renderSolution(
   solution: GunSolution,
   minV: number,
   maxV: number,
+  showPotential: boolean,
 ): void {
   const { n_r, n_z, mask, potential_v } = solution;
 
@@ -59,9 +60,11 @@ export function renderSolution(
       let r: number, g: number, b: number;
       if (isFixed) {
         r = g = b = 0; // electrodes: black
-      } else {
+      } else if (showPotential) {
         const t = range > 0 ? (potential_v[idx] - minV) / range : 0;
         [r, g, b] = interpolate(t);
+      } else {
+        r = g = b = 255; // free cells: white
       }
 
       // Right half: r = 0 is at canvas centre (x = n_r − 1).
