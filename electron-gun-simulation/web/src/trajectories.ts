@@ -122,7 +122,7 @@ export function computeTrajectories(solution: GunSolution, parameters: GunParame
 
       if (!adjacentToFilament) continue;
 
-      const traj = integrateOne(solution, i_r * h_m, z_lo_m + i_z * h_m, dt);
+      const traj = integrateOne(solution, (i_r + 0.5) * h_m, z_lo_m + (i_z - 0.5) * h_m, dt);
       if (traj.length >= 4) trajectories.push(traj);
     }
   }

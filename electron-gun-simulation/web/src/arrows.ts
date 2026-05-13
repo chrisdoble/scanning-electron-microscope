@@ -3,7 +3,7 @@ import { type ViewState, containerToSolution } from './view';
 
 const SPACING = 50;           // container pixels between arrow centres
 const MAX_LEN = SPACING * 0.75;
-const MIN_LEN = SPACING * 0.10;
+const MIN_LEN = SPACING * 0.20;
 const HEAD_ANGLE = Math.PI / 6; // 30° arrowhead half-angle
 
 export function renderArrows(
