@@ -51,6 +51,10 @@ body {
   cursor: default;
 }
 
+#viz-controls .sub-control {
+  padding-left: 1.2em;
+}
+
 #legend {
   position: absolute;
   bottom: 12px;

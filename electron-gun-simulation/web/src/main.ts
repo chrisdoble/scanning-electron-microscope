@@ -41,11 +41,13 @@ const legendScale    = requireElement('#legend-scale', HTMLCanvasElement);
 const legendMax      = requireElement('#legend-label-max', HTMLElement);
 const legendMid      = requireElement('#legend-label-mid', HTMLElement);
 const legendMin      = requireElement('#legend-label-min', HTMLElement);
-const showPotential  = requireElement('#show-potential', HTMLInputElement);
-const showEField     = requireElement('#show-efield', HTMLInputElement);
-const showBeam       = requireElement('#show-beam', HTMLInputElement);
+const showPotential     = requireElement('#show-potential', HTMLInputElement);
+const showEField        = requireElement('#show-efield', HTMLInputElement);
+const flipEFieldArrows  = requireElement('#flip-efield-arrows', HTMLInputElement);
+const showBeam          = requireElement('#show-beam', HTMLInputElement);
 
 initLegendScale(legendScale);
+flipEFieldArrows.disabled = !showEField.checked;
 
 // ---- Render functions ----
 
@@ -63,7 +65,8 @@ function renderViewport(): void {
     renderTrajectories(overlay, state.trajectories, state.solution, viewState, fitScale, containerW, containerH);
   }
   if (showEField.checked) {
-    renderArrows(overlay, state.solution, viewState, fitScale, containerW, containerH);
+    renderArrows(overlay, state.solution, viewState, fitScale, containerW, containerH,
+      flipEFieldArrows.checked);
   }
 }
 
@@ -128,7 +131,11 @@ visualisation.addEventListener('mousedown', (event: MouseEvent) => {
 });
 
 showPotential.addEventListener('change', renderScene);
-showEField.addEventListener('change', renderScene);
+showEField.addEventListener('change', () => {
+  flipEFieldArrows.disabled = !showEField.checked;
+  renderScene();
+});
+flipEFieldArrows.addEventListener('change', renderScene);
 showBeam.addEventListener('change', renderScene);
 
 // ---- Solver worker ----

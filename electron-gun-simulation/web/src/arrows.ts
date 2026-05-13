@@ -13,6 +13,7 @@ export function renderArrows(
   fitScale: number,
   containerW: number,
   containerH: number,
+  flip: boolean,
 ): void {
   const ctx = overlay.getContext('2d');
   if (ctx === null) return;
@@ -88,13 +89,16 @@ export function renderArrows(
     const length = MIN_LEN + t * (MAX_LEN - MIN_LEN);
     const halfLen = length / 2;
 
-    const tailX = cx - dx * halfLen;
-    const tailY = cy - dy * halfLen;
-    const tipX  = cx + dx * halfLen;
-    const tipY  = cy + dy * halfLen;
+    const drawDx = flip ? -dx : dx;
+    const drawDy = flip ? -dy : dy;
+
+    const tailX = cx - drawDx * halfLen;
+    const tailY = cy - drawDy * halfLen;
+    const tipX  = cx + drawDx * halfLen;
+    const tipY  = cy + drawDy * halfLen;
 
     const headLen = Math.min(length * 0.3, 6);
-    const angle = Math.atan2(dy, dx);
+    const angle = Math.atan2(drawDy, drawDx);
 
     ctx.beginPath();
     ctx.moveTo(tailX, tailY);
