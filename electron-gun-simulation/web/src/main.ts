@@ -10,6 +10,7 @@ import {
   handleDrag,
 } from './view';
 import { renderArrows } from './arrows';
+import { computeTrajectories, renderTrajectories } from './trajectories';
 import type { AppState } from './state';
 import { DEFAULT_GUN_PARAMETERS, WorkerResponseSchema } from './worker-protocol';
 
@@ -28,6 +29,7 @@ const state: AppState = {
   parameters: { ...DEFAULT_GUN_PARAMETERS },
   pendingParameters: false,
   solution: null,
+  trajectories: [],
   solving: false,
 };
 
@@ -41,6 +43,7 @@ const legendMid      = requireElement('#legend-label-mid', HTMLElement);
 const legendMin      = requireElement('#legend-label-min', HTMLElement);
 const showPotential  = requireElement('#show-potential', HTMLInputElement);
 const showEField     = requireElement('#show-efield', HTMLInputElement);
+const showBeam       = requireElement('#show-beam', HTMLInputElement);
 
 initLegendScale(legendScale);
 
@@ -50,13 +53,16 @@ let viewState: ViewState = { zoom: 1, translationX: 0, translationY: 0 };
 let fitScale = 1;
 
 function renderViewport(): void {
-  if (canvas.width === 0 || canvas.height === 0) return;
+  if (canvas.width === 0 || canvas.height === 0 || state.solution === null) return;
   const containerW = visualisation.clientWidth;
   const containerH = visualisation.clientHeight;
   fitScale = computeFitScale(containerW, containerH, canvas.width, canvas.height);
   viewState = clampTranslation(viewState, fitScale, containerW, containerH, canvas.width, canvas.height);
   applyTransform(canvas, overlay, viewState, fitScale, containerW, containerH);
-  if (state.solution && showEField.checked) {
+  if (showBeam.checked) {
+    renderTrajectories(overlay, state.trajectories, state.solution, viewState, fitScale, containerW, containerH);
+  }
+  if (showEField.checked) {
     renderArrows(overlay, state.solution, viewState, fitScale, containerW, containerH);
   }
 }
@@ -123,6 +129,7 @@ visualisation.addEventListener('mousedown', (event: MouseEvent) => {
 
 showPotential.addEventListener('change', renderScene);
 showEField.addEventListener('change', renderScene);
+showBeam.addEventListener('change', renderScene);
 
 // ---- Solver worker ----
 
@@ -139,6 +146,7 @@ worker.addEventListener('message', (event: MessageEvent) => {
 
   if (msg.type === 'success') {
     state.solution = msg.solution;
+    state.trajectories = computeTrajectories(msg.solution, state.parameters);
     renderScene();
     console.log(
       `Solve: ${msg.duration_ms.toFixed(1)} ms` +

@@ -101,6 +101,8 @@ pub struct GunSolution {
     pub n_z: usize,
     #[wasm_bindgen(readonly)]
     pub h_m: f64, // grid spacing in metres
+    #[wasm_bindgen(readonly)]
+    pub z_lo_m: f64, // physical z coordinate of grid row i_z = 0, in metres
     // All grids are length n_r * n_z, row-major as per PHYSICS.md §2.2.
     // Accessing these from JS returns a copy (clone) of the data.
     potential_v: Vec<f64>, // potential in volts
@@ -298,6 +300,7 @@ pub fn solve_electron_gun(params: &GunParameters) -> Result<GunSolution, JsError
         n_r: potential.n_r,
         n_z: potential.n_z,
         h_m: potential.h_m,
+        z_lo_m: z_lo,
         potential_v: potential.data,
         e_r_v_per_m: e_r.data,
         e_z_v_per_m: e_z.data,

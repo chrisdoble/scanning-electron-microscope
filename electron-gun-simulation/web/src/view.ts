@@ -89,6 +89,21 @@ export function handleDrag(
   );
 }
 
+// Maps a point in solution canvas pixel space (0,0 = top-left of canvas buffer)
+// to container space (relative to container top-left). Inverse of containerToSolution.
+export function solutionToContainer(
+  x: number, y: number,
+  state: ViewState, fitScale: number,
+  containerW: number, containerH: number,
+  canvasW: number, canvasH: number,
+): { cx: number; cy: number } {
+  const totalScale = fitScale * state.zoom;
+  return {
+    cx: (x - canvasW / 2) * totalScale + containerW / 2 + state.translationX,
+    cy: (y - canvasH / 2) * totalScale + containerH / 2 + state.translationY,
+  };
+}
+
 // Maps a point in container space (relative to container top-left) to
 // solution canvas pixel space (0,0 = top-left of canvas buffer).
 export function containerToSolution(
