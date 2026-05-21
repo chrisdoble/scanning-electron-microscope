@@ -280,7 +280,7 @@ impl App {
 
     /// Render the UI and handle user input.
     async fn update_ui(&self, terminal: &mut DefaultTerminal) -> Result<bool, AnyError> {
-        let has_event = crossterm::event::poll(Duration::from_secs(0))?;
+        let has_event = crossterm::event::poll(Duration::from_millis(100))?;
         let mut state = self.state.lock().await;
 
         if has_event {
