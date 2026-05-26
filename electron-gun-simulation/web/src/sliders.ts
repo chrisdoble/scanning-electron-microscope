@@ -1,11 +1,17 @@
 import type { GunParameters } from './worker-protocol';
 import type { AppState } from './state';
 
-type GunParameterKey = keyof GunParameters;
+type BooleanGunParameterKey = {
+  [K in keyof GunParameters]: GunParameters[K] extends boolean ? K : never;
+}[keyof GunParameters];
+
+type NumberGunParameterKey = {
+  [K in keyof GunParameters]: GunParameters[K] extends number ? K : never;
+}[keyof GunParameters];
 
 interface SliderDefinition {
   label: string;
-  field: GunParameterKey;
+  field: NumberGunParameterKey;
   min: number;
   max: number;
   step: number;
@@ -14,6 +20,7 @@ interface SliderDefinition {
 
 interface GroupDefinition {
   title: string;
+  enabledField?: BooleanGunParameterKey;
   sliders: SliderDefinition[];
 }
 
@@ -29,6 +36,7 @@ const GROUPS: GroupDefinition[] = [
   },
   {
     title: 'Wehnelt cylinder',
+    enabledField: 'wehnelt_enabled',
     sliders: [
       { label: 'Outer radius',    field: 'wehnelt_outer_radius_mm',    min: 1.0,   max: 10.0, step: 0.1,  unit: 'mm' },
       { label: 'Inner radius',    field: 'wehnelt_inner_radius_mm',    min: 0.5,   max: 9.5,  step: 0.1,  unit: 'mm' },
@@ -41,6 +49,7 @@ const GROUPS: GroupDefinition[] = [
   },
   {
     title: 'Anode',
+    enabledField: 'anode_enabled',
     sliders: [
       { label: 'z position',      field: 'anode_z_mm',               min: 0.5,   max: 15.0, step: 0.1,  unit: 'mm' },
       { label: 'Thickness',       field: 'anode_thickness_mm',       min: 0.1,   max: 5.0,  step: 0.1,  unit: 'mm' },
@@ -119,13 +128,47 @@ export function buildControls(
     section.className = 'electrode-group';
 
     const heading = document.createElement('h2');
-    heading.textContent = group.title;
-    section.appendChild(heading);
 
-    for (const def of group.sliders) {
-      section.appendChild(buildSliderRow(def, state.parameters, onInput, onCommit));
+    if (group.enabledField) {
+      const enabledField = group.enabledField;
+      const label = document.createElement('label');
+      label.className = 'electrode-enable';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = state.parameters[enabledField];
+
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(group.title));
+      heading.appendChild(label);
+
+      const sliderInputs: HTMLInputElement[] = [];
+
+      for (const def of group.sliders) {
+        const row = buildSliderRow(def, state.parameters, onInput, onCommit);
+        const input = row.querySelector('input[type="range"]') as HTMLInputElement;
+        input.disabled = !checkbox.checked;
+        sliderInputs.push(input);
+        section.appendChild(row);
+      }
+
+      checkbox.addEventListener('change', () => {
+        state.parameters[enabledField] = checkbox.checked;
+        for (const input of sliderInputs) {
+          input.disabled = !checkbox.checked;
+        }
+        onInput();
+        onCommit();
+      });
+    } else {
+      heading.textContent = group.title;
+
+      for (const def of group.sliders) {
+        section.appendChild(buildSliderRow(def, state.parameters, onInput, onCommit));
+      }
     }
 
+    section.insertBefore(heading, section.firstChild);
     panel.appendChild(section);
   }
 }

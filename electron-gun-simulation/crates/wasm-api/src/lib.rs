@@ -59,6 +59,16 @@ pub struct GunParameters {
     /// produce a coarser grid that solves faster (useful for live preview
     /// while dragging). Default 1.0 = full resolution.
     pub h_scale: f64,
+
+    /// Whether to rasterise the Wehnelt cylinder into the solution mask.
+    /// When false, the Wehnelt geometry is still used for domain sizing and
+    /// grid-spacing calculations so the grid dimensions stay stable on toggle.
+    pub wehnelt_enabled: bool,
+
+    /// Whether to rasterise the anode into the solution mask.
+    /// When false, the anode geometry is still used for domain sizing and
+    /// grid-spacing calculations so the grid dimensions stay stable on toggle.
+    pub anode_enabled: bool,
 }
 
 impl Default for GunParameters {
@@ -81,6 +91,8 @@ impl Default for GunParameters {
             anode_aperture_radius_mm: 0.5,
             anode_voltage_v: 0.0,
             h_scale: 1.0,
+            wehnelt_enabled: true,
+            anode_enabled: true,
         }
     }
 }
@@ -179,7 +191,7 @@ pub fn solve_electron_gun(params: &GunParameters) -> Result<GunSolution, JsError
             "Anode aperture radius must be less than outer radius",
         ));
     }
-    if fil_r >= weh_inner_r {
+    if params.wehnelt_enabled && fil_r >= weh_inner_r {
         return Err(JsError::new(
             "Filament radius must be less than Wehnelt inner radius",
         ));
@@ -268,17 +280,32 @@ pub fn solve_electron_gun(params: &GunParameters) -> Result<GunSolution, JsError
                 potential.data[idx] = fil_v;
             }
             // Wehnelt wall: weh_inner_r ≤ r ≤ weh_outer_r, wall z-range.
-            if r >= weh_inner_r && r <= weh_outer_r && z >= weh_wall_z_lo && z <= weh_wall_z_hi {
+            if params.wehnelt_enabled
+                && r >= weh_inner_r
+                && r <= weh_outer_r
+                && z >= weh_wall_z_lo
+                && z <= weh_wall_z_hi
+            {
                 mask.data[idx] = Cell::Fixed;
                 potential.data[idx] = weh_v;
             }
             // Wehnelt cap (aperture excluded): weh_ap_r ≤ r ≤ weh_outer_r, cap z-range.
-            if r >= weh_ap_r && r <= weh_outer_r && z >= weh_cap_z_lo && z <= weh_cap_z_hi {
+            if params.wehnelt_enabled
+                && r >= weh_ap_r
+                && r <= weh_outer_r
+                && z >= weh_cap_z_lo
+                && z <= weh_cap_z_hi
+            {
                 mask.data[idx] = Cell::Fixed;
                 potential.data[idx] = weh_v;
             }
             // Anode (aperture excluded): an_ap_r ≤ r ≤ an_outer_r, |z − an_z| ≤ an_t/2.
-            if r >= an_ap_r && r <= an_outer_r && z >= an_z_lo && z <= an_z_hi {
+            if params.anode_enabled
+                && r >= an_ap_r
+                && r <= an_outer_r
+                && z >= an_z_lo
+                && z <= an_z_hi
+            {
                 mask.data[idx] = Cell::Fixed;
                 potential.data[idx] = an_v;
             }

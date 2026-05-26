@@ -52,6 +52,8 @@ function handleMessage(event: MessageEvent): void {
   p.anode_aperture_radius_mm = src.anode_aperture_radius_mm;
   p.anode_voltage_v = src.anode_voltage_v;
   p.h_scale = src.h_scale;
+  p.wehnelt_enabled = src.wehnelt_enabled;
+  p.anode_enabled = src.anode_enabled;
 
   try {
     const result = solve_electron_gun(p);

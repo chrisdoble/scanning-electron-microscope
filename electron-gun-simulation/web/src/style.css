@@ -109,6 +109,27 @@ body {
   margin: 0 0 0.6rem;
 }
 
+.electrode-enable {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  cursor: pointer;
+}
+
+.electrode-enable input[type='checkbox'] {
+  cursor: pointer;
+}
+
+.slider-row input[type='range']:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.slider-row:has(input[type='range']:disabled) label,
+.slider-row:has(input[type='range']:disabled) .slider-value {
+  opacity: 0.4;
+}
+
 .slider-row {
   display: grid;
   grid-template-columns: 1fr auto;

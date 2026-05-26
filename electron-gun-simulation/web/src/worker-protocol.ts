@@ -18,6 +18,8 @@ export const GunParametersSchema = z.object({
   anode_aperture_radius_mm: z.number(),
   anode_voltage_v: z.number(),
   h_scale: z.number(),
+  wehnelt_enabled: z.boolean(),
+  anode_enabled: z.boolean(),
 });
 
 export type GunParameters = z.infer<typeof GunParametersSchema>;
@@ -41,6 +43,8 @@ export const DEFAULT_GUN_PARAMETERS: GunParameters = {
   anode_aperture_radius_mm: 0.5,
   anode_voltage_v: 0.0,
   h_scale: 1.0,
+  wehnelt_enabled: true,
+  anode_enabled: true,
 };
 
 export const GunSolutionSchema = z.object({
