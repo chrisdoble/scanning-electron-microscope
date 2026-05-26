@@ -225,7 +225,7 @@ pub fn solve_electron_gun(params: &GunParameters) -> Result<GunSolution, JsError
     .into_iter()
     .fold(0.0_f64, f64::max);
 
-    let margin = 3.0 * largest_dim;
+    let margin = 2.0 * largest_dim;
     let r_max = elec_r_max + margin;
     let z_lo = elec_z_min - margin; // physical z at i_z = 0
     let z_range = (elec_z_max + margin) - z_lo;
