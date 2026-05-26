@@ -110,6 +110,7 @@ export function computeTrajectories(solution: GunSolution, parameters: GunParame
       if (mask[i_z * n_r + i_r] !== 0) continue;
 
       // Is this free cell adjacent to a filament cell?
+      const half_h = h_m / 2;
       const adjacentToFilament = NEIGHBORS.some(([dr, dz]) => {
         const nr = i_r + dr;
         const nz = i_z + dz;
@@ -117,7 +118,7 @@ export function computeTrajectories(solution: GunSolution, parameters: GunParame
         if (mask[nz * n_r + nr] !== 1) return false;
         const phys_r = nr * h_m;
         const phys_z = z_lo_m + nz * h_m;
-        return phys_r <= fil_r && phys_z >= fil_zlo && phys_z <= fil_zhi;
+        return phys_r - half_h <= fil_r && phys_z + half_h >= fil_zlo && phys_z - half_h <= fil_zhi;
       });
 
       if (!adjacentToFilament) continue;

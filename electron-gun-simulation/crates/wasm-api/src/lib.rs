@@ -266,8 +266,14 @@ pub fn solve_electron_gun(params: &GunParameters) -> Result<GunSolution, JsError
     }
 
     // 7. Rasterise electrodes (ARCHITECTURE.md §4.3 steps 6-7).
+    //    A cell at centre (r, z) is Fixed if its h×h area intersects the electrode
+    //    rectangle. This is equivalent to testing whether the cell centre lies within
+    //    the electrode bounds expanded by half_h in each direction. Using intersection
+    //    rather than point-containment ensures small electrodes (thinner than h) are
+    //    always captured regardless of grid alignment.
     //    Physical coords: r = i_r * h, z = z_lo + i_z * h.
     //    Later electrodes overwrite earlier ones (last-wins).
+    let half_h = h / 2.0;
     for i_z in 0..n_z {
         let z = z_lo + i_z as f64 * h;
         for i_r in 0..n_r {
@@ -275,36 +281,37 @@ pub fn solve_electron_gun(params: &GunParameters) -> Result<GunSolution, JsError
             let idx = potential.idx(i_r, i_z);
 
             // Filament: solid disk, r ≤ fil_r, |z − fil_z| ≤ fil_t/2.
-            if r <= fil_r && z >= fil_z_lo && z <= fil_z_hi {
+            // r-lo bound is 0; r + half_h ≥ 0 always, so that term is omitted.
+            if r - half_h <= fil_r && z + half_h >= fil_z_lo && z - half_h <= fil_z_hi {
                 mask.data[idx] = Cell::Fixed;
                 potential.data[idx] = fil_v;
             }
             // Wehnelt wall: weh_inner_r ≤ r ≤ weh_outer_r, wall z-range.
             if params.wehnelt_enabled
-                && r >= weh_inner_r
-                && r <= weh_outer_r
-                && z >= weh_wall_z_lo
-                && z <= weh_wall_z_hi
+                && r + half_h >= weh_inner_r
+                && r - half_h <= weh_outer_r
+                && z + half_h >= weh_wall_z_lo
+                && z - half_h <= weh_wall_z_hi
             {
                 mask.data[idx] = Cell::Fixed;
                 potential.data[idx] = weh_v;
             }
             // Wehnelt cap (aperture excluded): weh_ap_r ≤ r ≤ weh_outer_r, cap z-range.
             if params.wehnelt_enabled
-                && r >= weh_ap_r
-                && r <= weh_outer_r
-                && z >= weh_cap_z_lo
-                && z <= weh_cap_z_hi
+                && r + half_h >= weh_ap_r
+                && r - half_h <= weh_outer_r
+                && z + half_h >= weh_cap_z_lo
+                && z - half_h <= weh_cap_z_hi
             {
                 mask.data[idx] = Cell::Fixed;
                 potential.data[idx] = weh_v;
             }
             // Anode (aperture excluded): an_ap_r ≤ r ≤ an_outer_r, |z − an_z| ≤ an_t/2.
             if params.anode_enabled
-                && r >= an_ap_r
-                && r <= an_outer_r
-                && z >= an_z_lo
-                && z <= an_z_hi
+                && r + half_h >= an_ap_r
+                && r - half_h <= an_outer_r
+                && z + half_h >= an_z_lo
+                && z - half_h <= an_z_hi
             {
                 mask.data[idx] = Cell::Fixed;
                 potential.data[idx] = an_v;
