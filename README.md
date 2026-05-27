@@ -2,6 +2,8 @@ This repository contains my DIY scanning electron microscope project.
 
 My initial goal is to image samples using secondary electron emission and control the microscope from my computer.
 
+I'm also documenting the process on YouTube [here](https://www.youtube.com/playlist?list=PLmlXFuUXRl5AR0MqcsTuL44zxy5YJyGKN).
+
 # Roadmap
 
 - [x] Purchase vacuum equipment
