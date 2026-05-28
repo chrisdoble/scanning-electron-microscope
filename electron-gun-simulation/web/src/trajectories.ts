@@ -123,8 +123,17 @@ export function computeTrajectories(solution: GunSolution, parameters: GunParame
 
       if (!adjacentToFilament) continue;
 
-      const traj = integrateOne(solution, (i_r + 0.5) * h_m, z_lo_m + (i_z - 0.5) * h_m, dt);
-      if (traj.length >= 4) trajectories.push(traj);
+      // Launch one trajectory per 2×2 sub-cell to double the linear density
+      // of trajectories along the filament face in each direction.
+      const r_base = (i_r + 0.5) * h_m;
+      const z_base = z_lo_m + (i_z - 0.5) * h_m;
+      const quarter_h = h_m / 4;
+      for (const dr of [-quarter_h, quarter_h]) {
+        for (const dz of [-quarter_h, quarter_h]) {
+          const traj = integrateOne(solution, r_base + dr, z_base + dz, dt);
+          if (traj.length >= 4) trajectories.push(traj);
+        }
+      }
     }
   }
 
