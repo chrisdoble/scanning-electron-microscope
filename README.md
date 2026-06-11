@@ -28,6 +28,7 @@ The repository structure is as follows:
 - [`electronics`](electronics): KiCad files for the controller PCB.
 - [`firmware`](firmware): A Rust crate containing the [Embassy](https://github.com/embassy-rs/embassy)-based firmware for the controller.
 - [`host`](host): A Rust crate containing code to interface with the controller from a host computer.
+- [`usb-tmc`](usb-tmc): A Rust crate containing an implementation of the [USB Test and Measurement Class](https://www.usb.org/document-library/test-measurement-class-specification) for interfacing with oscilloscopes, power supplies, etc.
 
 # Required hardware
 

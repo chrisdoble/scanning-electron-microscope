@@ -1,0 +1,11 @@
+[package]
+name = "usb-tmc"
+edition.workspace = true
+publish.workspace = true
+version.workspace = true
+
+[dependencies]
+log = "0.4.29"
+rusb = "0.9.4"
+thiserror = "2.0.17"
+tokio = { features = ["macros", "rt", "time"], version = "1.49.0" }
