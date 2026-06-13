@@ -326,7 +326,10 @@ fn read_message(inner: &mut Inner) -> Result<Vec<u8>> {
 
     loop {
         let b_tag = inner.b_tags.next();
-        let request = protocol::encode_request_dev_dep_msg_in(b_tag, u32::MAX);
+        // The Rigol DP932E power supply gets confused when the transfer size is
+        // set to u32::MAX. It behaves as expected when using pyvisa which uses
+        // a transfer size of 20 * 1024. Use that here so everything works.
+        let request = protocol::encode_request_dev_dep_msg_in(b_tag, 20 * 1024);
         write_bulk_all(
             &inner.handle,
             inner.bulk_out_endpoint,
