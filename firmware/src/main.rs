@@ -85,6 +85,12 @@ async fn main(spawner: Spawner) {
     // transmission). Set this pin high to transmit and set it low to read.
     let mut uart1_transmit_pin = Output::new(peripherals.PIN_3, Level::Low);
 
+    // The two relays on the controller. When a pin is low the relay is in its
+    // base state (nc is connected), when it's high it's in its active state (no
+    // is connected). They hold their state until the next RLY command.
+    let mut relay_1_pin = Output::new(peripherals.PIN_18, Level::Low);
+    let mut relay_2_pin = Output::new(peripherals.PIN_19, Level::Low);
+
     // USB packets that are exactly the maximum packet size aren't processed
     // until a subsequent shorter packet is sent. We may not have a subsequent
     // packet to send but we want all packets to be sent immediately. Set the
@@ -116,6 +122,10 @@ async fn main(spawner: Spawner) {
                     b"ADC" => {
                         write_command(command, "ADC", &mut uart0).await?;
                         response_length = read_response(&mut response, "ADC", &mut uart0).await?;
+                    }
+                    b"RLY" => {
+                        response_length =
+                            set_relays(command, &mut relay_1_pin, &mut relay_2_pin, &mut response)?;
                     }
                     b"TMP" => {
                         write_rs_485_command(
@@ -194,6 +204,8 @@ fn init_usb<'a>(
         let mut config = embassy_usb::Config::new(0x1209, 0x0001);
         config.manufacturer = Some("Chris Doble");
         config.max_packet_size_0 = USB_MAX_PACKET_SIZE;
+        // Use the maximum available power for the relays' coil draw.
+        config.max_power = 500;
         config.product = Some("SEM controller");
         config
     };
@@ -412,6 +424,34 @@ async fn read_response(
         response[..length]
     );
     Ok(length)
+}
+
+/// Sets the state of the relays and writes a response into `response`.
+///
+/// `command` must be a single digit in the range 0-3 followed by a carriage
+/// return. The digit is a bit mask where the first bit corresponds to the first
+/// relay and the second bit corresponds to the second relay.
+///
+/// If the command is valid, the length of the response is returned.
+fn set_relays(
+    command: &[u8],
+    relay_1_pin: &mut Output<'_>,
+    relay_2_pin: &mut Output<'_>,
+    response: &mut [u8],
+) -> Result<usize, ControllerError> {
+    if command.len() != 2 || !(b'0'..=b'3').contains(&command[0]) {
+        return Err(ControllerError::CommandInvalid);
+    }
+
+    let mask = command[0] - b'0';
+    info!("Setting relays: {}", mask);
+    relay_1_pin.set_level(Level::from(mask & 0b01 != 0));
+    relay_2_pin.set_level(Level::from(mask & 0b10 != 0));
+
+    // Respond with 1 to indicate the command was received and executed. The
+    // carriage return matches the terminator used by the ADC and the TMP.
+    response[..2].copy_from_slice(b"1\r");
+    Ok(2)
 }
 
 /// Sends a response to the USB host.

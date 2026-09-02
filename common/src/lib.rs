@@ -14,6 +14,9 @@ pub const USB_MAX_PACKET_SIZE: u8 = 64;
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(Format))]
 pub enum ControllerError {
+    /// A command's payload wasn't valid for its destination.
+    CommandInvalid,
+
     /// A command was missing a destination prefix.
     ///
     /// Each command must include a three letter destination prefix followed by
@@ -60,6 +63,7 @@ impl error::Error for ControllerError {}
 impl fmt::Display for ControllerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            ControllerError::CommandInvalid => "COMMAND_INVALID",
             ControllerError::CommandMissingDestination => "COMMAND_MISSING_DESTINATION",
             ControllerError::CommandTimeout => "COMMAND_TIMEOUT",
             ControllerError::CommandTooLong => "COMMAND_TOO_LONG",
@@ -79,6 +83,7 @@ impl str::FromStr for ControllerError {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
+            "COMMAND_INVALID" => ControllerError::CommandInvalid,
             "COMMAND_MISSING_DESTINATION" => ControllerError::CommandMissingDestination,
             "COMMAND_TIMEOUT" => ControllerError::CommandTimeout,
             "COMMAND_TOO_LONG" => ControllerError::CommandTooLong,
