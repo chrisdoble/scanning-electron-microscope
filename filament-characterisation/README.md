@@ -2,4 +2,4 @@ This directory contains files relating to the hardware and software used to char
 
 # Directory structure
 
-- [`filament-mount`](filament-mount): 3D models of the filament mount.
+- [`mount`](mount): 3D models of the filament mount.
