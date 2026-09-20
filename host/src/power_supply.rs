@@ -86,13 +86,6 @@ struct PowerSupplyState {
 
     /// The supply itself.
     device: UsbTmcDevice,
-
-    /// The polarity most recently set.
-    ///
-    /// Cached because the controller's `RLY` command is write-only: the
-    /// firmware holds the relay state but offers no way to read it back. It
-    /// starts as `Nil`, which is the state the relay pins power up in.
-    polarity: Polarity,
 }
 
 /// Interacts with the Rigol DP-932E power supply and the SPDT polarity relays.
@@ -120,7 +113,6 @@ impl PowerSupply {
                 channel,
                 controller,
                 device,
-                polarity: Polarity::default(),
             }),
         })
     }
@@ -141,8 +133,11 @@ impl PowerSupply {
 
     /// Gets the direction of the current through the filament.
     pub async fn get_polarity(&self) -> Result<Polarity, PowerSupplyError> {
-        // TODO: return `state.polarity`. The relays can't be read back, so the
-        // cached value is the only answer there is.
+        // TODO: send a `Destination::RLY` command whose payload is "?" and map
+        // the relay bit mask it returns — 0 to `Nil`, 1 to `Forward`, 2 to
+        // `Reverse`, and 3 to `Nil` too, since both relays energised puts both
+        // sides of the filament on the positive rail, which is electrically
+        // the same as neither and is never deliberately set.
         error!("power supply get_polarity isn't implemented");
         Err(PowerSupplyError::NotImplemented)
     }
@@ -168,8 +163,7 @@ impl PowerSupply {
     pub async fn set_polarity(&self, _polarity: Polarity) -> Result<(), PowerSupplyError> {
         // TODO: send a `Destination::RLY` command whose payload is the relay
         // bit mask as a single digit — 0 for `Nil`, 1 for `Forward` (relay 1
-        // energised) and 2 for `Reverse` (relay 2 energised) — then store the
-        // new polarity in `state.polarity`.
+        // energised) and 2 for `Reverse` (relay 2 energised).
         error!("power supply set_polarity isn't implemented");
         Err(PowerSupplyError::NotImplemented)
     }

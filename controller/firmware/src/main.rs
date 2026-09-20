@@ -124,8 +124,15 @@ async fn main(spawner: Spawner) {
                         response_length = read_response(&mut response, "ADC", &mut uart0).await?;
                     }
                     b"RLY" => {
-                        response_length =
-                            set_relays(command, &mut relay_1_pin, &mut relay_2_pin, &mut response)?;
+                        response_length = match command {
+                            b"?\r" => get_relays(&relay_1_pin, &relay_2_pin, &mut response),
+                            _ => set_relays(
+                                command,
+                                &mut relay_1_pin,
+                                &mut relay_2_pin,
+                                &mut response,
+                            )?,
+                        };
                     }
                     b"TMP" => {
                         write_rs_485_command(
@@ -424,6 +431,23 @@ async fn read_response(
         response[..length]
     );
     Ok(length)
+}
+
+/// Writes the state of the relays into `response`.
+///
+/// The state is a single digit in the range 0-3 followed by a carriage return,
+/// the same bit mask `set_relays` accepts: the first bit corresponds to the
+/// first relay and the second bit corresponds to the second relay.
+///
+/// The length of the response is returned.
+fn get_relays(relay_1_pin: &Output<'_>, relay_2_pin: &Output<'_>, response: &mut [u8]) -> usize {
+    let mask = u8::from(relay_1_pin.is_set_high()) | (u8::from(relay_2_pin.is_set_high()) << 1);
+    info!("Getting relays: {}", mask);
+
+    // The carriage return matches the terminator used by the ADC and the TMP.
+    response[0] = b'0' + mask;
+    response[1] = b'\r';
+    2
 }
 
 /// Sets the state of the relays and writes a response into `response`.
