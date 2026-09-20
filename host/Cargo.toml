@@ -5,14 +5,14 @@ publish.workspace = true
 version.workspace = true
 
 [dependencies]
-clap = { features = ["derive"], version = "4.5.56" }
+clap = { workspace = true }
 common = { path = "../common" }
-crossterm = "0.29.0"
-env_logger = "0.11.8"
-log = "0.4.29"
+crossterm = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
 plotters = { default-features = false, features = ["bitmap_backend", "bitmap_encoder", "image", "line_series", "ttf"], version = "0.3.7" }
-ratatui = "0.30.0"
-serialport = "4.8.1"
-thiserror = "2.0.17"
-tokio = { features = ["macros", "rt", "sync", "time"], version = "1.49.0" }
+ratatui = { workspace = true }
+serialport = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
 usb-tmc = { path = "../usb-tmc" }
