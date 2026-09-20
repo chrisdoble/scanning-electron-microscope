@@ -10,6 +10,9 @@ pub enum Destination {
     /// The Edwards ADC MkII pressure gauge controller.
     ADC,
 
+    /// The SPDT relays on the controller.
+    RLY,
+
     // The Pfeiffer TC 600 TMP controller.
     TMP,
 }

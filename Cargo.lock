@@ -1382,6 +1382,7 @@ dependencies = [
  "serialport",
  "thiserror 2.0.18",
  "tokio",
+ "usb-tmc",
 ]
 
 [[package]]
