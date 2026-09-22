@@ -7,4 +7,4 @@ This crate contains both a library for interfacing with the controller hardware 
 
 # Running
 
-1. Run `cargo run -p characteriser -- <device path> <ADC gauge number> <TMP address>`, e.g. `cargo run -p characteriser -- /dev/tty.usbmodem11201 1 001`.
+1. Run `cargo run --bin vacuum -- <device path> <ADC gauge number> <TMP address>`, e.g. `cargo run --bin vacuum -- /dev/tty.usbmodem11201 1 001`.
