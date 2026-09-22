@@ -1,7 +1,7 @@
-use crate::controller::Controller;
+use crate::controller::{Controller, Destination};
 use common::ControllerError;
 use log::*;
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display, num::ParseFloatError, sync::Arc};
 use thiserror::Error;
 use usb_tmc::UsbTmcDevice;
 
@@ -24,9 +24,16 @@ pub enum PowerSupplyError {
     #[error("controller error: {0}")]
     Controller(#[from] ControllerError),
 
+    #[error("invalid float: {0}")]
+    InvalidFloatError(#[from] ParseFloatError),
+
     /// The method hasn't been implemented yet.
     #[error("not implemented")]
     NotImplemented,
+
+    /// The controller returned an unknown relay polarity.
+    #[error("unknown relay polarity: {0}")]
+    UnknownRelayPolarity(String),
 
     /// An error encountered while communicating with the supply over USBTMC.
     #[error("usb-tmc error: {0}")]
@@ -75,9 +82,6 @@ impl Display for Polarity {
 #[allow(dead_code)]
 #[derive(Debug)]
 struct PowerSupplyState {
-    /// The channel driving the filament.
-    channel: u8,
-
     /// Used to switch the SPDT polarity relays.
     ///
     /// The relays are wired to the controller rather than to the supply, so
@@ -89,6 +93,8 @@ struct PowerSupplyState {
 }
 
 /// Interacts with the Rigol DP-932E power supply and the SPDT polarity relays.
+///
+/// Always uses the power supply's first channel.
 ///
 /// Only some commands and queries are implemented. See the supply's
 /// programming guide for a list of all supported commands and queries.
@@ -103,75 +109,97 @@ impl PowerSupply {
     /// `controller` is used to switch the SPDT polarity relays.
     ///
     /// The supply itself is found by its USB vendor and product IDs.
-    pub async fn new(channel: u8, controller: Arc<Controller>) -> Result<Self, PowerSupplyError> {
+    pub async fn new(controller: Arc<Controller>) -> Result<Self, PowerSupplyError> {
         let device = UsbTmcDevice::open(VENDOR_ID, PRODUCT_ID, None)
             .await
             .inspect_err(|e| error!("failed to open the power supply: {}", e))?;
 
         Ok(Self {
-            state: tokio::sync::Mutex::new(PowerSupplyState {
-                channel,
-                controller,
-                device,
-            }),
+            state: tokio::sync::Mutex::new(PowerSupplyState { controller, device }),
         })
     }
 
-    /// Gets the current flowing out of the channel in amperes.
+    /// Gets the current flowing out of channel 1 in amperes.
     pub async fn get_current(&self) -> Result<f64, PowerSupplyError> {
-        // TODO: query ":MEASure:CURRent? CH<channel>" and parse the response.
-        error!("power supply get_current isn't implemented");
-        Err(PowerSupplyError::NotImplemented)
+        let state = self.state.lock().await;
+        Ok(state
+            .device
+            .query_str(":MEASure:CURRent? CH1")
+            .await?
+            .trim()
+            .parse()?)
     }
 
-    /// Gets whether the channel's output is enabled.
+    /// Gets whether channel 1's output is enabled.
     pub async fn get_output_enabled(&self) -> Result<bool, PowerSupplyError> {
-        // TODO: query ":OUTPut? CH<channel>" and parse the response.
-        error!("power supply get_output_enabled isn't implemented");
-        Err(PowerSupplyError::NotImplemented)
+        let state = self.state.lock().await;
+        Ok(state.device.query_str(":OUTPut? CH1").await?.trim() == "1")
     }
 
     /// Gets the direction of the current through the filament.
     pub async fn get_polarity(&self) -> Result<Polarity, PowerSupplyError> {
-        // TODO: send a `Destination::RLY` command whose payload is "?" and map
-        // the relay bit mask it returns — 0 to `Nil`, 1 to `Forward`, 2 to
-        // `Reverse`, and 3 to `Nil` too, since both relays energised puts both
-        // sides of the filament on the positive rail, which is electrically
-        // the same as neither and is never deliberately set.
-        error!("power supply get_polarity isn't implemented");
-        Err(PowerSupplyError::NotImplemented)
+        let state = self.state.lock().await;
+        let polarity = state
+            .controller
+            .send_command(Destination::RLY, "?")
+            .await?
+            .trim()
+            .to_string();
+        match polarity.as_str() {
+            "0" | "3" => Ok(Polarity::Nil),
+            "1" => Ok(Polarity::Forward),
+            "2" => Ok(Polarity::Reverse),
+            _ => Err(PowerSupplyError::UnknownRelayPolarity(polarity)),
+        }
     }
 
     /// Sets the channel's current limit in amperes.
-    pub async fn set_current(&self, _current: f64) -> Result<(), PowerSupplyError> {
-        // TODO: send ":SOURce<channel>:CURRent <current>".
-        error!("power supply set_current isn't implemented");
-        Err(PowerSupplyError::NotImplemented)
+    pub async fn set_current_limit(&self, current: f64) -> Result<(), PowerSupplyError> {
+        let state = self.state.lock().await;
+        state
+            .device
+            .write_str(format!(":SOURce1:CURRent {}", current).as_str())
+            .await?;
+        Ok(())
     }
 
     /// Enables or disables the channel's output.
-    pub async fn set_output_enabled(&self, _enabled: bool) -> Result<(), PowerSupplyError> {
-        // TODO: send ":OUTPut CH<channel>,ON" or ":OUTPut CH<channel>,OFF".
-        error!("power supply set_output_enabled isn't implemented");
-        Err(PowerSupplyError::NotImplemented)
+    pub async fn set_output_enabled(&self, enabled: bool) -> Result<(), PowerSupplyError> {
+        let state = self.state.lock().await;
+        state
+            .device
+            .write_str(format!(":OUTPut CH1,{}", enabled as u8).as_str())
+            .await?;
+        Ok(())
     }
 
     /// Sets the direction of the current through the filament via the relays.
     ///
     /// IMPORTANT: The output must be disabled before the relays are switched,
-    /// otherwise the contacts will arc.
-    pub async fn set_polarity(&self, _polarity: Polarity) -> Result<(), PowerSupplyError> {
-        // TODO: send a `Destination::RLY` command whose payload is the relay
-        // bit mask as a single digit — 0 for `Nil`, 1 for `Forward` (relay 1
-        // energised) and 2 for `Reverse` (relay 2 energised).
-        error!("power supply set_polarity isn't implemented");
-        Err(PowerSupplyError::NotImplemented)
+    /// otherwise the contacts may arc.
+    pub async fn set_polarity(&self, polarity: Polarity) -> Result<(), PowerSupplyError> {
+        let state = self.state.lock().await;
+        state
+            .controller
+            .send_command(
+                Destination::RLY,
+                match polarity {
+                    Polarity::Nil => "0",
+                    Polarity::Forward => "1",
+                    Polarity::Reverse => "2",
+                },
+            )
+            .await?;
+        Ok(())
     }
 
     /// Sets the channel's voltage limit in volts.
-    pub async fn set_voltage(&self, _voltage: f64) -> Result<(), PowerSupplyError> {
-        // TODO: send ":SOURce<channel>:VOLTage <voltage>".
-        error!("power supply set_voltage isn't implemented");
-        Err(PowerSupplyError::NotImplemented)
+    pub async fn set_voltage_limit(&self, voltage: f64) -> Result<(), PowerSupplyError> {
+        let state = self.state.lock().await;
+        state
+            .device
+            .write_str(format!(":SOURce1:VOLTage {}", voltage).as_str())
+            .await?;
+        Ok(())
     }
 }
