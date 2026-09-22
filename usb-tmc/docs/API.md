@@ -10,6 +10,9 @@ exchange SCPI-style messages with an instrument over its bulk endpoints:
 
 - Finding a device by USB vendor/product ID, opening it, and locating its
   USBTMC interface and bulk endpoints — once, at startup.
+- Reading the interface's capabilities (`GET_CAPABILITIES`) and asserting REN
+  (`REN_CONTROL`) if it accepts it, so a USB488 instrument doesn't sit in local
+  mode ignoring everything it's sent.
 - Sending a message to the device (`DEV_DEP_MSG_OUT`).
 - Requesting a response and reading it back in full
   (`REQUEST_DEV_DEP_MSG_IN` / `DEV_DEP_MSG_IN`), reassembling multi-transfer
@@ -48,9 +51,16 @@ impl UsbTmcDevice {
     /// and bulk-OUT endpoints, and claims it. All of this happens once;
     /// [`read`] and [`write`] reuse the result.
     ///
+    /// It then reads the interface's capabilities and, if the interface accepts
+    /// it, asserts REN (Remote ENable) — without which a USB488 instrument may
+    /// sit in local mode and ignore everything it's sent. REN stays asserted
+    /// until the instrument is sent `GO_TO_LOCAL`, has its Local key pressed,
+    /// or is power cycled, so it outlives the process that asserted it.
+    ///
     /// `timeout` is the timeout applied to every bulk transfer performed by
     /// the returned device for its entire lifetime — there is no per-call
-    /// override. If `timeout` is `None`, a default of 5 seconds is used.
+    /// override, though it also bounds the control transfers above. If
+    /// `timeout` is `None`, a default of 5 seconds is used.
     ///
     /// # Errors
     ///
@@ -62,6 +72,10 @@ impl UsbTmcDevice {
     /// - [`Error::UsbTmcInterfaceNotFound`] — the device has no interface
     ///   with the USBTMC class/subclass exposing exactly one bulk-IN and one
     ///   bulk-OUT endpoint.
+    /// - [`Error::ControlRequestFailed`] — the device declined
+    ///   `GET_CAPABILITIES` or `REN_CONTROL`.
+    /// - [`Error::Protocol`] — the device's response to one of those requests
+    ///   was the wrong length.
     /// - [`Error::Usb`] — any underlying `rusb`/libusb call fails (opening
     ///   the device, claiming the interface, etc.).
     ///
@@ -235,11 +249,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Deliberately not implemented in v1 (may be revisited later):
 
-- **Control-endpoint requests** (`INITIATE_ABORT_BULK_OUT`,
-  `CHECK_ABORT_BULK_OUT_STATUS`, `INITIATE_ABORT_BULK_IN`,
-  `CHECK_ABORT_BULK_IN_STATUS`, `INITIATE_CLEAR`/`CHECK_CLEAR_STATUS`,
-  `GET_CAPABILITIES`). Without these, the only way to recover from a stuck
-  or desynchronized transfer is to drop and reopen the `UsbTmcDevice`.
+- **The abort and clear control-endpoint requests**
+  (`INITIATE_ABORT_BULK_OUT`, `CHECK_ABORT_BULK_OUT_STATUS`,
+  `INITIATE_ABORT_BULK_IN`, `CHECK_ABORT_BULK_IN_STATUS`,
+  `INITIATE_CLEAR`/`CHECK_CLEAR_STATUS`). Without these, the only way to
+  recover from a stuck or desynchronized transfer is to drop and reopen the
+  `UsbTmcDevice` — which re-asserts REN but doesn't clear the device's bulk
+  pipes. `GET_CAPABILITIES` and `REN_CONTROL` *are* implemented, at open.
+- **Releasing REN** — there's no `GO_TO_LOCAL` or `LOCAL_LOCKOUT`, so an
+  instrument this crate has opened stays in remote mode until its Local key is
+  pressed or it's power cycled.
 - **The optional interrupt-IN endpoint** (used for asynchronous device
   notifications) is never read.
 - **`TermChar`-based early termination** — `read` relies solely on the EOM

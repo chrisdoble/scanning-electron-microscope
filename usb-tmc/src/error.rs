@@ -5,6 +5,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    /// The device rejected a class-specific control request, returning a
+    /// `USBTMC_status` other than `STATUS_SUCCESS` — `0x02` is `STATUS_PENDING`
+    /// and `0x80` is `STATUS_FAILED`. Unlike [`Error::Protocol`] this doesn't
+    /// mean the host and device are out of sync; the device understood the
+    /// request and declined it.
+    #[error("the device returned status {status:#04x} for control request {request:#04x}")]
+    ControlRequestFailed { request: u8, status: u8 },
+
     /// No connected USB device matched the requested vendor and product ID.
     #[error("no device found with vendor ID {vendor_id:#06x} and product ID {product_id:#06x}")]
     DeviceNotFound { vendor_id: u16, product_id: u16 },
@@ -21,11 +29,6 @@ pub enum Error {
         count: usize,
     },
 
-    /// The device has no USBTMC interface (class `0xFE`, subclass `0x03`)
-    /// exposing exactly one bulk-IN and one bulk-OUT endpoint.
-    #[error("no usable USBTMC interface found on device")]
-    UsbTmcInterfaceNotFound,
-
     /// The device sent a response that didn't conform to the USBTMC bulk
     /// transfer framing (e.g. a mismatched `bTag`/`bTagInverse`, or an
     /// unexpected message type). The host and device are now out of sync;
@@ -39,6 +42,11 @@ pub enum Error {
     /// performing a bulk transfer (including timeouts).
     #[error(transparent)]
     Usb(#[from] rusb::Error),
+
+    /// The device has no USBTMC interface (class `0xFE`, subclass `0x03`)
+    /// exposing exactly one bulk-IN and one bulk-OUT endpoint.
+    #[error("no usable USBTMC interface found on device")]
+    UsbTmcInterfaceNotFound,
 
     /// A response from
     /// [`read_str`](crate::UsbTmcDevice::read_str)/[`query_str`](crate::UsbTmcDevice::query_str)

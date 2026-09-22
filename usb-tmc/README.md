@@ -15,6 +15,9 @@ See [`docs/API.md`](docs/API.md) for the full API design.
 
 - Find a device by USB vendor/product ID, open it, and locate its USBTMC
   interface and bulk endpoints.
+- Read the interface's capabilities (`GET_CAPABILITIES`) and, if it accepts
+  them, assert REN (`REN_CONTROL`), without which a USB488 instrument may
+  ignore everything it's sent until something else takes it out of local mode.
 - Send a message to the device (`DEV_DEP_MSG_OUT`).
 - Request a response and read it back in full
   (`REQUEST_DEV_DEP_MSG_IN`/`DEV_DEP_MSG_IN`), reassembling multi-transfer
@@ -24,7 +27,11 @@ See [`docs/API.md`](docs/API.md) for the full API design.
 
 - No support for the control-endpoint requests used to abort or recover a
   stuck transfer — if the host and device get out of sync, drop and reopen
-  the `UsbTmcDevice`.
+  the `UsbTmcDevice`. Note that reopening asserts REN again but doesn't clear
+  the device's bulk pipes, which is what `INITIATE_CLEAR` is for.
+- REN is asserted on every `open` and never released — there's no
+  `GO_TO_LOCAL`, so an instrument stays in remote mode until its Local key is
+  pressed or it's power cycled.
 - `read` relies solely on the EOM bit; `TermChar`-based early termination
   isn't supported.
 - If multiple devices match the given vendor/product ID, `open` returns an

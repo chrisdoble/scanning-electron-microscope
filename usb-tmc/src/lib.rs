@@ -72,22 +72,33 @@ impl UsbTmcDevice {
     /// and bulk-OUT endpoints, and claims it. All of this happens once;
     /// [`read`] and [`write`] reuse the result.
     ///
+    /// It then reads the interface's capabilities and, if the interface accepts
+    /// it, asserts REN (Remote ENable) — without which a USB488 instrument may
+    /// sit in local mode and ignore everything it's sent. REN stays asserted
+    /// until the instrument is sent `GO_TO_LOCAL`, has its Local key pressed, or
+    /// is power cycled, so it outlives the process that asserted it.
+    ///
     /// `timeout` is the timeout applied to every bulk transfer performed by
     /// the returned device for its entire lifetime — there is no per-call
-    /// override. If `timeout` is `None`, a default of 5 seconds is used.
+    /// override, though it also bounds the control transfers above. If
+    /// `timeout` is `None`, a default of 5 seconds is used.
     ///
     /// # Errors
     ///
+    /// - [`Error::ControlRequestFailed`] — the device declined
+    ///   `GET_CAPABILITIES` or `REN_CONTROL`.
     /// - [`Error::DeviceNotFound`] — no connected device matches `vendor_id`
     ///   and `product_id`.
     /// - [`Error::MultipleDevicesFound`] — more than one connected device
     ///   matches. This crate doesn't support disambiguating further; ensure
     ///   only one matching device is connected.
+    /// - [`Error::Protocol`] — the device's response to one of those requests
+    ///   was the wrong length.
+    /// - [`Error::Usb`] — any underlying `rusb`/libusb call fails (opening
+    ///   the device, claiming the interface, etc.).
     /// - [`Error::UsbTmcInterfaceNotFound`] — the device has no interface
     ///   with the USBTMC class/subclass exposing exactly one bulk-IN and one
     ///   bulk-OUT endpoint.
-    /// - [`Error::Usb`] — any underlying `rusb`/libusb call fails (opening
-    ///   the device, claiming the interface, etc.).
     ///
     /// [`read`]: UsbTmcDevice::read
     /// [`write`]: UsbTmcDevice::write
@@ -224,6 +235,8 @@ fn open_blocking(vendor_id: u16, product_id: u16, timeout: Duration) -> Result<U
     let handle = device.open()?;
     handle.claim_interface(interface_number)?;
 
+    enable_remote_control(&handle, interface_number, timeout)?;
+
     Ok(UsbTmcDevice {
         inner: Arc::new(Mutex::new(Inner {
             handle,
@@ -234,6 +247,72 @@ fn open_blocking(vendor_id: u16, product_id: u16, timeout: Duration) -> Result<U
             b_tags: protocol::BTagSequence::default(),
         })),
     })
+}
+
+/// Asserts REN (Remote ENable) on `handle`, if its USBTMC interface accepts it.
+///
+/// A USB488 instrument may sit in local mode and ignore the messages it's sent
+/// until REN is asserted. VISA implementations assert it on every open, which is
+/// why an instrument one of them has talked to is then reachable without it: REN
+/// stays asserted until the instrument is sent `GO_TO_LOCAL`, has its Local key
+/// pressed, or is power cycled.
+///
+/// Whether the interface accepts `REN_CONTROL` comes from `GET_CAPABILITIES`,
+/// which every USBTMC interface must implement. An interface that doesn't accept
+/// it is left alone — plenty of instruments answer queries in local mode.
+fn enable_remote_control(
+    handle: &rusb::DeviceHandle<GlobalContext>,
+    interface_number: u8,
+    timeout: Duration,
+) -> Result<()> {
+    // Class-specific requests read from an interface: bmRequestType 0xA1.
+    let request_type = rusb::request_type(
+        Direction::In,
+        rusb::RequestType::Class,
+        rusb::Recipient::Interface,
+    );
+
+    let mut capabilities = [0u8; protocol::GET_CAPABILITIES_LEN];
+    let n = handle.read_control(
+        request_type,
+        protocol::GET_CAPABILITIES,
+        0,
+        u16::from(interface_number),
+        &mut capabilities,
+        timeout,
+    )?;
+    if n != capabilities.len() {
+        return Err(Error::Protocol(format!(
+            "the device's GET_CAPABILITIES response was {n} bytes, expected {}",
+            capabilities.len()
+        )));
+    }
+    protocol::check_status(protocol::GET_CAPABILITIES, capabilities[0])?;
+
+    if !protocol::accepts_ren_control(&capabilities) {
+        log::debug!("the device doesn't accept REN_CONTROL, leaving it in local mode");
+        return Ok(());
+    }
+
+    let mut status = [0u8; 1];
+    let n = handle.read_control(
+        request_type,
+        protocol::REN_CONTROL,
+        1,
+        u16::from(interface_number),
+        &mut status,
+        timeout,
+    )?;
+    if n != status.len() {
+        return Err(Error::Protocol(format!(
+            "the device's REN_CONTROL response was {n} bytes, expected {}",
+            status.len()
+        )));
+    }
+    protocol::check_status(protocol::REN_CONTROL, status[0])?;
+
+    log::debug!("asserted REN");
+    Ok(())
 }
 
 /// Finds the single connected USB device matching `vendor_id` and

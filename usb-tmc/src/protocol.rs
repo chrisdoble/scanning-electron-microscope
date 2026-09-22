@@ -13,6 +13,25 @@ pub const USBTMC_INTERFACE_CLASS: u8 = 0xfe;
 /// `bInterfaceSubClass` for a USBTMC interface.
 pub const USBTMC_INTERFACE_SUBCLASS: u8 = 0x03;
 
+/// `bRequest` for `GET_CAPABILITIES` (USBTMC 1.00, section 4.2.1.8).
+pub const GET_CAPABILITIES: u8 = 7;
+
+/// The length of a `GET_CAPABILITIES` response.
+pub const GET_CAPABILITIES_LEN: usize = 0x18;
+
+/// `bRequest` for `REN_CONTROL` (USB488 1.00, section 4.3.1).
+pub const REN_CONTROL: u8 = 160;
+
+/// The `USBTMC_status` a device returns when it accepted a request.
+const STATUS_SUCCESS: u8 = 1;
+
+/// The offset of the USB488 capabilities byte in a `GET_CAPABILITIES` response.
+const USB488_CAPABILITIES_OFFSET: usize = 0x0e;
+
+/// Bit 1 of the USB488 capabilities byte: the interface accepts `REN_CONTROL`,
+/// `GO_TO_LOCAL` and `LOCAL_LOCKOUT`.
+const USB488_CAPABILITY_REN_CONTROL: u8 = 1 << 1;
+
 const DEV_DEP_MSG_OUT: u8 = 1;
 const REQUEST_DEV_DEP_MSG_IN: u8 = 2;
 const DEV_DEP_MSG_IN: u8 = 2;
@@ -104,6 +123,22 @@ pub fn decode_dev_dep_msg_in(
     let eom = header[8] & TRANSFER_ATTRIBUTES_BIT0 != 0;
 
     Ok(DevDepMsgIn { transfer_size, eom })
+}
+
+/// Checks the `USBTMC_status` a device returned for the control request
+/// `request`.
+pub fn check_status(request: u8, status: u8) -> Result<(), Error> {
+    if status == STATUS_SUCCESS {
+        Ok(())
+    } else {
+        Err(Error::ControlRequestFailed { request, status })
+    }
+}
+
+/// Whether a `GET_CAPABILITIES` response says the interface accepts
+/// `REN_CONTROL`.
+pub fn accepts_ren_control(capabilities: &[u8; GET_CAPABILITIES_LEN]) -> bool {
+    capabilities[USB488_CAPABILITIES_OFFSET] & USB488_CAPABILITY_REN_CONTROL != 0
 }
 
 /// Tracks the `bTag` to use for the next bulk transfer.
