@@ -1,6 +1,12 @@
 [workspace]
 default-members = []
-members = ["common", "controller/firmware", "host", "usb-tmc"]
+members = [
+    "common",
+    "controller/firmware",
+    "filament-characterisation/characteriser",
+    "host",
+    "usb-tmc",
+]
 resolver = "3"
 
 [workspace.package]

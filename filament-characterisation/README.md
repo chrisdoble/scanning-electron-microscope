@@ -2,4 +2,5 @@ This directory contains files relating to the hardware and software used to char
 
 # Directory structure
 
+- [`characteriser`](characteriser): A Rust crate containing the TUI that steps an operator through characterising a filament.
 - [`mount`](mount): 3D models of the filament mount.

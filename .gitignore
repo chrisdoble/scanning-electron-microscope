@@ -1,3 +1,6 @@
+# Application output
+**/out
+
 # Cargo files
 **/target
 
@@ -12,3 +15,6 @@ fp-info-cache
 
 # MacOS files
 .DS_Store
+
+# Python files
+**/.venv

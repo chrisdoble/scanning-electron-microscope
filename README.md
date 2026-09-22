@@ -26,7 +26,7 @@ The repository structure is as follows:
 - [`controller`](controller): Contains files relating to the controller hardware that enables communication with the vacuum equipment, controls relays, etc.
 - [`common`](common): A Rust crate containing code common to `firmware` and `host`.
 - [`electron-gun-simulation`](electron-gun-simulation): A web-based simulation of an electron gun.
-- [`filament-characteriser`](filament-characteriser): Contains files relating to the hardware and software used to characterise tungsten filaments to be used in the SEM.
+- [`filament-characterisation`](filament-characterisation): Contains files relating to the hardware and software used to characterise tungsten filaments to be used in the SEM.
 - [`host`](host): A Rust crate containing both a library for interfacing with the controller hardware (pressure gauge, turbo molecular pump, etc.) and a binary for doing the same via a TUI.
 - [`usb-tmc`](usb-tmc): A Rust crate containing an implementation of the [USB Test and Measurement Class](https://www.usb.org/document-library/test-measurement-class-specification) for interfacing with oscilloscopes, power supplies, etc.
 
