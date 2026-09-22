@@ -1,16 +1,34 @@
 mod app;
+mod python;
 mod ui;
 
 use app::App;
 use clap::Parser;
 use env_logger::{Builder, Target};
 use log::*;
-use std::fs;
+use std::{fs, process::ExitCode};
 
 type AnyError = Box<dyn std::error::Error>;
 
+/// Reports `run`'s result and turns it into an exit status.
+///
+/// `main` doesn't return the `Result` itself because Rust would then report it
+/// with `Debug`, which for these errors drops the `Display` message — and the
+/// `Display` of a `PythonError::Environment` is what tells the operator which
+/// commands to run.
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), AnyError> {
+async fn main() -> ExitCode {
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {}", e);
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Runs the application.
+async fn run() -> Result<(), AnyError> {
     init_logging()?;
 
     let args = Arguments::parse();
@@ -19,6 +37,10 @@ async fn main() -> Result<(), AnyError> {
     } else {
         info!("Running against real hardware");
     }
+
+    // Check the Python environment before taking over the terminal, so the
+    // operator sees the error and how to fix it.
+    python::check_environment().await?;
 
     // `ratatui::init` installs a panic hook that restores the terminal before
     // chaining to the previous hook, so a panic message isn't swallowed by the
@@ -35,10 +57,6 @@ async fn main() -> Result<(), AnyError> {
     let result: Result<(), AnyError> = async { App::new().run(&mut terminal).await }.await;
 
     ratatui::restore();
-
-    if let Err(e) = &result {
-        eprintln!("Error: {}", e);
-    }
 
     result
 }

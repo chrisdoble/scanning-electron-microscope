@@ -5,6 +5,16 @@ See [`docs/DESIGN.md`](docs/DESIGN.md) for the full specification.
 # Requirements
 
 - [Rust](https://rust-lang.org/)
+- [Python 3](https://www.python.org/)
+
+Statistics and uncertainty propagation are done by the scripts in [`python`](python), which need a virtual environment beside them. Create it once, from this directory:
+
+```
+python3 -m venv python/.venv
+python/.venv/bin/pip install -r python/requirements.txt
+```
+
+The application checks for it at start-up and refuses to run without it, printing these same two commands.
 
 # Running
 
