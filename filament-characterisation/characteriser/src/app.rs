@@ -1,9 +1,17 @@
-use crate::{AnyError, ui};
+use crate::{
+    AnyError,
+    steps::{Section, StepKind, StepStatus},
+    ui,
+    ui::StepsState,
+};
 use crossterm::event::{Event, EventStream, KeyCode, KeyModifiers};
 use futures::StreamExt;
 use log::*;
 use ratatui::DefaultTerminal;
-use std::time::{Duration, Instant};
+use std::{
+    sync::{Arc, Mutex, MutexGuard},
+    time::Duration,
+};
 use tokio::time::MissedTickBehavior;
 
 /// How often the UI is redrawn.
@@ -15,14 +23,24 @@ const RENDER_INTERVAL: Duration = Duration::from_millis(50);
 /// The application.
 #[derive(Debug)]
 pub struct App {
-    /// When the application started.
-    start_time: Instant,
+    /// The step tree.
+    ///
+    /// Shared with the procedure task, which mutates it while the application
+    /// renders it. The lock is a `std::sync::Mutex` because every critical
+    /// section is either a short synchronous mutation or one render pass, and
+    /// it is never held across an `.await`. The application takes it once per
+    /// frame, for the duration of the draw.
+    root: Arc<Mutex<Section>>,
+
+    /// Scroll position of the steps list.
+    steps_state: StepsState,
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(root: Arc<Mutex<Section>>) -> Self {
         Self {
-            start_time: Instant::now(),
+            root,
+            steps_state: StepsState::default(),
         }
     }
 
@@ -64,7 +82,7 @@ impl App {
         loop {
             tokio::select! {
                 Some(Ok(event)) = terminal_events.next() => {
-                    if self.handle_terminal_event(event) {
+                    if self.handle_terminal_event(event)? {
                         info!("Quitting");
                         break;
                     }
@@ -77,14 +95,14 @@ impl App {
     }
 
     /// Handles a terminal event, returning whether the application should quit.
-    fn handle_terminal_event(&mut self, event: Event) -> bool {
+    fn handle_terminal_event(&mut self, event: Event) -> Result<bool, AnyError> {
         // Only act on presses, otherwise key repeats double-fire on terminals
         // that report them.
         let Event::Key(event) = event else {
-            return false;
+            return Ok(false);
         };
         if !event.is_press() {
-            return false;
+            return Ok(false);
         }
 
         match event.code {
@@ -92,18 +110,75 @@ impl App {
             KeyCode::Char('c') | KeyCode::Char('C')
                 if event.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                true
+                return Ok(true);
             }
 
-            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => true,
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(true),
 
-            _ => false,
+            KeyCode::Up => self.steps_state.scroll_up(1),
+            KeyCode::Down => self.steps_state.scroll_down(1),
+            KeyCode::PageUp => self.steps_state.scroll_up(self.steps_state.page()),
+            KeyCode::PageDown => self.steps_state.scroll_down(self.steps_state.page()),
+            KeyCode::Home => self.steps_state.scroll_to_top(),
+            KeyCode::End => self.steps_state.scroll_to_bottom(),
+
+            KeyCode::Enter | KeyCode::Char('y') => self.answer(true)?,
+            KeyCode::Char('n') => self.answer(false)?,
+
+            _ => {}
         }
+
+        Ok(false)
+    }
+
+    /// Answers the pending confirmation, if there is one.
+    ///
+    /// TODO: the procedure owns a step's status — the application should only
+    /// take the responder and send the answer, leaving the procedure to set
+    /// `answer`, `status` and `finished_at` when it wakes. It does both here
+    /// only because the hard-coded tree has no procedure behind it, and the
+    /// pending step would otherwise pin the view forever.
+    fn answer(&mut self, answer: bool) -> Result<(), AnyError> {
+        let mut root = lock(&self.root)?;
+
+        if let Some(step) = root.pending_mut()
+            && let StepKind::Confirm {
+                answer: a,
+                responder,
+                ..
+            } = &mut step.kind
+        {
+            // An error here only means the procedure has gone away.
+            if let Some(responder) = responder.take() {
+                let _ = responder.send(answer);
+            }
+
+            *a = Some(answer);
+            step.finished_at = Some(std::time::Instant::now());
+            step.status = StepStatus::Done;
+        }
+
+        Ok(())
     }
 
     /// Draws the UI.
-    fn render(&self, terminal: &mut DefaultTerminal) -> Result<(), AnyError> {
-        terminal.draw(|frame| ui::render(frame, self.start_time.elapsed()))?;
+    fn render(&mut self, terminal: &mut DefaultTerminal) -> Result<(), AnyError> {
+        // Borrow the two fields separately — `lock` is a free function rather
+        // than a method so that holding the guard doesn't borrow all of `self`.
+        let root = lock(&self.root)?;
+        let steps_state = &mut self.steps_state;
+        terminal.draw(|frame| ui::render(frame, &root, steps_state))?;
         Ok(())
     }
+}
+
+/// Locks the step tree.
+///
+/// A poisoned lock is fatal: the error ends the event loop, the terminal is
+/// restored, and `main` reports it.
+fn lock(root: &Mutex<Section>) -> Result<MutexGuard<'_, Section>, AnyError> {
+    root.lock().map_err(|e| {
+        error!("failed to acquire the step tree's mutex: {}", e);
+        format!("failed to acquire the step tree's mutex: {}", e).into()
+    })
 }

@@ -1,12 +1,18 @@
 mod app;
 mod python;
+mod steps;
+mod style;
 mod ui;
 
 use app::App;
 use clap::Parser;
 use env_logger::{Builder, Target};
 use log::*;
-use std::{fs, process::ExitCode};
+use std::{
+    fs,
+    process::ExitCode,
+    sync::{Arc, Mutex},
+};
 
 type AnyError = Box<dyn std::error::Error>;
 
@@ -53,8 +59,13 @@ async fn run() -> Result<(), AnyError> {
     // returns an error instead.
     let mut terminal = ratatui::init();
 
+    // TODO: this is `steps::demo()` until the procedure builds the tree (step 8
+    // of the design document's build order), at which point it becomes
+    // `Section::default()`.
+    let root = Arc::new(Mutex::new(steps::demo()));
+
     // Use an `async` block to ensure we call `ratatui::restore` on error.
-    let result: Result<(), AnyError> = async { App::new().run(&mut terminal).await }.await;
+    let result: Result<(), AnyError> = async { App::new(root).run(&mut terminal).await }.await;
 
     ratatui::restore();
 

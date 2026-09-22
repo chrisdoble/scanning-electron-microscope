@@ -1,57 +1,54 @@
+mod steps;
+
+pub use steps::{Steps, StepsState};
+
+use crate::{
+    steps::{Section, StepKind},
+    style::SUBTLE_TEXT_STYLE,
+};
 use ratatui::{
     Frame,
-    layout::Constraint,
-    style::{Color, Modifier, Style, Styled},
-    widgets::{Block, Padding, Paragraph},
+    layout::{Constraint, Layout},
+    style::Styled,
+    widgets::Paragraph,
 };
 use std::time::Duration;
 
-const BLOCK_TITLE_STYLE: Style = Style::new().add_modifier(Modifier::BOLD).fg(Color::White);
-const SUBTLE_TEXT_STYLE: Style = Style::new().fg(Color::Rgb(96, 96, 96));
-
-/// The size of the placeholder block, including its border and padding.
-const PLACEHOLDER_HEIGHT: u16 = 7;
-const PLACEHOLDER_WIDTH: u16 = 36;
-
 /// Renders the application.
 ///
-/// TODO: replace this placeholder with the layout described in section 14 of
-/// the design document as the vacuum, filament, run and steps blocks are
-/// built. The elapsed time is here so that the render tick is visibly running.
-pub fn render(frame: &mut Frame, elapsed: Duration) {
-    let area = frame.area().centered(
-        Constraint::Length(PLACEHOLDER_WIDTH),
-        Constraint::Length(PLACEHOLDER_HEIGHT),
-    );
+/// TODO: add the vacuum, filament and run blocks above the steps list, as
+/// described in section 14 of the design document.
+pub fn render(frame: &mut Frame, root: &Section, steps_state: &mut StepsState) {
+    let [steps, shortcuts_bar] =
+        Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(frame.area());
 
+    frame.render_stateful_widget(Steps { root }, steps, steps_state);
+
+    // The shortcuts bar's text changes with context, as in the vacuum control
+    // binary. Scrolling isn't offered while a step is pending, because the view
+    // stays pinned to it until it's answered.
+    let shortcuts = match root.pending().map(|step| &step.kind) {
+        Some(StepKind::Confirm { .. }) => "[Enter / Y] Yes   [N] No   [Esc] Quit",
+        Some(StepKind::Input { .. }) => "[Enter] Submit   [Esc] Quit",
+        _ => "[↑/↓] Scroll   [Esc] Quit",
+    };
     frame.render_widget(
-        Paragraph::new(format!(
-            "Elapsed: {}\n\nPress [Esc / Q] to quit.",
-            format_duration(elapsed)
-        ))
-        .block(
-            Block::bordered()
-                .padding(Padding::symmetric(2, 1))
-                .title("Characteriser".set_style(BLOCK_TITLE_STYLE)),
-        )
-        .centered()
-        .set_style(SUBTLE_TEXT_STYLE),
-        area,
+        Paragraph::new(shortcuts.set_style(SUBTLE_TEXT_STYLE)).centered(),
+        shortcuts_bar,
     );
 }
 
-/// Formats a duration as `HH:MM:SS`, or as seconds to one decimal place if it's
-/// less than a minute.
+/// Formats a duration as `3s`, `2m 3s` or `1h 2m 3s`, leaving out the units
+/// that would be zero.
 pub fn format_duration(duration: Duration) -> String {
-    if duration.as_secs() < 60 {
-        return format!("{:.1} s", duration.as_secs_f64());
-    }
-
     let seconds = duration.as_secs();
-    format!(
-        "{:02}:{:02}:{:02}",
-        seconds / 3600,
-        seconds / 60 % 60,
-        seconds % 60
-    )
+    let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+
+    if hours > 0 {
+        format!("{}h {}m {}s", hours, minutes, seconds)
+    } else if minutes > 0 {
+        format!("{}m {}s", minutes, seconds)
+    } else {
+        format!("{}s", seconds)
+    }
 }
