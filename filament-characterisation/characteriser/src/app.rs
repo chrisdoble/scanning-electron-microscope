@@ -1,6 +1,6 @@
 use crate::{
     AnyError,
-    steps::{Section, StepKind, StepStatus},
+    steps::{Section, StepKind},
     ui,
     ui::StepsState,
 };
@@ -105,55 +105,59 @@ impl App {
             return Ok(false);
         }
 
-        match event.code {
-            // Ctrl+C always quits immediately.
-            KeyCode::Char('c') | KeyCode::Char('C')
-                if event.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                return Ok(true);
+        let control = event.modifiers.contains(KeyModifiers::CONTROL);
+        let mut root = lock(&self.root)?;
+
+        // Taking a responder out of the step is what stops it being pending, so
+        // a second `Enter` can't answer twice. Sending on it is what wakes the
+        // procedure, which then sets the step's status: the application only
+        // sends. An error sending only means the procedure has gone away.
+        match (root.pending_mut().map(|step| &mut step.kind), event.code) {
+            // Quit, whatever's pending.
+            (_, KeyCode::Char('c') | KeyCode::Char('C')) if control => return Ok(true),
+            (_, KeyCode::Esc) => return Ok(true),
+
+            (Some(StepKind::Confirm { responder, .. }), KeyCode::Enter) => {
+                if let Some(responder) = responder.take() {
+                    let _ = responder.send(());
+                }
             }
 
-            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(true),
+            // A pending input takes printable characters, so a `q` typed into
+            // it is a character rather than a quit.
+            (Some(StepKind::Input { buffer, .. }), KeyCode::Char(c))
+                if !control && !event.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                buffer.push(c);
+            }
+            (Some(StepKind::Input { buffer, .. }), KeyCode::Backspace) => {
+                buffer.pop();
+            }
+            (
+                Some(StepKind::Input {
+                    buffer, responder, ..
+                }),
+                KeyCode::Enter,
+            ) => {
+                if let Some(responder) = responder.take() {
+                    let _ = responder.send(buffer.clone());
+                }
+            }
 
-            KeyCode::Up => self.steps_state.scroll_up(1),
-            KeyCode::Down => self.steps_state.scroll_down(1),
-            KeyCode::PageUp => self.steps_state.scroll_up(self.steps_state.page()),
-            KeyCode::PageDown => self.steps_state.scroll_down(self.steps_state.page()),
-            KeyCode::Home => self.steps_state.scroll_to_top(),
-            KeyCode::End => self.steps_state.scroll_to_bottom(),
-
-            KeyCode::Enter => self.confirm()?,
+            // With nothing pending, `q` quits and the view scrolls. While
+            // something is pending the view is pinned to it anyway.
+            (None, KeyCode::Char('q') | KeyCode::Char('Q')) => return Ok(true),
+            (None, KeyCode::Up) => self.steps_state.scroll_up(1),
+            (None, KeyCode::Down) => self.steps_state.scroll_down(1),
+            (None, KeyCode::PageUp) => self.steps_state.scroll_up(self.steps_state.page()),
+            (None, KeyCode::PageDown) => self.steps_state.scroll_down(self.steps_state.page()),
+            (None, KeyCode::Home) => self.steps_state.scroll_to_top(),
+            (None, KeyCode::End) => self.steps_state.scroll_to_bottom(),
 
             _ => {}
         }
 
         Ok(false)
-    }
-
-    /// Passes the pending confirmation, if there is one.
-    ///
-    /// TODO: the procedure owns a step's status — the application should only
-    /// take the responder and send `()`, leaving the procedure to set `status`
-    /// and `finished_at` when it wakes. It does both here only because the
-    /// hard-coded tree has no procedure behind it, and the pending step would
-    /// otherwise pin the view forever.
-    fn confirm(&mut self) -> Result<(), AnyError> {
-        let mut root = lock(&self.root)?;
-
-        if let Some(step) = root.pending_mut()
-            && let StepKind::Confirm { responder, .. } = &mut step.kind
-        {
-            // Taking the responder is what ends the wait. An error sending
-            // only means the procedure has gone away.
-            if let Some(responder) = responder.take() {
-                let _ = responder.send(());
-            }
-
-            step.finished_at = Some(std::time::Instant::now());
-            step.status = StepStatus::Done;
-        }
-
-        Ok(())
     }
 
     /// Draws the UI.

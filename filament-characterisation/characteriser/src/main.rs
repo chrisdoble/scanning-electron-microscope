@@ -74,6 +74,10 @@ async fn run() -> Result<(), AnyError> {
     // `Section::default()`.
     let root = Arc::new(Mutex::new(steps::demo()));
 
+    // TODO: the procedure task replaces this (step 8 of the design document's
+    // build order).
+    tokio::spawn(steps::run_demo(Arc::clone(&root)));
+
     // Use an `async` block to ensure we call `ratatui::restore` on error.
     let result: Result<(), AnyError> = async { App::new(root).run(&mut terminal).await }.await;
 

@@ -10,6 +10,7 @@ use crate::{
 use ratatui::text::{Line, Span};
 use std::{
     fmt::Display,
+    sync::{Arc, Mutex, MutexGuard},
     time::{Duration, Instant},
 };
 use tokio::sync::oneshot;
@@ -21,8 +22,6 @@ const INDENT: u16 = 2;
 ///
 /// Paths stay valid for the life of the run because steps are only ever
 /// appended — never removed, never reordered.
-// TODO: remove this once `Context` addresses steps by path.
-#[allow(dead_code)]
 pub type StepPath = Vec<usize>;
 
 /// A single step in the procedure.
@@ -168,8 +167,8 @@ impl Step {
 
     /// Whether the step is waiting on the user.
     ///
-    /// True exactly while it still holds a responder: taking the responder is
-    /// what ends the wait.
+    /// True exactly while it still holds a responder: taking the responder out
+    /// is what stops it being pending.
     pub fn is_pending(&self) -> bool {
         match &self.kind {
             StepKind::Confirm { responder, .. } => responder.is_some(),
@@ -296,8 +295,6 @@ impl Step {
 
 impl Section {
     /// Appends a step and returns its index in `children`.
-    // TODO: remove this once `Context` emits steps.
-    #[allow(dead_code)]
     pub fn push(&mut self, kind: StepKind) -> usize {
         self.children.push(Step::new(kind));
         self.children.len() - 1
@@ -366,8 +363,6 @@ impl Section {
     }
 
     /// The section at `path`, if it exists and is a section.
-    // TODO: remove this once `Context` emits steps.
-    #[allow(dead_code)]
     pub fn section_at_mut(&mut self, path: &[usize]) -> Option<&mut Section> {
         match path.split_first() {
             None => Some(self),
@@ -379,8 +374,6 @@ impl Section {
     }
 
     /// The step at `path`, if it exists.
-    // TODO: remove this once `Context` emits steps.
-    #[allow(dead_code)]
     pub fn step_at_mut(&mut self, path: &[usize]) -> Option<&mut Step> {
         let (index, rest) = path.split_first()?;
         let step = self.children.get_mut(*index)?;
@@ -623,15 +616,117 @@ pub fn demo() -> Section {
         "Settling at 1.850 A before taking the next point",
     )));
 
-    // The receiver is dropped: nothing is waiting on this confirmation, but the
-    // sender being `Some` is what makes the step pending.
-    let (responder, _) = oneshot::channel();
-    sweeping.children.push(Step::new(StepKind::Confirm {
-        prompt: String::from("Confirm that the filament current has settled"),
-        responder: Some(responder),
-    }));
-
     root.children.push(Step::new(StepKind::Section(sweeping)));
 
     root
+}
+
+/// Plays the procedure's part at the end of the demo tree: a confirmation, then
+/// a value to enter, so both prompts can be exercised before the procedure
+/// exists.
+///
+/// It drives them exactly as `Context` will: park a responder in the tree,
+/// await the other end, and set the step's status once it wakes. An input that
+/// doesn't parse gets an error and a fresh responder, and is asked again in
+/// place. The lock is never held across an `.await`.
+///
+/// TODO: delete this with `demo` once the procedure builds the tree (step 8 of
+/// the design document's build order).
+pub async fn run_demo(root: Arc<Mutex<Section>>) {
+    /// Locks the tree. Only a panic while it was held can poison it, and
+    /// nothing holding it here can panic.
+    fn lock(root: &Mutex<Section>) -> MutexGuard<'_, Section> {
+        root.lock().expect("the step tree's mutex was poisoned")
+    }
+
+    /// Appends a step to the section at `section` and returns its path.
+    fn push(root: &Mutex<Section>, section: &[usize], kind: StepKind) -> StepPath {
+        let mut root = lock(root);
+        let index = root
+            .section_at_mut(section)
+            .expect("the demo's section exists")
+            .push(kind);
+        [section, &[index]].concat()
+    }
+
+    /// Applies `f` to the step at `path`.
+    fn update(root: &Mutex<Section>, path: &[usize], f: impl FnOnce(&mut Step)) {
+        f(lock(root)
+            .step_at_mut(path)
+            .expect("the demo's step exists"));
+    }
+
+    // The prompts go in the tree's last section.
+    let section: StepPath = vec![lock(&root).children.len() - 1];
+
+    let (responder, confirmation) = oneshot::channel();
+    let path = push(
+        &root,
+        &section,
+        StepKind::Confirm {
+            prompt: String::from("Confirm that the filament current has settled"),
+            responder: Some(responder),
+        },
+    );
+
+    // An error only means the application has gone away.
+    if confirmation.await.is_err() {
+        return;
+    }
+    update(&root, &path, |step| {
+        step.finished_at = Some(Instant::now());
+        step.status = StepStatus::Done;
+    });
+
+    let (responder, mut submission) = oneshot::channel();
+    let path = push(
+        &root,
+        &section,
+        StepKind::Input {
+            buffer: String::new(),
+            error: None,
+            prompt: String::from("Maximum heating current"),
+            responder: Some(responder),
+            unit: Some(String::from("A")),
+            value: None,
+        },
+    );
+
+    loop {
+        let Ok(buffer) = submission.await else {
+            return;
+        };
+
+        match buffer.trim().parse::<f64>() {
+            Ok(current) => {
+                update(&root, &path, |step| {
+                    if let StepKind::Input { error, value, .. } = &mut step.kind {
+                        *error = None;
+                        *value = Some(format!("{:.3}", current));
+                    }
+                    step.finished_at = Some(Instant::now());
+                    step.status = StepStatus::Done;
+                });
+                return;
+            }
+
+            // Ask again in place, with the error beside the prompt. The step
+            // stays the last in the tree, which keeps `pending` correct.
+            Err(_) => {
+                let (responder, next) = oneshot::channel();
+                submission = next;
+                update(&root, &path, |step| {
+                    if let StepKind::Input {
+                        error,
+                        responder: r,
+                        ..
+                    } = &mut step.kind
+                    {
+                        *error = Some(String::from("not a number"));
+                        *r = Some(responder);
+                    }
+                });
+            }
+        }
+    }
 }

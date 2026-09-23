@@ -876,8 +876,11 @@ if let Some(Step { kind: StepKind::Confirm { responder, .. }, .. }) = root.pendi
 
 Three things follow from this arrangement, all worth comments in the code:
 
-- **Taking the responder is what ends the wait.** Once taken, `pending_mut`
-  stops returning the step, so a second `Enter` can't confirm twice.
+- **Taking the responder is what ends the pending state; sending on it is
+  what ends the procedure's wait.** Once taken, `pending_mut` stops returning
+  the step, so a second `Enter` can't confirm twice. The send wakes the
+  procedure — as would dropping the responder unsent, which the receiver sees as
+  an error and the procedure treats as cancellation.
 - **The procedure owns status.** The app only sends the confirmation; the
   procedure sets `status` and `finished_at` when it wakes. One writer of
   lifecycle state, and it's the one that knows what happens next.
