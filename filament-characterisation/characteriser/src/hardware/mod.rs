@@ -20,8 +20,23 @@ use host::{
     power_supply::{Polarity, PowerSupplyError},
     tmp::TmpError,
 };
-use std::sync::Arc;
+use log::*;
+use std::{sync::Arc, time::Duration};
 use thiserror::Error;
+use tokio::{sync::watch, time::MissedTickBehavior};
+
+/// How many polls in a row may fail before the hardware is given up on.
+///
+/// A serial timeout mid-run shouldn't end a forty-minute pump-down, so a single
+/// failure is only logged and retried. But persistent failure means the rig is
+/// no longer under control, and the filament shouldn't stay powered.
+const POLL_FAILURE_TOLERANCE: u32 = 3;
+
+/// How often the hardware is polled.
+///
+/// Once a second is plenty for a display, and the vacuum side alone is five
+/// serial round trips, each of which the ADC can take ~300 ms to answer.
+const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// An error encountered while reading or driving the hardware.
 #[derive(Debug, Error)]
@@ -188,4 +203,67 @@ pub trait VacuumSystem: std::fmt::Debug + Send + Sync {
 pub struct Hardware {
     pub filament: Arc<dyn FilamentSystem>,
     pub vacuum: Arc<dyn VacuumSystem>,
+}
+
+/// Polls the hardware every `POLL_INTERVAL` and publishes what it reads.
+///
+/// A failed poll is logged and retried on the next tick. Returns the error once
+/// `POLL_FAILURE_TOLERANCE` polls in a row have failed, which is fatal: the
+/// caller reports it and the application shuts down.
+///
+/// Returns rather than reporting the failure itself so that this module doesn't
+/// depend on the application's event type.
+pub async fn poll(
+    hardware: Hardware,
+    snapshots: watch::Sender<Option<Snapshots>>,
+) -> HardwareError {
+    let mut ticker = tokio::time::interval(POLL_INTERVAL);
+
+    // The first tick is immediate, so the blocks fill as soon as the
+    // instruments answer. A slow poll delays the next rather than bursting to
+    // catch up, since a poll that ran late is already up to date.
+    ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+    let mut failures = 0;
+
+    loop {
+        ticker.tick().await;
+
+        // One after the other rather than concurrently: if one failed while the
+        // other was mid-transaction, dropping the other's future would release
+        // its lock while its I/O carried on, which can split the scope's
+        // arm-then-query sequence. Not worth it for a once-a-second poll.
+        let result = async {
+            Ok::<_, HardwareError>(Snapshots {
+                vacuum: hardware.vacuum.snapshot().await?,
+                filament: hardware.filament.snapshot().await?,
+            })
+        }
+        .await;
+
+        match result {
+            Ok(snapshot) => {
+                failures = 0;
+                debug!("{:?}", snapshot);
+
+                // An error only means every receiver has gone, which happens
+                // as the application shuts down.
+                let _ = snapshots.send(Some(snapshot));
+            }
+            Err(e) => {
+                failures += 1;
+                if failures >= POLL_FAILURE_TOLERANCE {
+                    error!(
+                        "polling the hardware failed {} times in a row: {}",
+                        failures, e
+                    );
+                    return e;
+                }
+                warn!(
+                    "polling the hardware failed ({} of {}), retrying: {}",
+                    failures, POLL_FAILURE_TOLERANCE, e
+                );
+            }
+        }
+    }
 }

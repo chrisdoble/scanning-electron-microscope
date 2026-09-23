@@ -6,7 +6,7 @@ mod steps;
 mod style;
 mod ui;
 
-use app::App;
+use app::{App, AppEvent};
 use clap::Parser;
 use env_logger::{Builder, Target};
 use hardware::{
@@ -20,8 +20,15 @@ use std::{
     process::ExitCode,
     sync::{Arc, Mutex},
 };
+use tokio::sync::{mpsc, watch};
 
 type AnyError = Box<dyn std::error::Error>;
+
+/// How many messages the application's event channel can hold.
+///
+/// There's one sender now and two at most, each sending once as it finishes,
+/// so this only has to be more than that.
+const EVENT_CHANNEL_CAPACITY: usize = 8;
 
 /// Reports `run`'s result and turns it into an exit status.
 ///
@@ -52,12 +59,6 @@ async fn run() -> Result<(), AnyError> {
 
     let hardware = build_hardware(&args).await?;
 
-    // TODO: the poll task takes these every `POLL_INTERVAL` and publishes them
-    // on a watch channel (step 6 of the design document's build order). Until it
-    // exists, one of each proves the adapters work.
-    debug!("{:?}", hardware.vacuum.snapshot().await?);
-    debug!("{:?}", hardware.filament.snapshot().await?);
-
     // `ratatui::init` installs a panic hook that restores the terminal before
     // chaining to the previous hook, so a panic message isn't swallowed by the
     // alternate screen. Anything that wants to run before that restore has to
@@ -78,8 +79,24 @@ async fn run() -> Result<(), AnyError> {
     // build order).
     tokio::spawn(steps::run_demo(Arc::clone(&root)));
 
+    let (snapshots_tx, snapshots_rx) = watch::channel(None);
+    let (events_tx, events_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
+
+    // The poll task returns only once the hardware has failed for good, which
+    // is fatal, so it's forwarded to the application to end the run. An error
+    // sending means the application has already gone.
+    tokio::spawn(async move {
+        let e = hardware::poll(hardware, snapshots_tx).await;
+        let _ = events_tx.send(AppEvent::HardwareFailed(e)).await;
+    });
+
     // Use an `async` block to ensure we call `ratatui::restore` on error.
-    let result: Result<(), AnyError> = async { App::new(root).run(&mut terminal).await }.await;
+    let result: Result<(), AnyError> = async {
+        App::new(root)
+            .run(&mut terminal, snapshots_rx, events_rx)
+            .await
+    }
+    .await;
 
     ratatui::restore();
 

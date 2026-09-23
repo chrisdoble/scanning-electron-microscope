@@ -1,5 +1,6 @@
 use crate::{
     AnyError,
+    hardware::{HardwareError, Snapshots},
     steps::{Section, StepKind},
     ui,
     ui::StepsState,
@@ -10,15 +11,28 @@ use log::*;
 use ratatui::DefaultTerminal;
 use std::{
     sync::{Arc, Mutex, MutexGuard},
-    time::Duration,
+    time::{Duration, Instant},
 };
-use tokio::time::MissedTickBehavior;
+use tokio::{
+    sync::{mpsc, watch},
+    time::MissedTickBehavior,
+};
 
 /// How often the UI is redrawn.
 ///
 /// 20 fps, which is enough for the spinner on a running step to animate
 /// smoothly.
 const RENDER_INTERVAL: Duration = Duration::from_millis(50);
+
+/// An out-of-band message to the application's event loop.
+///
+/// Only what can't be expressed as shared state: the step tree is shared, and
+/// the snapshots have a watch channel of their own.
+#[derive(Debug)]
+pub enum AppEvent {
+    /// The hardware has failed persistently and the run can't continue.
+    HardwareFailed(HardwareError),
+}
 
 /// The application.
 #[derive(Debug)]
@@ -32,6 +46,14 @@ pub struct App {
     /// frame, for the duration of the draw.
     root: Arc<Mutex<Section>>,
 
+    /// The most recent readings, or `None` before the first poll.
+    ///
+    /// Once the first arrives it stays `Some`: a failed poll never clears it.
+    snapshots: Option<Snapshots>,
+
+    /// When the application started.
+    start_time: Instant,
+
     /// Scroll position of the steps list.
     steps_state: StepsState,
 }
@@ -40,6 +62,8 @@ impl App {
     pub fn new(root: Arc<Mutex<Section>>) -> Self {
         Self {
             root,
+            snapshots: None,
+            start_time: Instant::now(),
             steps_state: StepsState::default(),
         }
     }
@@ -48,7 +72,15 @@ impl App {
     ///
     /// The terminal is drawn from here rather than from a task of its own
     /// because `DefaultTerminal` would otherwise have to be shared.
-    pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<(), AnyError> {
+    ///
+    /// `snapshots` carries the hardware poll task's readings, and `events` the
+    /// messages that can't be expressed as shared state.
+    pub async fn run(
+        &mut self,
+        terminal: &mut DefaultTerminal,
+        mut snapshots: watch::Receiver<Option<Snapshots>>,
+        mut events: mpsc::Receiver<AppEvent>,
+    ) -> Result<(), AnyError> {
         // `EventStream` needs no wiring to the terminal: it reads crossterm's
         // process-wide event source, which `ratatui::init` has already put into
         // raw mode. Only one may exist at a time, and nothing else may read
@@ -68,12 +100,18 @@ impl App {
         // one completes, drops the others. Dropping a future cancels whatever
         // work it was doing, so the question isn't whether the other branches
         // are cancelled — they are — but whether cancelling them loses
-        // anything. Both of these are cancellation-safe, because their state
-        // lives in a long-lived object outside the future: an unread key event
-        // stays in the `EventStream`'s buffer, and the tick deadline lives in
-        // the `Interval`. Each iteration creates fresh futures from those
-        // objects, so a branch that lost the race is simply re-awaited with
-        // nothing missed.
+        // anything. All of these are cancellation-safe, because their state
+        // lives in a long-lived object outside the future: an unreceived
+        // message stays in the channel, an unread key event stays in the
+        // `EventStream`'s buffer, the watch receiver's "seen" marker only
+        // advances when `changed()` actually resolves, and the tick deadline
+        // lives in the `Interval`. Each iteration creates fresh futures from
+        // those objects, so a branch that lost the race is simply re-awaited
+        // with nothing missed.
+        //
+        // Once the poll task has exited, `changed()` returns an error at once.
+        // That only disables its branch for the iteration — the loop still
+        // waits on the others, so it doesn't spin.
         //
         // IMPORTANT: only cancellation-safe futures go directly in a `select!`
         // branch. Anything that buffers into a local (a multi-step read, a
@@ -81,6 +119,10 @@ impl App {
         // delivered over a channel instead.
         loop {
             tokio::select! {
+                Some(event) = events.recv() => self.handle_app_event(event)?,
+                Ok(()) = snapshots.changed() => {
+                    self.snapshots = *snapshots.borrow_and_update();
+                }
                 Some(Ok(event)) = terminal_events.next() => {
                     if self.handle_terminal_event(event)? {
                         info!("Quitting");
@@ -92,6 +134,21 @@ impl App {
         }
 
         Ok(())
+    }
+
+    /// Handles a message from another task.
+    ///
+    /// TODO: a hardware failure should be shown as a failed step, keep the UI
+    /// up until a key is pressed, and put the filament system into a safe state
+    /// (step 9 of the design document's build order). For now it ends the run
+    /// with the error, which restores the terminal and has `main` report it.
+    fn handle_app_event(&mut self, event: AppEvent) -> Result<(), AnyError> {
+        match event {
+            AppEvent::HardwareFailed(e) => {
+                error!("the hardware has failed: {}", e);
+                Err(e.into())
+            }
+        }
     }
 
     /// Handles a terminal event, returning whether the application should quit.
@@ -166,7 +223,9 @@ impl App {
         // than a method so that holding the guard doesn't borrow all of `self`.
         let root = lock(&self.root)?;
         let steps_state = &mut self.steps_state;
-        terminal.draw(|frame| ui::render(frame, &root, steps_state))?;
+        let snapshots = self.snapshots.as_ref();
+        let elapsed = self.start_time.elapsed();
+        terminal.draw(|frame| ui::render(frame, &root, steps_state, snapshots, elapsed))?;
         Ok(())
     }
 }
