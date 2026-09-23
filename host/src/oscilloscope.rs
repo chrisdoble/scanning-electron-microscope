@@ -100,10 +100,17 @@ impl Oscilloscope {
             state.is_measuring_voltage = true;
         }
 
-        poll(async || {
+        // Clone the handle for the closure rather than letting it borrow the
+        // guard. A future that captures a `&MutexGuard` can't be proven `Send`
+        // for every lifetime, which breaks callers that box it — an
+        // `#[async_trait]` implementation, say. Clones of a `UsbTmcDevice` share
+        // the same device and serialise against each other, and the guard is
+        // still held, so the transaction is unchanged.
+        let device = state.device.clone();
+
+        poll(async move || {
             // e.g. -4.2016E-04
-            let voltage: f64 = state
-                .device
+            let voltage: f64 = device
                 .query_str(":MEASure:ITEM? VAVG,CHANnel1")
                 .await?
                 .trim()
@@ -182,15 +189,14 @@ impl Oscilloscope {
             .write_str(format!(":CHANnel1:SCALe {}", scale).as_str())
             .await?;
 
+        // See `get_voltage` for why the closure gets a clone of the handle
+        // rather than borrowing the guard.
+        let device = state.device.clone();
+
         // The scope takes a moment to apply the new scale, so read it back
         // until it's the value we set.
-        poll(async || {
-            let f: f64 = state
-                .device
-                .query_str(":CHANnel1:SCALe?")
-                .await?
-                .trim()
-                .parse()?;
+        poll(async move || {
+            let f: f64 = device.query_str(":CHANnel1:SCALe?").await?.trim().parse()?;
 
             Ok(if f == scale {
                 Ok(())
