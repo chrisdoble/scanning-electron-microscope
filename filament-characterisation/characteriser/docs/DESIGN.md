@@ -555,9 +555,10 @@ pub enum HardwareError {
   tasks to stop.
 - `let root = Arc::new(Mutex::new(Section::default()));` — the step tree, cloned
   into the `Context` and kept by `App`.
-- `let results_path = results::path_for_now();` — where the run's measurements
-  are written, moved into the `Context` and kept by `main` so it can be printed
-  on exit.
+- `let characterisation = Characterisation::new();` and
+  `let results_path = characterisation.path();` — the run's measurements, moved
+  into the `Context`, and where they're written, kept by `main` so it can be
+  printed on exit. The `Context` doesn't need the path: `save` knows it.
 - `let (snapshots_tx, snapshots_rx) = watch::channel(None);` — the sender goes to
   the poll task, receivers to `App` and to the `Context`.
 - `let (events_tx, events_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);` — the
@@ -1082,7 +1083,7 @@ read.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Characterisation {
     /// An identifier for the filament under test, entered by the operator.
-    pub filament_id: String,
+    pub filament_id: Option<String>,
 
     /// When the run started, in seconds since the Unix epoch.
     pub started_at: u64,
@@ -1097,23 +1098,28 @@ impl Characterisation {
     /// Creates the results for a run starting now.
     pub fn new() -> Self;
 
-    /// Writes the results to `path`.
+    /// Where the results are written, named for `started_at`.
+    pub fn path(&self) -> PathBuf;
+
+    /// Writes the results to `path()`.
     ///
     /// Writes to a temporary file and renames it, so killing the program can't
     /// leave a half-written file behind.
-    pub fn save(&self, path: &Path) -> Result<(), ResultsError>;
+    pub fn save(&self) -> Result<(), ResultsError>;
 }
 ```
 
-`filament_id` is a required `String`, not an `Option`. It starts empty and is
-set by the first thing the procedure does, before any measurement is taken, so
-no results file that contains a measurement can lack it. The type can't enforce
-that ordering — only building the struct after the prompt could, and that would
-mean `Context` couldn't own it — so the ordering is enforced by the procedure
-and stated in a comment on the field.
+`filament_id` is `None` until the operator enters it. It's the first thing the
+procedure asks for, before any measurement is taken, so no results file that
+contains a measurement can lack it. But results are saved on every exit path
+(§10.3), so a run quit at that first prompt still writes a file — and `None`,
+serialised as `null`, says the identifier was never given where an empty string
+would look like one that was.
 
 - File name: `out/characterisation-<started_at>.json`, so successive runs don't
-  overwrite each other. `results::path_for_now()` builds it, in `main` (§8.1).
+  overwrite each other. `Characterisation::path` builds it from `started_at`
+  rather than reading the clock again, so the name always matches the time
+  recorded inside.
 - Format: `serde_json::to_string_pretty`. Confine the format choice to `save`.
 - Write to `<path>_new` and `fs::rename` over the real path, the same idiom the
   existing binary uses in `log_pressure` and `graph_pressure`.
@@ -1160,9 +1166,6 @@ pub struct Context {
 
     /// The section this context's steps are appended to.
     parent: StepPath,
-
-    /// The file `save` writes the measurements to.
-    results_path: PathBuf,
 
     /// The step tree.
     root: Arc<Mutex<Section>>,
@@ -1653,7 +1656,8 @@ async fn main() -> Result<(), AnyError> {
     python::check_environment().await?;
 
     let hardware = build_hardware(&args)?;
-    let results_path = results::path_for_now();
+    let characterisation = Characterisation::new();
+    let results_path = characterisation.path();
     info!("Writing results to {}", results_path.display());
 
     let mut terminal = ratatui::init();
