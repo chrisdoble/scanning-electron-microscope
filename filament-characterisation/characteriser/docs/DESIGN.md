@@ -669,18 +669,20 @@ pub struct Step {
 /// What a step displays and how the user interacts with it.
 #[derive(Debug)]
 pub enum StepKind {
-    /// A yes/no decision from the user.
+    /// A gate: something the user has to make true, e.g. "Confirm that the
+    /// roughing pump is running", before the procedure continues.
+    ///
+    /// Not a yes/no question. There's no answer to record — the step's status
+    /// and `finished_at` say that it was passed and when — and no way to refuse:
+    /// a user who can't make it true quits instead.
     Confirm {
-        /// Set by the procedure once the user answers.
-        answer: Option<bool>,
-
         prompt: String,
 
-        /// Taken by the application when the user answers.
+        /// Taken by the application when the user confirms.
         ///
         /// `Some` exactly while this step is waiting for input, which is what
         /// `Section::pending_mut` looks for.
-        responder: Option<oneshot::Sender<bool>>,
+        responder: Option<oneshot::Sender<()>>,
     },
 
     /// A value typed by the user.
@@ -827,38 +829,37 @@ Two alternatives, for the record, both rejected:
 
 ### 9.3 How a confirmation works
 
+A confirmation is a gate, not a question: the procedure states something the
+operator has to make true — "Confirm that the roughing pump is running" — and
+waits until they press `Enter`. There's no "no". An operator who can't make it
+true quits, which cancels the token and unblocks the wait with
+`ProcedureError::Cancelled`, and cleanup runs as on any other exit (§16).
+
 The responder lives in the step, so no separate request message or pending
 registry is needed. The procedure creates the channel, parks the sender in the
 tree, and awaits the receiver:
 
 ```rust
-pub async fn confirm(&self, prompt: impl Into<String>) -> Result<bool, ProcedureError> {
-    let (responder, response) = oneshot::channel();
+pub async fn confirm(&self, prompt: impl Into<String>) -> Result<(), ProcedureError> {
+    let (responder, confirmation) = oneshot::channel();
     let path = self.push(StepKind::Confirm {
-        answer: None,
         prompt: prompt.into(),
         responder: Some(responder),
     });
 
     // The lock is dropped by `push` before we await: the application needs it
-    // to render the prompt and to answer it.
-    let answer = tokio::select! {
-        answer = response => answer.map_err(|_| ProcedureError::Cancelled)?,
+    // to render the prompt and to confirm it.
+    tokio::select! {
+        confirmation = confirmation => confirmation.map_err(|_| ProcedureError::Cancelled)?,
         _ = self.cancel.cancelled() => return Err(ProcedureError::Cancelled),
     };
 
-    self.update(&path, |kind| {
-        if let StepKind::Confirm { answer: a, .. } = kind {
-            *a = Some(answer);
-        }
-    });
     self.finish(&path, StepStatus::Done);
-
-    Ok(answer)
+    Ok(())
 }
 ```
 
-`push`, `update` and `finish` are the private `Context` helpers every one of its
+`push` and `finish` are two of the private `Context` helpers every one of its
 methods is built from; they're defined in §11.1.
 
 The application, on `Enter`:
@@ -868,7 +869,7 @@ let mut root = self.root.lock()?;
 if let Some(Step { kind: StepKind::Confirm { responder, .. }, .. }) = root.pending_mut() {
     if let Some(responder) = responder.take() {
         // An error here only means the procedure has gone away.
-        let _ = responder.send(true);
+        let _ = responder.send(());
     }
 }
 ```
@@ -876,9 +877,9 @@ if let Some(Step { kind: StepKind::Confirm { responder, .. }, .. }) = root.pendi
 Three things follow from this arrangement, all worth comments in the code:
 
 - **Taking the responder is what ends the wait.** Once taken, `pending_mut`
-  stops returning the step, so a second `Enter` can't answer twice.
-- **The procedure owns status.** The app only sends the answer; the procedure
-  sets `answer`, `status` and `finished_at` when it wakes. One writer of
+  stops returning the step, so a second `Enter` can't confirm twice.
+- **The procedure owns status.** The app only sends the confirmation; the
+  procedure sets `status` and `finished_at` when it wakes. One writer of
   lifecycle state, and it's the one that knows what happens next.
 - **Cancellation is the token, not the drop.** The tree is `Arc`-shared and
   outlives the app, so dropping `App` doesn't drop the responder. The `select!`
@@ -1182,8 +1183,11 @@ impl Context {
         F: FnOnce(Context) -> Fut,
         Fut: Future<Output = Result<(), ProcedureError>>;
 
-    /// Asks the user to confirm something and waits for their answer.
-    pub async fn confirm(&self, prompt: impl Into<String>) -> Result<bool, ProcedureError>;
+    /// Waits for the user to confirm that something is the case.
+    ///
+    /// A gate rather than a question (§9.3): it returns once they have, and the
+    /// only way past it otherwise is quitting.
+    pub async fn confirm(&self, prompt: impl Into<String>) -> Result<(), ProcedureError>;
 
     /// Asks the user for a value and waits until they enter a valid one.
     pub async fn input<T: FromStr>(
@@ -1243,8 +1247,8 @@ impl Context {
 
     /// Applies `f` to the kind of the step at `path`.
     ///
-    /// Used to write an answer into a prompt, or a parse error back into an
-    /// input step before re-prompting.
+    /// Used to write a parse error back into an input step before
+    /// re-prompting, or the value it accepted once one parses.
     fn update(&self, path: &[usize], f: impl FnOnce(&mut StepKind));
 
     /// Sets the step's status and `finished_at`.
@@ -1295,7 +1299,7 @@ pub async fn characterise(ctx: Context, hardware: Hardware) -> Result<(), Proced
 
 Sections nest freely: any of those functions can call `ctx.section` again for a
 sub-section, or just push steps. Control flow is ordinary Rust — a loop over
-sweep points, an early return on a refused confirmation, a conditional section —
+sweep points, an early return on a failed check, a conditional section —
 which is the point of doing it this way rather than through a list of stages.
 
 ### 11.3 The stub bodies
@@ -1305,11 +1309,7 @@ path. Real logic is a `TODO`.
 
 ```rust
 async fn pump_down(ctx: Context, hardware: Hardware) -> Result<(), ProcedureError> {
-    if !ctx.confirm("Is the roughing pump running?").await? {
-        return Err(ProcedureError::Aborted(
-            "the roughing pump must be running to pump down".into(),
-        ));
-    }
+    ctx.confirm("Confirm that the roughing pump is running").await?;
 
     ctx.wait_for("Waiting for chamber to reach TMP operating pressure", |s| {
         s.vacuum.pressure.value < TMP_MAXIMUM_BACKING_PRESSURE_MBAR
@@ -1534,9 +1534,9 @@ empty-state path per block and no placeholder values anywhere.
 ┌ Steps ────────────────────────────────────────────────────────────┐
 │ ✔ Preparing                                            00:00:42   │
 │   ✔ Filament: W-0007                                              │
-│   ✔ Confirmed the chamber is sealed                               │
+│   ✔ Confirm that the chamber is sealed                            │
 │ ✔ Pumping down chamber                                 00:06:05   │
-│   ✔ Is the roughing pump running? Yes                             │
+│   ✔ Confirm that the roughing pump is running                     │
 │   ✔ Waiting for chamber to reach TMP operating pressure   3.1 s   │
 │   ✔ Turned on the TMP                                             │
 │   ✔ Base pressure: 2.4e-06 mbar                                   │
@@ -1615,7 +1615,8 @@ Key events are routed in this order:
 
 1. `Ctrl+C` — always quits immediately.
 2. If `Section::pending_mut` returns a step, it consumes the event:
-   - **Confirm**: `Enter` or `y` → `true`; `n` → `false`; `Esc` → quit.
+   - **Confirm**: `Enter` confirms; `Esc` → quit. There's no key for "no" —
+     a confirmation is a gate, not a question (§9.3).
    - **Input**: printable characters append to the buffer; `Backspace` deletes;
      `Enter` takes the responder and sends the buffer; `Esc` → quit.
 3. Otherwise:

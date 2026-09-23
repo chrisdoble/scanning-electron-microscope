@@ -41,18 +41,20 @@ pub struct Step {
 /// What a step displays and how the user interacts with it.
 #[derive(Debug)]
 pub enum StepKind {
-    /// A yes/no decision from the user.
+    /// A gate: something the user has to make true, e.g. "Confirm that the
+    /// roughing pump is running", before the procedure continues.
+    ///
+    /// Not a yes/no question. There's no answer to record — the step's status
+    /// and `finished_at` say that it was passed and when — and no way to refuse:
+    /// a user who can't make it true quits instead.
     Confirm {
-        /// Set by the procedure once the user answers.
-        answer: Option<bool>,
-
         prompt: String,
 
-        /// Taken by the application when the user answers.
+        /// Taken by the application when the user confirms.
         ///
         /// `Some` exactly while this step is waiting for input, which is what
         /// `Section::pending_mut` looks for.
-        responder: Option<oneshot::Sender<bool>>,
+        responder: Option<oneshot::Sender<()>>,
     },
 
     /// A value typed by the user.
@@ -205,18 +207,15 @@ impl Step {
         let available = width.saturating_sub(glyph.width() as u16);
 
         match &self.kind {
-            StepKind::Confirm {
-                answer,
-                prompt,
-                responder,
-            } => {
-                let mut spans = vec![Span::raw(format!("{} ", prompt))];
-                match (answer, responder.is_some()) {
-                    (_, true) => spans.push(Span::styled("[Enter] Confirm", CONFIRMATION_STYLE)),
-                    (Some(true), _) => spans.push(Span::styled("Yes", VARIABLE_STYLE)),
-                    (Some(false), _) => spans.push(Span::styled("No", VARIABLE_STYLE)),
-                    (None, _) => {}
+            StepKind::Confirm { prompt, responder } => {
+                let mut spans = vec![Span::raw(prompt.clone())];
+
+                // Once it's passed there's nothing to add: the glyph says so.
+                if responder.is_some() {
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled("[Enter] Confirm", CONFIRMATION_STYLE));
                 }
+
                 vec![line(glyph, ellipsify(spans, available))]
             }
 
@@ -513,8 +512,7 @@ pub fn demo() -> Section {
     ));
     preparing.children.push(finished(
         StepKind::Confirm {
-            answer: Some(true),
-            prompt: String::from("Is the chamber sealed?"),
+            prompt: String::from("Confirm that the chamber is sealed"),
             responder: None,
         },
         StepStatus::Done,
@@ -534,8 +532,7 @@ pub fn demo() -> Section {
     };
     pumping.children.push(finished(
         StepKind::Confirm {
-            answer: Some(true),
-            prompt: String::from("Is the roughing pump running?"),
+            prompt: String::from("Confirm that the roughing pump is running"),
             responder: None,
         },
         StepStatus::Done,
@@ -626,12 +623,11 @@ pub fn demo() -> Section {
         "Settling at 1.850 A before taking the next point",
     )));
 
-    // The receiver is dropped: nothing is waiting on this answer, but the
+    // The receiver is dropped: nothing is waiting on this confirmation, but the
     // sender being `Some` is what makes the step pending.
     let (responder, _) = oneshot::channel();
     sweeping.children.push(Step::new(StepKind::Confirm {
-        answer: None,
-        prompt: String::from("Continue to the next sweep point?"),
+        prompt: String::from("Confirm that the filament current has settled"),
         responder: Some(responder),
     }));
 

@@ -122,8 +122,7 @@ impl App {
             KeyCode::Home => self.steps_state.scroll_to_top(),
             KeyCode::End => self.steps_state.scroll_to_bottom(),
 
-            KeyCode::Enter | KeyCode::Char('y') => self.answer(true)?,
-            KeyCode::Char('n') => self.answer(false)?,
+            KeyCode::Enter => self.confirm()?,
 
             _ => {}
         }
@@ -131,29 +130,25 @@ impl App {
         Ok(false)
     }
 
-    /// Answers the pending confirmation, if there is one.
+    /// Passes the pending confirmation, if there is one.
     ///
     /// TODO: the procedure owns a step's status — the application should only
-    /// take the responder and send the answer, leaving the procedure to set
-    /// `answer`, `status` and `finished_at` when it wakes. It does both here
-    /// only because the hard-coded tree has no procedure behind it, and the
-    /// pending step would otherwise pin the view forever.
-    fn answer(&mut self, answer: bool) -> Result<(), AnyError> {
+    /// take the responder and send `()`, leaving the procedure to set `status`
+    /// and `finished_at` when it wakes. It does both here only because the
+    /// hard-coded tree has no procedure behind it, and the pending step would
+    /// otherwise pin the view forever.
+    fn confirm(&mut self) -> Result<(), AnyError> {
         let mut root = lock(&self.root)?;
 
         if let Some(step) = root.pending_mut()
-            && let StepKind::Confirm {
-                answer: a,
-                responder,
-                ..
-            } = &mut step.kind
+            && let StepKind::Confirm { responder, .. } = &mut step.kind
         {
-            // An error here only means the procedure has gone away.
+            // Taking the responder is what ends the wait. An error sending
+            // only means the procedure has gone away.
             if let Some(responder) = responder.take() {
-                let _ = responder.send(answer);
+                let _ = responder.send(());
             }
 
-            *a = Some(answer);
             step.finished_at = Some(std::time::Instant::now());
             step.status = StepStatus::Done;
         }

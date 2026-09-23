@@ -28,7 +28,7 @@ pub fn render(frame: &mut Frame, root: &Section, steps_state: &mut StepsState) {
     // binary. Scrolling isn't offered while a step is pending, because the view
     // stays pinned to it until it's answered.
     let shortcuts = match root.pending().map(|step| &step.kind) {
-        Some(StepKind::Confirm { .. }) => "[Enter / Y] Yes   [N] No   [Esc] Quit",
+        Some(StepKind::Confirm { .. }) => "[Enter] Confirm   [Esc] Quit",
         Some(StepKind::Input { .. }) => "[Enter] Submit   [Esc] Quit",
         _ => "[↑/↓] Scroll   [Esc] Quit",
     };
