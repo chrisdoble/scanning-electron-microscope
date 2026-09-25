@@ -153,6 +153,20 @@ impl PowerSupply {
         }
     }
 
+    /// Puts the supply and the relays into a known, unpowered state: the output
+    /// off, both limits at zero, and the relays de-energised.
+    ///
+    /// The output is disabled first so that the relays are never switched under
+    /// load. If anything fails, this stops there and returns the error — in
+    /// particular it won't switch the relays if the output couldn't be
+    /// disabled.
+    pub async fn reset(&self) -> Result<(), PowerSupplyError> {
+        self.set_output_enabled(false).await?;
+        self.set_current_limit(0.0).await?;
+        self.set_voltage_limit(0.0).await?;
+        self.set_polarity(Polarity::Nil).await
+    }
+
     /// Sets the channel's current limit in amperes.
     pub async fn set_current_limit(&self, current: f64) -> Result<(), PowerSupplyError> {
         let state = self.state.lock().await;
