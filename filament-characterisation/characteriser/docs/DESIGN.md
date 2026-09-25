@@ -1082,16 +1082,25 @@ read.
 /// fails part-way still leaves its partial results behind.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Characterisation {
+    /// The current through the filament while measuring its cold resistance
+    /// in `Polarity::Forward`.
+    pub cold_forward_current_amps: Option<Measurement>,
+
+    /// The voltage across the filament while measuring its cold resistance in
+    /// `Polarity::Forward`.
+    pub cold_forward_voltage_volts: Option<Measurement>,
+
+    /// As above, in `Polarity::Reverse`.
+    pub cold_reverse_current_amps: Option<Measurement>,
+
+    /// As above, in `Polarity::Reverse`.
+    pub cold_reverse_voltage_volts: Option<Measurement>,
+
     /// An identifier for the filament under test, entered by the operator.
     pub filament_id: Option<String>,
 
     /// When the run started, in seconds since the Unix epoch.
     pub started_at: u64,
-
-    // TODO: one field per measured quantity as the measurements are
-    // implemented, each a `Measurement` (or a `Vec` of them for a sweep), named
-    // with its unit. If any of them needs a timestamp, `Context` grows a method
-    // returning seconds since `started_at` — nothing needs one yet.
 }
 
 impl Characterisation {
@@ -1108,6 +1117,11 @@ impl Characterisation {
     pub fn save(&self) -> Result<(), ResultsError>;
 }
 ```
+
+Every measured field is an `Option` for the same reason `filament_id` is: the
+file is saved before anything is measured, and a run quit part-way leaves the
+rest as `null`. More fields join these as the real procedure measures more, each
+a `Measurement` (or a `Vec` of them for a sweep) named with its unit.
 
 `filament_id` is `None` until the operator enters it. It's the first thing the
 procedure asks for, before any measurement is taken, so no results file that
@@ -1170,6 +1184,10 @@ pub struct Context {
     /// The step tree.
     root: Arc<Mutex<Section>>,
 
+    /// Whether the results have been saved yet, so the first save can say where
+    /// they're going (§10.3). Shared for the same reason as `characterisation`.
+    saved: Arc<AtomicBool>,
+
     /// The readings published by the hardware poll task.
     snapshots: watch::Receiver<Option<Snapshots>>,
 }
@@ -1179,15 +1197,16 @@ impl Context {
     ///
     /// The context passed to `f` is parented to the new section, so any steps
     /// it emits are nested beneath it. On error the section is marked failed
-    /// and the error propagates.
-    pub async fn section<F, Fut>(
+    /// and the error propagates. Whatever `f` returns is passed back, so a
+    /// section can hand its measurements to the caller that records them.
+    pub async fn section<F, Fut, T>(
         &self,
         title: impl Into<String>,
         f: F,
-    ) -> Result<(), ProcedureError>
+    ) -> Result<T, ProcedureError>
     where
         F: FnOnce(Context) -> Fut,
-        Fut: Future<Output = Result<(), ProcedureError>>;
+        Fut: Future<Output = Result<T, ProcedureError>>;
 
     /// Waits for the user to confirm that something is the case.
     ///
@@ -1196,11 +1215,16 @@ impl Context {
     pub async fn confirm(&self, prompt: impl Into<String>) -> Result<(), ProcedureError>;
 
     /// Asks the user for a value and waits until they enter a valid one.
-    pub async fn input<T: FromStr>(
+    ///
+    /// A value that doesn't parse gets its parse error beside the prompt.
+    pub async fn input<T>(
         &self,
         prompt: impl Into<String>,
         unit: Option<&str>,
-    ) -> Result<T, ProcedureError>;
+    ) -> Result<T, ProcedureError>
+    where
+        T: FromStr,
+        T::Err: Display;
 
     /// Adds a labelled measurement to the step list.
     pub fn measurement(&self, label: impl Into<String>, value: impl Display);
@@ -1270,18 +1294,20 @@ why they don't return `Result`.
 ```rust
 #[derive(Debug, Error)]
 pub enum ProcedureError {
-    #[error("aborted by operator: {0}")]
-    Aborted(String),
     #[error("cancelled")]
     Cancelled,
-    #[error("{0}")]
-    Failed(String),
     #[error("hardware error: {0}")]
     Hardware(#[from] HardwareError),
     #[error("python error: {0}")]
     Python(#[from] PythonError),
 }
 ```
+
+`Cancelled` is what every waiting method returns once the token fires. There's
+no variant for the procedure's own checks — a reading outside a plausible
+range, say — because the stubs make none; add one with the first that does.
+Refusals by the hardware, such as a current above the cap, are already
+`HardwareError`s.
 
 ### 11.2 The procedure itself
 
@@ -1297,21 +1323,26 @@ pub async fn characterise(ctx: Context, hardware: Hardware) -> Result<(), Proced
     ctx.section("Preparing", |ctx| prepare(ctx, hardware.clone())).await?;
     ctx.section("Pumping down chamber", |ctx| pump_down(ctx, hardware.clone())).await?;
     ctx.section("Measuring cold resistance", |ctx| measure_cold_resistance(ctx, hardware.clone())).await?;
-    ctx.section("Sweeping heating current", |ctx| sweep_heating_current(ctx, hardware.clone())).await?;
+    ctx.section("Spinning down TMP", |ctx| spin_down(ctx, hardware.clone())).await?;
     ctx.section("Finishing", |ctx| finish(ctx, hardware.clone())).await?;
     Ok(())
 }
 ```
 
 Sections nest freely: any of those functions can call `ctx.section` again for a
-sub-section, or just push steps. Control flow is ordinary Rust — a loop over
+sub-section, or just push steps. Each takes the `Hardware`, which is how a
+section reads an instrument faster than the once-a-second snapshot — sampling in
+a loop, or waiting on a condition inside `ctx.waiting`. `ctx.wait_for` is for
+conditions the snapshot can answer. Control flow is ordinary Rust — a loop over
 sweep points, an early return on a failed check, a conditional section —
 which is the point of doing it this way rather than through a list of stages.
 
 ### 11.3 The stub bodies
 
 These exercise every step kind, every interaction, the save path and the Python
-path. Real logic is a `TODO`.
+path. Real logic is a `TODO`. Only the cold resistance is measured; the sweep of
+the heating current waits for the real procedure. `MAXIMUM_HEATING_CURRENT_AMPS`
+is held at 100 mA until then, so nothing the stubs do can heat a filament.
 
 ```rust
 async fn pump_down(ctx: Context, hardware: Hardware) -> Result<(), ProcedureError> {
@@ -1338,33 +1369,6 @@ async fn pump_down(ctx: Context, hardware: Hardware) -> Result<(), ProcedureErro
     );
     Ok(())
 }
-
-async fn sweep_heating_current(ctx: Context, hardware: Hardware) -> Result<(), ProcedureError> {
-    let maximum: f64 = ctx.input("Maximum heating current", Some("A")).await?;
-
-    // TODO: replace with a real sweep that settles at each point, takes
-    // SAMPLE_COUNT samples of both quantities, reverses the polarity to cancel
-    // the Seebeck voltage, and records a `Measurement` per point.
-    hardware.filament.set_output_enabled(true).await?;
-    let step = maximum / SWEEP_POINTS as f64;
-    let mut current = step;
-    while current <= maximum {
-        hardware.filament.set_heating_current(current).await?;
-        tokio::time::sleep(SWEEP_SETTLING_TIME).await;
-
-        let voltage = hardware.filament.get_filament_voltage().await?;
-        ctx.measurement(
-            format!("{:.3} A", current),
-            format!("{:.1} mV", voltage * 1000.0),
-        );
-
-        current += step;
-    }
-
-    hardware.filament.set_heating_current(0.0).await?;
-    hardware.filament.set_output_enabled(false).await?;
-    Ok(())
-}
 ```
 
 The rest:
@@ -1373,14 +1377,18 @@ The rest:
   `ctx.save`) before anything else — the first save is what tells the operator
   where the results are being written — then calls
   `set_heating_voltage(MAXIMUM_HEATING_VOLTAGE_VOLTS)` once so the channel runs
-  in constant current, and confirms the chamber is sealed and the filament is
-  mounted.
-- `measure_cold_resistance` takes `SAMPLE_COUNT` samples of voltage and current
-  at a small current in `Polarity::Forward`, then again in `Polarity::Reverse` —
-  disabling the output between them, as `set_polarity` requires — calls
-  `python::mean_and_standard_error` on each set, shows the results as
-  measurement steps, records them and saves. This is the one stub that runs the
-  whole measurement pattern end to end, so make it the reference for the others.
+  in constant current, and confirms the filament is mounted and the chamber is
+  sealed.
+- `measure_cold_resistance` runs a sub-section per polarity, `Forward` then
+  `Reverse`. Each disables the output before switching the relays, as
+  `set_polarity` requires; sets `COLD_RESISTANCE_CURRENT_AMPS`, enables the
+  output and lets it settle; takes `SAMPLE_COUNT` samples of voltage and
+  current; disables the output; and summarises each set with
+  `python::mean_and_standard_error`, showing the results as measurement steps.
+  The sub-section returns its two `Measurement`s, which the caller records and
+  saves. This is the one stub that runs the whole measurement pattern end to
+  end, so make it the reference for the others.
+- `spin_down` turns the TMP off and waits for its rotation speed to reach zero.
 - `finish` zeroes the supply, returns the relays to `Polarity::Nil`, and saves a
   final time.
 
@@ -1515,10 +1523,11 @@ enum Shutdown {
 
 The `None` snapshot is the only start-up state. Once the first one is handled,
 it is `Some` and stays that way — a poll failure never clears it, it retries and
-then becomes fatal (§8.1). Handling that first snapshot is also what spawns the
-procedure task; the app holds the procedure's inputs until then. Note in a
-comment that this ordering is deliberate, so nobody "simplifies" it by spawning
-the procedure in `main`.
+then becomes fatal (§8.1). The procedure doesn't start until that first snapshot
+exists either: `main` spawns it, and its runner's first act is to wait on its own
+watch receiver for `Some`. So nothing runs against instruments that haven't
+answered, without `App` having to hold the procedure's inputs just to hand them
+on.
 
 Until then, the vacuum and filament blocks render their border and title with a
 centred `Waiting for readings…` in `SUBTLE_TEXT_STYLE` — the same treatment the
@@ -1533,7 +1542,7 @@ empty-state path per block and no placeholder values anywhere.
 ```
 ┌ Vacuum ─────────────┐┌ Filament ────────────┐┌ Run ───────────────┐
 │ Pressure:  1.2e-05 m││ Current:    1.850 A  ││ Elapsed:  00:12:31 │
-│ TMP:       Running  ││ Polarity:   Forward  ││ Section:  Sweeping │
+│ TMP:       Running  ││ Polarity:   Forward  ││ Section:  Pumping… │
 │ Speed:     1500/1500││ Output:     Enabled  ││ Status:   Running  │
 │ Current:   0.42 A   ││ Voltage:    482.1 mV ││                    │
 └─────────────────────┘└──────────────────────┘└────────────────────┘

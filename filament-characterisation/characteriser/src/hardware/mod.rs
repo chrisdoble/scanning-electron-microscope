@@ -1,12 +1,5 @@
 //! Everything the application can talk to, behind one trait per subsystem.
 
-// TODO: remove this once the poll task, the procedure and the shutdown path call
-// all of this (steps 6, 8 and 9 of the design document's build order). Only the
-// two `snapshot` methods have a caller so far, and dead-code analysis is
-// transitive: an uncalled method's body doesn't count as a use of what it names,
-// so without this most of the module and all of `constants` looks unused.
-#![allow(dead_code)]
-
 mod mock;
 mod real;
 
@@ -126,6 +119,9 @@ pub trait FilamentSystem: std::fmt::Debug + Send + Sync {
     ///
     /// In order: zero the current, disable the output, then
     /// `set_polarity(Polarity::Nil)` to de-energise both relays.
+    // TODO: remove this once shutdown calls it (step 9 of the design
+    // document's build order).
+    #[allow(dead_code)]
     async fn enter_safe_state(&self);
 
     /// Measures the voltage across the filament in volts.

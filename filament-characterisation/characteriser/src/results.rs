@@ -1,9 +1,5 @@
 //! What a characterisation run measures, and how it's written to disk.
 
-// TODO: remove this once `Context` records and saves results (step 8 of the
-// design document's build order). Until then only the tests call any of this.
-#![allow(dead_code)]
-
 use log::*;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -53,8 +49,28 @@ pub struct Measurement {
 ///
 /// Written to disk at checkpoints throughout the procedure so that a run which
 /// fails part-way still leaves its partial results behind.
+///
+/// Every measured field is an `Option`, `None` until it's measured, because the
+/// file is saved before anything is — and a run that's quit part-way leaves the
+/// rest as `null`.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Characterisation {
+    /// The current through the filament while measuring its cold resistance
+    /// in `Polarity::Forward`.
+    pub cold_forward_current_amps: Option<Measurement>,
+
+    /// The voltage across the filament while measuring its cold resistance in
+    /// `Polarity::Forward`.
+    pub cold_forward_voltage_volts: Option<Measurement>,
+
+    /// The current through the filament while measuring its cold resistance
+    /// in `Polarity::Reverse`.
+    pub cold_reverse_current_amps: Option<Measurement>,
+
+    /// The voltage across the filament while measuring its cold resistance in
+    /// `Polarity::Reverse`.
+    pub cold_reverse_voltage_volts: Option<Measurement>,
+
     /// An identifier for the filament under test, entered by the operator.
     ///
     /// `None` until then. It's the first thing the procedure asks for, before
@@ -65,16 +81,16 @@ pub struct Characterisation {
 
     /// When the run started, in seconds since the Unix epoch.
     pub started_at: u64,
-    // TODO: one field per measured quantity as the measurements are
-    // implemented, each a `Measurement` (or a `Vec` of them for a sweep), named
-    // with its unit. If any of them needs a timestamp, `Context` grows a method
-    // returning seconds since `started_at` — nothing needs one yet.
 }
 
 impl Characterisation {
     /// Creates the results for a run starting now.
     pub fn new() -> Self {
         Self {
+            cold_forward_current_amps: None,
+            cold_forward_voltage_volts: None,
+            cold_reverse_current_amps: None,
+            cold_reverse_voltage_volts: None,
             filament_id: None,
 
             // Only fails if the system clock is set before 1970.

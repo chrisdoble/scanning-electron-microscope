@@ -1,7 +1,8 @@
 use crate::{
     AnyError,
     hardware::{HardwareError, Snapshots},
-    steps::{Section, StepKind},
+    procedure::ProcedureError,
+    steps::{Section, StepKind, StepStatus},
     ui,
     ui::StepsState,
 };
@@ -32,6 +33,9 @@ const RENDER_INTERVAL: Duration = Duration::from_millis(50);
 pub enum AppEvent {
     /// The hardware has failed persistently and the run can't continue.
     HardwareFailed(HardwareError),
+
+    /// The procedure task has finished, successfully or otherwise.
+    ProcedureFinished(Result<(), ProcedureError>),
 }
 
 /// The application.
@@ -138,15 +142,31 @@ impl App {
 
     /// Handles a message from another task.
     ///
-    /// TODO: a hardware failure should be shown as a failed step, keep the UI
-    /// up until a key is pressed, and put the filament system into a safe state
-    /// (step 9 of the design document's build order). For now it ends the run
-    /// with the error, which restores the terminal and has `main` report it.
+    /// TODO: both failures should be shown as a failed step, keep the UI up
+    /// until a key is pressed, and put the filament system into a safe state;
+    /// and a finished procedure should end the run (step 9 of the design
+    /// document's build order). For now a hardware failure ends the run with
+    /// the error, and a finished procedure — successful or not — leaves the UI
+    /// up so the result can be read before quitting.
     fn handle_app_event(&mut self, event: AppEvent) -> Result<(), AnyError> {
         match event {
             AppEvent::HardwareFailed(e) => {
                 error!("the hardware has failed: {}", e);
                 Err(e.into())
+            }
+
+            // `run` has already logged how it ended.
+            AppEvent::ProcedureFinished(Ok(())) => Ok(()),
+
+            // The sections it failed in are already marked as failed; this
+            // says why, at the end of the list where the operator is looking.
+            AppEvent::ProcedureFinished(Err(e)) => {
+                let mut root = lock(&self.root)?;
+                let index = root.push(StepKind::error(format!("The procedure failed: {}", e)));
+                let step = &mut root.children[index];
+                step.finished_at = Some(Instant::now());
+                step.status = StepStatus::Failed;
+                Ok(())
             }
         }
     }

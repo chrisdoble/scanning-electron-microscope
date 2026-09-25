@@ -156,14 +156,22 @@ impl VacuumSystem for MockVacuumSystem {
     }
 
     async fn snapshot(&self) -> Result<VacuumSnapshot, HardwareError> {
+        let tmp_running = *self.tmp_running();
+
         Ok(VacuumSnapshot {
             pressure: Pressure {
                 unit: PressureUnit::Millibar,
                 value: PRESSURE_MBAR,
             },
             tmp_current: TMP_CURRENT_AMPS,
-            tmp_current_rotation_speed: TMP_ROTATION_SPEED_HERTZ,
-            tmp_running: *self.tmp_running(),
+            // Follows what `set_tmp_running` was given, instantly: a snapshot
+            // reflects what was set, and there's no physics here.
+            tmp_current_rotation_speed: if tmp_running {
+                TMP_ROTATION_SPEED_HERTZ
+            } else {
+                0
+            },
+            tmp_running,
             tmp_target_rotation_speed: TMP_ROTATION_SPEED_HERTZ,
         })
     }

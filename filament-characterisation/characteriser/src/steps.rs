@@ -4,13 +4,12 @@
 //! `StepKind::Text`. Only `Line` and `Span` are needed.
 
 use crate::{
-    style::{CONFIRMATION_STYLE, ERROR_STYLE, VARIABLE_STYLE},
+    style::{CONFIRMATION_STYLE, ERROR_STYLE, SUCCESS_STYLE, VARIABLE_STYLE},
     ui::format_duration,
 };
 use ratatui::text::{Line, Span};
 use std::{
     fmt::Display,
-    sync::{Arc, Mutex, MutexGuard},
     time::{Duration, Instant},
 };
 use tokio::sync::oneshot;
@@ -202,7 +201,7 @@ impl Step {
     pub fn render(&self, width: u16) -> Vec<Line<'static>> {
         // Style at the span level, never the line level, so that a section
         // prepending an indent span can't interact with a line-level style.
-        let glyph = Span::raw(format!("{} ", self.glyph()));
+        let glyph = self.glyph();
         let available = width.saturating_sub(glyph.width() as u16);
 
         match &self.kind {
@@ -271,8 +270,9 @@ impl Step {
         }
     }
 
-    /// The status glyph shown at the start of the step's line.
-    fn glyph(&self) -> String {
+    /// The status glyph shown at the start of the step's line, and the space
+    /// after it: a green tick, a red cross, or a spinner.
+    fn glyph(&self) -> Span<'static> {
         /// The frames of the spinner shown beside a running step.
         const SPINNER_FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -280,14 +280,17 @@ impl Step {
         const SPINNER_FRAME_INTERVAL: Duration = Duration::from_millis(80);
 
         match self.status {
-            StepStatus::Done => String::from("✔"),
-            StepStatus::Failed => String::from("✖"),
+            StepStatus::Done => Span::styled("✔ ", SUCCESS_STYLE),
+            StepStatus::Failed => Span::styled("✖ ", ERROR_STYLE),
 
             // Indexed from the step's own elapsed time, so no tick counter has
             // to be passed down the tree.
             StepStatus::Running => {
                 let frame = self.elapsed().as_millis() / SPINNER_FRAME_INTERVAL.as_millis();
-                String::from(SPINNER_FRAMES[frame as usize % SPINNER_FRAMES.len()])
+                Span::raw(format!(
+                    "{} ",
+                    SPINNER_FRAMES[frame as usize % SPINNER_FRAMES.len()]
+                ))
             }
         }
     }
@@ -468,265 +471,4 @@ fn ellipsify(spans: Vec<Span<'static>>, width: u16) -> Vec<Span<'static>> {
     }
 
     kept
-}
-
-/// A hard-coded tree, so the widget can be exercised before the procedure
-/// exists.
-///
-/// TODO: delete this once the procedure builds the tree (step 8 of the design
-/// document's build order).
-pub fn demo() -> Section {
-    fn finished(kind: StepKind, status: StepStatus, seconds: u64) -> Step {
-        Step {
-            finished_at: Some(Instant::now()),
-            kind,
-            started_at: Instant::now() - Duration::from_secs(seconds),
-            status,
-        }
-    }
-
-    let mut root = Section::default();
-
-    let mut preparing = Section {
-        children: Vec::new(),
-        title: String::from("Preparing"),
-    };
-    preparing.children.push(finished(
-        StepKind::Input {
-            buffer: String::new(),
-            error: None,
-            prompt: String::from("Filament"),
-            responder: None,
-            unit: None,
-            value: Some(String::from("W-0007")),
-        },
-        StepStatus::Done,
-        3,
-    ));
-    preparing.children.push(finished(
-        StepKind::Confirm {
-            prompt: String::from("Confirm that the chamber is sealed"),
-            responder: None,
-        },
-        StepStatus::Done,
-        5,
-    ));
-    preparing.children.push(finished(
-        StepKind::text("Set the heating voltage limit to 30.000 V"),
-        StepStatus::Done,
-        1,
-    ));
-    root.children
-        .push(finished(StepKind::Section(preparing), StepStatus::Done, 42));
-
-    let mut pumping = Section {
-        children: Vec::new(),
-        title: String::from("Pumping down chamber"),
-    };
-    pumping.children.push(finished(
-        StepKind::Confirm {
-            prompt: String::from("Confirm that the roughing pump is running"),
-            responder: None,
-        },
-        StepStatus::Done,
-        4,
-    ));
-    pumping.children.push(finished(
-        StepKind::text("Waiting for chamber to reach TMP operating pressure"),
-        StepStatus::Done,
-        187,
-    ));
-    pumping.children.push(finished(
-        StepKind::text("Turned on the TMP"),
-        StepStatus::Done,
-        1,
-    ));
-    pumping.children.push(finished(
-        StepKind::error("The TMP took too long to reach speed, retrying"),
-        StepStatus::Failed,
-        90,
-    ));
-    pumping.children.push(finished(
-        StepKind::text("Waiting for TMP to reach speed"),
-        StepStatus::Done,
-        121,
-    ));
-    pumping.children.push(finished(
-        StepKind::measurement("Base pressure", "2.4e-06 mbar"),
-        StepStatus::Done,
-        0,
-    ));
-    root.children
-        .push(finished(StepKind::Section(pumping), StepStatus::Done, 365));
-
-    let mut cold = Section {
-        children: Vec::new(),
-        title: String::from("Measuring cold resistance"),
-    };
-    for (index, polarity) in ["Forward", "Reverse"].iter().enumerate() {
-        let mut sweep = Section {
-            children: Vec::new(),
-            title: format!("{} polarity", polarity),
-        };
-        for sample in 1..=6 {
-            sweep.children.push(finished(
-                StepKind::measurement(
-                    format!("Sample {}", sample),
-                    format!("{:.1} mV", 9.4 + sample as f64 * 0.07 + index as f64 * 0.2),
-                ),
-                StepStatus::Done,
-                0,
-            ));
-        }
-        sweep.children.push(finished(
-            StepKind::measurement(
-                format!("{} voltage", polarity),
-                format!("{:.2} ± 0.03 mV", 9.61 + index as f64 * 0.2),
-            ),
-            StepStatus::Done,
-            0,
-        ));
-        cold.children
-            .push(finished(StepKind::Section(sweep), StepStatus::Done, 14));
-    }
-    cold.children.push(finished(
-        StepKind::measurement("Cold resistance", "0.412 ± 0.002 Ω"),
-        StepStatus::Done,
-        0,
-    ));
-    root.children
-        .push(finished(StepKind::Section(cold), StepStatus::Done, 31));
-
-    let mut sweeping = Section {
-        children: Vec::new(),
-        title: String::from("Sweeping heating current"),
-    };
-    for point in 1..=9 {
-        let current = point as f64 * 0.185;
-        sweeping.children.push(finished(
-            StepKind::measurement(
-                format!("{:.3} A", current),
-                format!("{:.1} mV", current * 412.0),
-            ),
-            StepStatus::Done,
-            2,
-        ));
-    }
-    sweeping.children.push(Step::new(StepKind::text(
-        "Settling at 1.850 A before taking the next point",
-    )));
-
-    root.children.push(Step::new(StepKind::Section(sweeping)));
-
-    root
-}
-
-/// Plays the procedure's part at the end of the demo tree: a confirmation, then
-/// a value to enter, so both prompts can be exercised before the procedure
-/// exists.
-///
-/// It drives them exactly as `Context` will: park a responder in the tree,
-/// await the other end, and set the step's status once it wakes. An input that
-/// doesn't parse gets an error and a fresh responder, and is asked again in
-/// place. The lock is never held across an `.await`.
-///
-/// TODO: delete this with `demo` once the procedure builds the tree (step 8 of
-/// the design document's build order).
-pub async fn run_demo(root: Arc<Mutex<Section>>) {
-    /// Locks the tree. Only a panic while it was held can poison it, and
-    /// nothing holding it here can panic.
-    fn lock(root: &Mutex<Section>) -> MutexGuard<'_, Section> {
-        root.lock().expect("the step tree's mutex was poisoned")
-    }
-
-    /// Appends a step to the section at `section` and returns its path.
-    fn push(root: &Mutex<Section>, section: &[usize], kind: StepKind) -> StepPath {
-        let mut root = lock(root);
-        let index = root
-            .section_at_mut(section)
-            .expect("the demo's section exists")
-            .push(kind);
-        [section, &[index]].concat()
-    }
-
-    /// Applies `f` to the step at `path`.
-    fn update(root: &Mutex<Section>, path: &[usize], f: impl FnOnce(&mut Step)) {
-        f(lock(root)
-            .step_at_mut(path)
-            .expect("the demo's step exists"));
-    }
-
-    // The prompts go in the tree's last section.
-    let section: StepPath = vec![lock(&root).children.len() - 1];
-
-    let (responder, confirmation) = oneshot::channel();
-    let path = push(
-        &root,
-        &section,
-        StepKind::Confirm {
-            prompt: String::from("Confirm that the filament current has settled"),
-            responder: Some(responder),
-        },
-    );
-
-    // An error only means the application has gone away.
-    if confirmation.await.is_err() {
-        return;
-    }
-    update(&root, &path, |step| {
-        step.finished_at = Some(Instant::now());
-        step.status = StepStatus::Done;
-    });
-
-    let (responder, mut submission) = oneshot::channel();
-    let path = push(
-        &root,
-        &section,
-        StepKind::Input {
-            buffer: String::new(),
-            error: None,
-            prompt: String::from("Maximum heating current"),
-            responder: Some(responder),
-            unit: Some(String::from("A")),
-            value: None,
-        },
-    );
-
-    loop {
-        let Ok(buffer) = submission.await else {
-            return;
-        };
-
-        match buffer.trim().parse::<f64>() {
-            Ok(current) => {
-                update(&root, &path, |step| {
-                    if let StepKind::Input { error, value, .. } = &mut step.kind {
-                        *error = None;
-                        *value = Some(format!("{:.3}", current));
-                    }
-                    step.finished_at = Some(Instant::now());
-                    step.status = StepStatus::Done;
-                });
-                return;
-            }
-
-            // Ask again in place, with the error beside the prompt. The step
-            // stays the last in the tree, which keeps `pending` correct.
-            Err(_) => {
-                let (responder, next) = oneshot::channel();
-                submission = next;
-                update(&root, &path, |step| {
-                    if let StepKind::Input {
-                        error,
-                        responder: r,
-                        ..
-                    } = &mut step.kind
-                    {
-                        *error = Some(String::from("not a number"));
-                        *r = Some(responder);
-                    }
-                });
-            }
-        }
-    }
 }

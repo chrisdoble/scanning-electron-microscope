@@ -120,8 +120,6 @@ pub async fn check_environment() -> Result<(), PythonError> {
 ///
 /// Wraps `mean_and_standard_error.py`, which is the calculation behind every
 /// measurement.
-// TODO: remove this once the procedure records measurements.
-#[allow(dead_code)]
 pub async fn mean_and_standard_error(samples: &[f64]) -> Result<(f64, f64), PythonError> {
     /// The object `mean_and_standard_error.py` prints.
     #[derive(Deserialize)]
@@ -140,8 +138,6 @@ pub async fn mean_and_standard_error(samples: &[f64]) -> Result<(f64, f64), Pyth
 /// `args` are passed positionally. The script is expected to print a single
 /// JSON object on stdout, which is deserialised into `T`. Anything it prints on
 /// stderr is logged.
-// TODO: remove this once the procedure records measurements.
-#[allow(dead_code)]
 pub async fn run_script<T: DeserializeOwned>(
     script: &str,
     args: &[String],

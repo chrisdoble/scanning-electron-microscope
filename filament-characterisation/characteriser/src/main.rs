@@ -1,6 +1,7 @@
 mod app;
 mod constants;
 mod hardware;
+mod procedure;
 mod python;
 mod results;
 mod steps;
@@ -16,12 +17,16 @@ use hardware::{
 };
 use host::controller::Controller;
 use log::*;
+use procedure::Context;
+use results::Characterisation;
 use std::{
     fs,
     process::ExitCode,
     sync::{Arc, Mutex},
 };
+use steps::Section;
 use tokio::sync::{mpsc, watch};
+use tokio_util::sync::CancellationToken;
 
 type AnyError = Box<dyn std::error::Error>;
 
@@ -71,17 +76,42 @@ async fn run() -> Result<(), AnyError> {
     // returns an error instead.
     let mut terminal = ratatui::init();
 
-    // TODO: this is `steps::demo()` until the procedure builds the tree (step 8
-    // of the design document's build order), at which point it becomes
-    // `Section::default()`.
-    let root = Arc::new(Mutex::new(steps::demo()));
+    // The only way to stop the tasks. Nothing cancels it yet.
+    //
+    // TODO: have the application cancel it as the first step of shutdown (step
+    // 9 of the design document's build order).
+    let cancel = CancellationToken::new();
 
-    // TODO: the procedure task replaces this (step 8 of the design document's
-    // build order).
-    tokio::spawn(steps::run_demo(Arc::clone(&root)));
+    // The step tree. It's shared with the procedure, which mutates it, and the
+    // application, which renders it. The lock is a `std::sync::Mutex` because
+    // every critical section is a short synchronous mutation or one render
+    // pass, and it's never held across an `.await`.
+    let root = Arc::new(Mutex::new(Section::default()));
+
+    let characterisation = Characterisation::new();
+    info!("Writing results to {}", characterisation.path().display());
 
     let (snapshots_tx, snapshots_rx) = watch::channel(None);
     let (events_tx, events_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
+
+    // The procedure waits for the first snapshot before doing anything, so
+    // nothing runs against instruments that haven't answered yet. Its result is
+    // forwarded to the application; an error sending means it has already
+    // gone.
+    let ctx = Context::new(
+        cancel,
+        characterisation,
+        Arc::clone(&root),
+        snapshots_rx.clone(),
+    );
+    tokio::spawn({
+        let events_tx = events_tx.clone();
+        let hardware = hardware.clone();
+        async move {
+            let result = procedure::run(ctx, hardware).await;
+            let _ = events_tx.send(AppEvent::ProcedureFinished(result)).await;
+        }
+    });
 
     // The poll task returns only once the hardware has failed for good, which
     // is fatal, so it's forwarded to the application to end the run. An error

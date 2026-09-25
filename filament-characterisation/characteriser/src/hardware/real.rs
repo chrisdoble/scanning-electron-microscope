@@ -29,16 +29,20 @@ impl RealFilamentSystem {
     /// `controller` is used to switch the polarity relays.
     ///
     /// Both instruments are found by their USB vendor and product IDs, so both
-    /// must be attached. The oscilloscope is reset so that its channel,
-    /// timebase and vertical scale are known before anything is measured — the
-    /// counterpart of the ADC's unit call in `RealVacuumSystem::new`.
+    /// must be attached. Both are reset so they start from a known state: the
+    /// oscilloscope's channel, timebase and vertical scale set up for
+    /// measuring, and the supply's output off, its limits zero and the relays
+    /// de-energised, however it was left.
     pub async fn new(controller: Arc<Controller>) -> Result<Self, HardwareError> {
         let oscilloscope = Oscilloscope::new().await?;
         oscilloscope.reset().await?;
 
+        let power_supply = PowerSupply::new(controller).await?;
+        power_supply.reset().await?;
+
         Ok(Self {
             oscilloscope,
-            power_supply: PowerSupply::new(controller).await?,
+            power_supply,
         })
     }
 }

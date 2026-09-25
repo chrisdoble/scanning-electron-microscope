@@ -1,16 +1,14 @@
 //! The limits the procedure and the hardware adapters work within.
 
-// TODO: remove this once the procedure reads these (step 8 of the design
-// document's build order). The ones the adapters already check are only reached
-// from methods that have no caller yet, which counts as unused.
-#![allow(dead_code)]
-
 /// The maximum heating current the filament may be driven with in amperes.
 ///
-/// TODO: confirm this against the filament before a real run. The Rigol DP-932E
-/// can supply 3 A per channel, so the supply isn't the binding constraint —
-/// this value has to come from what the filament tolerates.
-pub const MAXIMUM_HEATING_CURRENT_AMPS: f64 = 2.0;
+/// Deliberately low while the procedure is a stub, so nothing it does can heat
+/// a filament even if it's run against the rig.
+///
+/// TODO: raise this with the real procedure, confirmed against what the
+/// filament tolerates. The Rigol DP-932E can supply 3 A per channel, so the
+/// supply isn't the binding constraint.
+pub const MAXIMUM_HEATING_CURRENT_AMPS: f64 = 0.1;
 
 /// The voltage limit the filament channel is set to in volts.
 ///
