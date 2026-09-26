@@ -99,17 +99,6 @@ impl Context {
             .await
             .and_then(|confirmation| confirmation.map_err(|_| ProcedureError::Cancelled));
 
-        // Nobody is waiting on it any more, so it mustn't still look like it's
-        // waiting on the user: while it held a responder it would stay pending,
-        // pinning the view to a prompt that can no longer be answered.
-        if result.is_err() {
-            self.update(&path, |kind| {
-                if let StepKind::Confirm { responder, .. } = kind {
-                    *responder = None;
-                }
-            });
-        }
-
         self.finish(&path, status(&result));
         result
     }
@@ -145,15 +134,7 @@ impl Context {
                 .and_then(|buffer| buffer.map_err(|_| ProcedureError::Cancelled))
             {
                 Ok(buffer) => buffer,
-
-                // As in `confirm`, give up the responder so the step stops
-                // looking like it's waiting on the user.
                 Err(e) => {
-                    self.update(&path, |kind| {
-                        if let StepKind::Input { responder, .. } = kind {
-                            *responder = None;
-                        }
-                    });
                     self.finish(&path, StepStatus::Failed);
                     return Err(e);
                 }
@@ -337,10 +318,22 @@ impl Context {
     // step tree's lock, and neither holds it across an `.await`.
 
     /// Sets the step's status and `finished_at`.
+    ///
+    /// A finished prompt also gives up its responder, whichever way it
+    /// finished. A step holding one counts as pending, and one left behind by a
+    /// prompt that failed or was cancelled would pin the view to a prompt that
+    /// can no longer be answered. After an answer the application has already
+    /// taken it, so this changes nothing.
     fn finish(&self, path: &[usize], status: StepStatus) {
         self.with_step(path, |step| {
             step.finished_at = Some(Instant::now());
             step.status = status;
+
+            match &mut step.kind {
+                StepKind::Confirm { responder, .. } => *responder = None,
+                StepKind::Input { responder, .. } => *responder = None,
+                StepKind::Section(_) | StepKind::Text { .. } => {}
+            }
         });
     }
 
