@@ -47,6 +47,7 @@ pub async fn characterise(ctx: Context, hardware: Hardware) -> Result<(), Proced
         .await?;
     ctx.section("Finishing", |ctx| finish(ctx, hardware.clone()))
         .await?;
+    ctx.confirm("Press enter to exit").await?;
     Ok(())
 }
 

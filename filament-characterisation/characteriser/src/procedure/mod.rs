@@ -99,6 +99,17 @@ impl Context {
             .await
             .and_then(|confirmation| confirmation.map_err(|_| ProcedureError::Cancelled));
 
+        // Nobody is waiting on it any more, so it mustn't still look like it's
+        // waiting on the user: while it held a responder it would stay pending,
+        // pinning the view to a prompt that can no longer be answered.
+        if result.is_err() {
+            self.update(&path, |kind| {
+                if let StepKind::Confirm { responder, .. } = kind {
+                    *responder = None;
+                }
+            });
+        }
+
         self.finish(&path, status(&result));
         result
     }
@@ -134,7 +145,15 @@ impl Context {
                 .and_then(|buffer| buffer.map_err(|_| ProcedureError::Cancelled))
             {
                 Ok(buffer) => buffer,
+
+                // As in `confirm`, give up the responder so the step stops
+                // looking like it's waiting on the user.
                 Err(e) => {
+                    self.update(&path, |kind| {
+                        if let StepKind::Input { responder, .. } = kind {
+                            *responder = None;
+                        }
+                    });
                     self.finish(&path, StepStatus::Failed);
                     return Err(e);
                 }
@@ -392,8 +411,11 @@ pub async fn run(ctx: Context, hardware: Hardware) -> Result<(), ProcedureError>
     // Save once more on both paths, so the final state always reaches disk.
     ctx.save();
 
+    // Cancellation is how every shutdown stops the procedure, including an
+    // ordinary quit, so it isn't logged as a failure.
     match &result {
-        Ok(()) => info!("The procedure finished"),
+        Ok(()) => info!("the procedure finished"),
+        Err(ProcedureError::Cancelled) => info!("the procedure was cancelled"),
         Err(e) => error!("the procedure failed: {}", e),
     }
     result

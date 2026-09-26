@@ -57,12 +57,13 @@ impl MockFilamentSystem {
 
 #[async_trait]
 impl FilamentSystem for MockFilamentSystem {
-    async fn enter_safe_state(&self) {
+    async fn enter_safe_state(&self) -> Result<(), HardwareError> {
         let mut state = self.state();
         state.heating_current = 0.0;
         state.output_enabled = false;
         state.polarity = Polarity::Nil;
         info!("Mock filament system entered a safe state");
+        Ok(())
     }
 
     async fn get_filament_voltage(&self) -> Result<f64, HardwareError> {

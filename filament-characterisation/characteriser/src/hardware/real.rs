@@ -49,21 +49,34 @@ impl RealFilamentSystem {
 
 #[async_trait]
 impl FilamentSystem for RealFilamentSystem {
-    async fn enter_safe_state(&self) {
+    async fn enter_safe_state(&self) -> Result<(), HardwareError> {
         // Every action is attempted even if an earlier one failed, so a single
         // failure can't leave the filament powered. Note that if disabling the
         // output fails, `set_polarity` then refuses to switch the relays — that
         // is the safe outcome, not a bug: better to leave them as they are than
         // to arc the contacts.
-        if let Err(e) = self.set_heating_current(0.0).await {
-            error!("failed to zero the heating current: {}", e);
+        let results = [
+            (
+                "zero the heating current",
+                self.set_heating_current(0.0).await,
+            ),
+            ("disable the output", self.set_output_enabled(false).await),
+            (
+                "de-energise the relays",
+                self.set_polarity(Polarity::Nil).await,
+            ),
+        ];
+
+        let mut first = Ok(());
+        for (action, result) in results {
+            if let Err(e) = result {
+                error!("failed to {}: {}", action, e);
+                if first.is_ok() {
+                    first = Err(HardwareError::Other(format!("couldn't {}: {}", action, e)));
+                }
+            }
         }
-        if let Err(e) = self.set_output_enabled(false).await {
-            error!("failed to disable the output: {}", e);
-        }
-        if let Err(e) = self.set_polarity(Polarity::Nil).await {
-            error!("failed to de-energise the relays: {}", e);
-        }
+        first
     }
 
     async fn get_filament_voltage(&self) -> Result<f64, HardwareError> {

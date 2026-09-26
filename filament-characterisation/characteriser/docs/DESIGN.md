@@ -549,10 +549,11 @@ pub enum HardwareError {
 
 **What `main` creates and hands out.** Before spawning anything:
 
-- `let cancel = CancellationToken::new();` — cloned into the poll task, into the
-  `Context`, and kept by `App`, which calls `cancel.cancel()` as the first step
-  of shutdown (§16). It is the only cancellation channel; nothing else signals
-  tasks to stop.
+- `let cancel = CancellationToken::new();` — cloned into the `Context` and kept
+  by `main`, which calls `cancel.cancel()` as the first step of shutdown (§16),
+  once the event loop has returned. It is the only cancellation channel; nothing
+  else signals the procedure to stop. The poll task isn't given it: it only
+  reads, so it's left running through shutdown and ends when `main` returns.
 - `let root = Arc::new(Mutex::new(Section::default()));` — the step tree, cloned
   into the `Context` and kept by `App`.
 - `let characterisation = Characterisation::new();` and
@@ -1484,15 +1485,8 @@ calculated by scripts added beside it.
 ```rust
 #[derive(Debug)]
 struct App {
-    /// Cancelled as the first step of shutdown, stopping the poll task and
-    /// unblocking any prompt the procedure is waiting on.
-    cancel: CancellationToken,
-
     /// The step tree, shared with the procedure task.
     root: Arc<Mutex<Section>>,
-
-    /// Why the application is shutting down, if it is.
-    shutdown: Option<Shutdown>,
 
     /// The most recent readings, or `None` before the first poll.
     snapshots: Option<Snapshots>,
@@ -1504,22 +1498,30 @@ struct App {
     steps_state: StepsState,
 }
 
-/// Why the application is shutting down.
+/// Why the application's event loop stopped, returned by `App::run`.
 ///
-/// `App::shutdown` is `None` for a normal run. Setting it is what ends the
-/// event loop: `Normal` exits at the end of the current iteration, while
-/// `Error` keeps rendering until the operator presses a key, so they can read
-/// what went wrong before the terminal is restored.
+/// Whatever the reason, `main` then cancels the procedure, waits for it, and
+/// puts the filament system into a safe state — in that order, and before
+/// anything waits on the operator (§16).
 #[derive(Debug)]
 enum Shutdown {
-    /// The procedure finished, or the operator quit.
+    /// The procedure finished, the operator quit, or a signal asked us to stop.
     Normal,
 
-    /// The run failed. The message is already shown as a failed text step; this
-    /// copy is what `main` returns and prints after the terminal is restored.
-    Error { acknowledged: bool, message: String },
+    /// The run failed. The message is already shown as a failed step; this copy
+    /// is what `main` reports once the terminal is restored.
+    Error(String),
+
+    /// The procedure task panicked. `ratatui::init`'s panic hook has already
+    /// restored the terminal, so there's nothing left to show the error on.
+    Panicked(String),
 }
 ```
+
+`App::run` returns the reason rather than storing it, so there's no shutdown
+state on `App` and no "acknowledged" flag to track: after a failure, `main`
+calls `App::acknowledge`, a small second loop that shows the final state of the
+run until any key is pressed.
 
 The `None` snapshot is the only start-up state. Once the first one is handled,
 it is `Some` and stays that way — a poll failure never clears it, it retries and
@@ -1638,8 +1640,9 @@ Key events are routed in this order:
    - `↑` / `↓`, `PgUp` / `PgDn`, `Home` / `End` — scroll the step list.
    - `q` / `Esc` — quit.
 
-When `App::shutdown` is `Shutdown::Error { acknowledged: false, .. }`, any key
-sets `acknowledged` and ends the loop.
+While `App::acknowledge` is showing a failed run, any key ends it, and the
+shortcuts bar reads `[Any key] Exit`. By then the filament system is already
+safe (§16).
 
 Only handle `event.is_press()`, as the existing binary does, so key repeats on
 some terminals don't double-fire. The shortcuts bar text changes with context,
@@ -1649,82 +1652,78 @@ again matching the existing binary.
 
 ## 16. Errors, shutdown and cleanup
 
-`main` keeps the existing shape — an `async` block whose result is captured so
-`ratatui::restore()` always runs — with the start-up checks before the terminal
-is touched and cleanup after:
+`main` runs the start-up checks before the terminal is touched, then the event
+loop, then the shutdown sequence — which runs **however the loop ended**,
+including when `App::run` itself fails (a poisoned lock, or a draw that fails
+because the terminal has gone). That's why the sequence lives in `main` rather
+than in the loop: the loop can't guarantee its own cleanup.
 
-```rust
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), AnyError> {
-    init_logging()?;
+`main` returns an `ExitCode` and reports errors itself, with `Display`, rather
+than returning the `Result`: Rust would report that with `Debug`, which drops
+the message — and for a `PythonError::Environment` the message is what tells
+the operator which commands to run.
 
-    let args = Arguments::parse();
+### 16.1 What ends the loop
 
-    // Check the Python environment before taking over the terminal, so the
-    // operator sees the error and how to fix it.
-    python::check_environment().await?;
+- The operator quitting: `q` or `Esc` with nothing pending, `Esc` at a prompt,
+  or `Ctrl+C` at any time. In raw mode `Ctrl+C` arrives as a key rather than
+  SIGINT, so it goes through the same path.
+- SIGHUP (the terminal window closing) and SIGTERM (`kill`). By default either
+  would end the process on the spot, with no cleanup; the loop handles them and
+  shuts down like a quit. `kill -9` can't be handled.
+- The procedure finishing (`Normal`) or failing (`Error`), or a fatal hardware
+  failure (`Error`). A failure is added as an error step at the end of the list,
+  where the operator is looking.
+- The procedure panicking (`Panicked`). The task is wrapped in `catch_unwind`, so
+  a panic is reported instead of the task dying silently and leaving the
+  application waiting for an event that never comes.
 
-    let hardware = build_hardware(&args)?;
-    let characterisation = Characterisation::new();
-    let results_path = characterisation.path();
-    info!("Writing results to {}", results_path.display());
+### 16.2 The sequence
 
-    let mut terminal = ratatui::init();
-    install_panic_hook();
+1. **Cancel the token.** Any pending `confirm`, `input`, `wait_for` or `waiting`
+   returns `Cancelled`, and the sections it was in finish `Failed`. A cancelled
+   prompt also gives up its responder, so it stops counting as pending.
+2. **Wait for the procedure**, for up to `SHUTDOWN_TIMEOUT` (2 s), then abort
+   it. Cancelling doesn't stop the procedure where it is: it stops at its next
+   cancellation-aware await, and plain hardware calls such as
+   `set_output_enabled(true)` don't watch the token. Cleaning up before it had
+   stopped would race those calls, and one landing after the cleanup could turn
+   the output back on. Waiting means **the cleanup always has the last word**.
+   It also lets the runner's final save happen, so quitting mid-run leaves the
+   results on disk. An aborted procedure can't save, which is why saves happen
+   at every measurement rather than only at the end.
+3. **`enter_safe_state`**, bounded by `CLEANUP_TIMEOUT` (5 s) so that a hung
+   instrument can't stop the terminal being restored. It attempts every action
+   and returns the first failure, so the operator can be warned.
+4. **Read the TMP's state** afresh, bounded the same way. The last snapshot is
+   stale if it's the vacuum side that failed.
+5. **After an `Error` only**, show the final state of the run — with a step
+   saying whether the filament system was made safe — and wait for any key. The
+   filament is made safe *before* this, never after: a fatal hardware failure
+   mid-measurement mustn't leave it powered while someone reads the error.
+6. **Restore the terminal and report**: the results path, if the procedure got
+   far enough to write it; a warning if the filament system may still be
+   powered, with the reason; a note if the TMP is still running, or that it may
+   be if its state couldn't be read (after a completed run the procedure has
+   stopped it); and the error, with a non-zero exit.
 
-    // Use an `async` block to ensure we clean up on error.
-    let result: Result<(), AnyError> = async {
-        // ... create the shared state (§8.1), spawn tasks, run the app loop ...
-    }
-    .await;
+The terminal may be gone by step 6 — that's what SIGHUP means — so nothing there
+may panic on a failed write: the terminal is restored with `try_restore`, and
+the report lines ignore write errors rather than using `println!`.
 
-    // Always put the filament system into a safe state. A hung instrument must
-    // not stop us restoring the terminal, so time it out.
-    if tokio::time::timeout(CLEANUP_TIMEOUT, hardware.filament.enter_safe_state())
-        .await
-        .is_err()
-    {
-        error!("timed out putting the filament system into a safe state");
-    }
+### 16.3 Panics
 
-    ratatui::restore();
-
-    println!("Results written to {}", results_path.display());
-    println!("The TMP is still running. Use the vacuum control binary to stop it.");
-
-    if let Err(e) = &result {
-        eprintln!("Error: {}", e);
-    }
-
-    result
-}
-```
+`ratatui::init` installs a panic hook that restores the terminal before
+chaining to the previous hook, so a panic message isn't swallowed by the
+alternate screen. A hook can't run the asynchronous cleanup, though. A panic in
+the procedure task is caught and still gets the full sequence above, bar the
+acknowledgement (the hook has already restored the terminal). A panic in the
+application itself can't, which is why nothing there may panic and why every
+fallible call returns an error instead.
 
 The results are saved by the procedure runner, which owns the `Characterisation`
-through `Context` and saves on every exit path — so `main` doesn't need a save
-of its own.
-
-`install_panic_hook` chains onto the existing hook, calling `ratatui::restore()`
-first so a panic message isn't swallowed by the alternate screen. Note in a
-comment that the panic hook **cannot** run the async cleanup — this is why the
-procedure task is never allowed to panic, and why every fallible call inside it
-returns an error instead.
-
-Shutdown sequence, triggered by the operator quitting, a procedure error, a
-fatal hardware failure, or the procedure completing:
-
-1. The app loop sets `App::shutdown` and cancels the `CancellationToken`.
-2. A pending `confirm` or `input` unblocks with `ProcedureError::Cancelled` via
-   the token (§9.3).
-3. The loop waits up to `SHUTDOWN_TIMEOUT` (2 s) for the procedure task's
-   `JoinHandle`, then aborts it. An aborted task can't save, which is why saves
-   happen at every measurement rather than only at the end.
-4. Control returns to `main`, which runs `enter_safe_state`.
-
-On a procedure error or a fatal hardware failure the app pushes a step built
-with `StepKind::error`, marks it and the enclosing sections `Failed`, and sets
-`Shutdown::Error`, which keeps the UI up until the operator presses a key. Log
-the error with `error!` regardless.
+through `Context` and saves on every exit path that lets it return — so `main`
+doesn't need a save of its own.
 
 ---
 

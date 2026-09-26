@@ -30,6 +30,7 @@ pub fn render(
     steps_state: &mut StepsState,
     snapshots: Option<&Snapshots>,
     elapsed: Duration,
+    exiting: bool,
 ) {
     let [top, steps, shortcuts_bar] = Layout::vertical([
         Constraint::Length(6),
@@ -59,6 +60,7 @@ pub fn render(
     // binary. Scrolling isn't offered while a step is pending, because the view
     // stays pinned to it until it's answered.
     let shortcuts = match root.pending().map(|step| &step.kind) {
+        _ if exiting => "[Any key] Exit",
         Some(StepKind::Confirm { .. }) => "[Enter] Confirm   [Esc] Quit",
         Some(StepKind::Input { .. }) => "[Enter] Submit   [Esc] Quit",
         _ => "[↑/↓] Scroll   [Esc] Quit",

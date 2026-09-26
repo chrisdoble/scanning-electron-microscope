@@ -15,6 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
+    signal::unix::{SignalKind, signal},
     sync::{mpsc, watch},
     time::MissedTickBehavior,
 };
@@ -36,6 +37,28 @@ pub enum AppEvent {
 
     /// The procedure task has finished, successfully or otherwise.
     ProcedureFinished(Result<(), ProcedureError>),
+
+    /// The procedure task panicked, with this message.
+    ProcedurePanicked(String),
+}
+
+/// Why the application's event loop stopped.
+///
+/// Whatever the reason, `main` then cancels the procedure, waits for it, and
+/// puts the filament system into a safe state — in that order, and before
+/// anything waits on the operator.
+#[derive(Debug)]
+pub enum Shutdown {
+    /// The procedure finished, the operator quit, or a signal asked us to stop.
+    Normal,
+
+    /// The run failed. The message is already shown as a failed step; this copy
+    /// is what `main` reports once the terminal is restored.
+    Error(String),
+
+    /// The procedure task panicked. `ratatui::init`'s panic hook has already
+    /// restored the terminal, so there's nothing left to show the error on.
+    Panicked(String),
 }
 
 /// The application.
@@ -72,7 +95,36 @@ impl App {
         }
     }
 
-    /// Runs the application's event loop until the user quits.
+    /// Shows the final state of a failed run and waits for any key.
+    ///
+    /// Called once the filament system is already safe, so the operator can
+    /// read what went wrong before the terminal is restored. A signal ends the
+    /// wait too, so `kill` still works while it's up.
+    pub async fn acknowledge(&mut self, terminal: &mut DefaultTerminal) -> Result<(), AnyError> {
+        // `run`'s `EventStream` was dropped when it returned, so this is the
+        // only one. The branches are cancellation-safe for the same reasons as
+        // `run`'s.
+        let mut terminal_events = EventStream::new();
+        let mut hangup = signal(SignalKind::hangup())?;
+        let mut terminate = signal(SignalKind::terminate())?;
+        let mut ticker = tokio::time::interval(RENDER_INTERVAL);
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+        loop {
+            tokio::select! {
+                Some(Ok(Event::Key(event))) = terminal_events.next() => {
+                    if event.is_press() {
+                        return Ok(());
+                    }
+                }
+                _ = hangup.recv() => return Ok(()),
+                _ = terminate.recv() => return Ok(()),
+                _ = ticker.tick() => self.render(terminal, true)?,
+            }
+        }
+    }
+
+    /// Runs the application's event loop until the run ends, returning why.
     ///
     /// The terminal is drawn from here rather than from a task of its own
     /// because `DefaultTerminal` would otherwise have to be shared.
@@ -84,7 +136,7 @@ impl App {
         terminal: &mut DefaultTerminal,
         mut snapshots: watch::Receiver<Option<Snapshots>>,
         mut events: mpsc::Receiver<AppEvent>,
-    ) -> Result<(), AnyError> {
+    ) -> Result<Shutdown, AnyError> {
         // `EventStream` needs no wiring to the terminal: it reads crossterm's
         // process-wide event source, which `ratatui::init` has already put into
         // raw mode. Only one may exist at a time, and nothing else may read
@@ -100,6 +152,13 @@ impl App {
         // `RENDER_INTERVAL` between draws, however late one runs.
         ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
+        // Closing the terminal sends SIGHUP and `kill` sends SIGTERM, and by
+        // default either ends the process on the spot, with no cleanup. Handled
+        // here, they shut down like a quit. (Ctrl+C needs nothing: raw mode
+        // delivers it as a key.)
+        let mut hangup = signal(SignalKind::hangup())?;
+        let mut terminate = signal(SignalKind::terminate())?;
+
         // `tokio::select!` polls every branch's future concurrently and, when
         // one completes, drops the others. Dropping a future cancels whatever
         // work it was doing, so the question isn't whether the other branches
@@ -108,8 +167,9 @@ impl App {
         // lives in a long-lived object outside the future: an unreceived
         // message stays in the channel, an unread key event stays in the
         // `EventStream`'s buffer, the watch receiver's "seen" marker only
-        // advances when `changed()` actually resolves, and the tick deadline
-        // lives in the `Interval`. Each iteration creates fresh futures from
+        // advances when `changed()` actually resolves, a signal that arrives
+        // between polls is held by its `Signal`, and the tick deadline lives in
+        // the `Interval`. Each iteration creates fresh futures from
         // those objects, so a branch that lost the race is simply re-awaited
         // with nothing missed.
         //
@@ -123,50 +183,72 @@ impl App {
         // delivered over a channel instead.
         loop {
             tokio::select! {
-                Some(event) = events.recv() => self.handle_app_event(event)?,
+                Some(event) = events.recv() => return self.handle_app_event(event),
                 Ok(()) = snapshots.changed() => {
                     self.snapshots = *snapshots.borrow_and_update();
                 }
                 Some(Ok(event)) = terminal_events.next() => {
                     if self.handle_terminal_event(event)? {
                         info!("Quitting");
-                        break;
+                        return Ok(Shutdown::Normal);
                     }
                 }
-                _ = ticker.tick() => self.render(terminal)?,
+                _ = hangup.recv() => {
+                    info!("Received SIGHUP, shutting down");
+                    return Ok(Shutdown::Normal);
+                }
+                _ = terminate.recv() => {
+                    info!("Received SIGTERM, shutting down");
+                    return Ok(Shutdown::Normal);
+                }
+                _ = ticker.tick() => self.render(terminal, false)?,
             }
         }
-
-        Ok(())
     }
 
-    /// Handles a message from another task.
+    /// Adds a step saying whether the filament system was made safe, for the
+    /// acknowledgement screen.
+    pub fn show_cleanup(&self, cleanup: &Result<(), String>) -> Result<(), AnyError> {
+        match cleanup {
+            Ok(()) => self.push(
+                StepKind::text("Put the filament system into a safe state"),
+                StepStatus::Done,
+            ),
+            Err(e) => self.push(
+                StepKind::error(format!("The filament system may still be powered: {}", e)),
+                StepStatus::Failed,
+            ),
+        }
+    }
+
+    /// Handles a message from another task. Every one of them ends the run.
     ///
-    /// TODO: both failures should be shown as a failed step, keep the UI up
-    /// until a key is pressed, and put the filament system into a safe state;
-    /// and a finished procedure should end the run (step 9 of the design
-    /// document's build order). For now a hardware failure ends the run with
-    /// the error, and a finished procedure — successful or not — leaves the UI
-    /// up so the result can be read before quitting.
-    fn handle_app_event(&mut self, event: AppEvent) -> Result<(), AnyError> {
+    /// A failure is added at the end of the step list, where the operator is
+    /// looking. The sections it happened in are marked failed as the procedure
+    /// unwinds.
+    fn handle_app_event(&mut self, event: AppEvent) -> Result<Shutdown, AnyError> {
         match event {
             AppEvent::HardwareFailed(e) => {
                 error!("the hardware has failed: {}", e);
-                Err(e.into())
+                let message = format!("The hardware failed: {}", e);
+                self.push(StepKind::error(message.clone()), StepStatus::Failed)?;
+                Ok(Shutdown::Error(message))
             }
 
-            // `run` has already logged how it ended.
-            AppEvent::ProcedureFinished(Ok(())) => Ok(()),
-
-            // The sections it failed in are already marked as failed; this
-            // says why, at the end of the list where the operator is looking.
+            // `procedure::run` has already logged how it ended.
+            AppEvent::ProcedureFinished(Ok(())) => Ok(Shutdown::Normal),
             AppEvent::ProcedureFinished(Err(e)) => {
-                let mut root = lock(&self.root)?;
-                let index = root.push(StepKind::error(format!("The procedure failed: {}", e)));
-                let step = &mut root.children[index];
-                step.finished_at = Some(Instant::now());
-                step.status = StepStatus::Failed;
-                Ok(())
+                let message = format!("The procedure failed: {}", e);
+                self.push(StepKind::error(message.clone()), StepStatus::Failed)?;
+                Ok(Shutdown::Error(message))
+            }
+
+            AppEvent::ProcedurePanicked(message) => {
+                error!("the procedure panicked: {}", message);
+                Ok(Shutdown::Panicked(format!(
+                    "The procedure panicked: {}",
+                    message
+                )))
             }
         }
     }
@@ -237,15 +319,27 @@ impl App {
         Ok(false)
     }
 
-    /// Draws the UI.
-    fn render(&mut self, terminal: &mut DefaultTerminal) -> Result<(), AnyError> {
+    /// Appends a finished step to the root of the tree.
+    fn push(&self, kind: StepKind, status: StepStatus) -> Result<(), AnyError> {
+        let mut root = lock(&self.root)?;
+        let index = root.push(kind);
+        let step = &mut root.children[index];
+        step.finished_at = Some(Instant::now());
+        step.status = status;
+        Ok(())
+    }
+
+    /// Draws the UI. `exiting` is set while waiting for the operator to
+    /// acknowledge a failed run.
+    fn render(&mut self, terminal: &mut DefaultTerminal, exiting: bool) -> Result<(), AnyError> {
         // Borrow the two fields separately — `lock` is a free function rather
         // than a method so that holding the guard doesn't borrow all of `self`.
         let root = lock(&self.root)?;
         let steps_state = &mut self.steps_state;
         let snapshots = self.snapshots.as_ref();
         let elapsed = self.start_time.elapsed();
-        terminal.draw(|frame| ui::render(frame, &root, steps_state, snapshots, elapsed))?;
+        terminal
+            .draw(|frame| ui::render(frame, &root, steps_state, snapshots, elapsed, exiting))?;
         Ok(())
     }
 }

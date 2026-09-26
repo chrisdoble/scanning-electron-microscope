@@ -55,7 +55,7 @@ pub enum HardwareError {
     Tmp(#[from] TmpError),
 
     // Custom errors
-    #[error("error: {0}")]
+    #[error("{0}")]
     Other(String),
 }
 
@@ -114,15 +114,16 @@ pub trait FilamentSystem: std::fmt::Debug + Send + Sync {
     /// Puts the filament system into a safe state.
     ///
     /// Called on every exit path: normal completion, procedure error, user quit,
-    /// and panic. Must be idempotent and must not return early on the first
-    /// failure — every action is attempted and failures are logged.
+    /// a signal, and a procedure panic. Must be idempotent and must not return
+    /// early on the first failure — every action is attempted and failures are
+    /// logged.
     ///
     /// In order: zero the current, disable the output, then
     /// `set_polarity(Polarity::Nil)` to de-energise both relays.
-    // TODO: remove this once shutdown calls it (step 9 of the design
-    // document's build order).
-    #[allow(dead_code)]
-    async fn enter_safe_state(&self);
+    ///
+    /// Returns the first failure, so the caller can warn that the filament
+    /// system may still be powered.
+    async fn enter_safe_state(&self) -> Result<(), HardwareError>;
 
     /// Measures the voltage across the filament in volts.
     ///
@@ -209,9 +210,13 @@ pub struct Hardware {
 ///
 /// Returns rather than reporting the failure itself so that this module doesn't
 /// depend on the application's event type.
+///
+/// Borrows `snapshots` rather than taking it, so the caller decides when the
+/// channel closes. Closing it is how waiters learn the poll has stopped, and
+/// they shouldn't learn that before the failure itself has been reported.
 pub async fn poll(
     hardware: Hardware,
-    snapshots: watch::Sender<Option<Snapshots>>,
+    snapshots: &watch::Sender<Option<Snapshots>>,
 ) -> HardwareError {
     let mut ticker = tokio::time::interval(POLL_INTERVAL);
 

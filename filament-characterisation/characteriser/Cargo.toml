@@ -17,5 +17,5 @@ serde = { features = ["derive"], version = "1" }
 serde_json = "1"
 serialport = { workspace = true }
 thiserror = { workspace = true }
-tokio = { features = ["process"], workspace = true }
+tokio = { features = ["process", "signal"], workspace = true }
 tokio-util = "0.7"
