@@ -1,6 +1,6 @@
 A Ratatui application that drives the vacuum rig and steps an operator through characterising a tungsten filament.
 
-See [`docs/DESIGN.md`](docs/DESIGN.md) for the full specification.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full specification.
 
 # Requirements
 
