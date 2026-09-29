@@ -56,13 +56,10 @@ At about 10 mW into a 0.1 Ω filament the rise is expected to be a few percent a
 
 Confirmed:
 
-- The DP932E has the DP900-HIRES option: 1 mA programming and 0.1 mA readback resolution, which is what `CURRENT_READBACK_RESOLUTION_AMPS` assumes.
+- The DP932E has the DP900-HIRES option: 1 mA programming and 0.1 mA readback resolution, which is what `CURRENT_READBACK_RESOLUTION_AMPS` assumes. A side effect of enabling it is that `*IDN?` reports `DP932A`. The supply is a DP932E, and the DP932E's specifications are the ones that apply.
+- Each `:MEASure:CURRent?` takes a new measurement, and measurements that follow each other too closely hold up setpoint changes. See "Appendix: the supply's current readback".
 - A 1× probe is on the scope's channel 1. The PVP3150 has a 1×/10× switch, so the procedure still asks the operator to check it (step 1.4). A probe switched to 10× would read 10× low while the scope is set to 1×, and would add an attenuation tolerance that isn't in the budget in 3.4.
 - Both instruments are within their calibration interval (scope 18 months, supply 12 months), so the data-sheet bounds used in 3.4 apply.
-
-Still to do. Claude Code should flag this in the PR description rather than guessing (as ARCHITECTURE.md §3 does):
-
-- **Measure the supply's current readback update interval** (see the appendix) and set `CURRENT_READBACK_INTERVAL` from it. Until then, use 200 ms and leave a `TODO`.
 
 All SCPI commands in this document have been checked against the DP900 and DHO800/DHO900 programming guides.
 
@@ -82,6 +79,7 @@ Commits 5 and 6 don't depend on 2–4, and can be done before them.
    - No behaviour change.
 2. **Add regulation mode and overcurrent protection to the supply.**
    - `RegulationMode` (serialisable), `get_regulation_mode`, `set_overcurrent_protection` and `get_overcurrent_tripped` in `host`, plus the `OFFMode` and OCP-clear additions to `reset`.
+   - The pause between current measurements in `get_current`.
    - The matching `FilamentSystem` methods, adapters and mocks.
    - Check on the rig: with the output on into the filament, the mode reads `CC`.
 3. **Read the scope from a single acquisition.**
@@ -154,7 +152,12 @@ Extend `reset` to put two more things into a known state before anything else. B
 1. **`:OUTPut:OFFMode 0V` (4.8.9).** This is a global setting, not per channel. It makes a disabled output actively hold 0 V, so by the time `set_polarity` switches the relays the output really is at 0 V. The alternatives don't guarantee that. `DELAYOFF` turns the output off after a delay, so the relays could switch while it was still live. `IMMEOFF` doesn't guarantee its fall time. 0V is the default, but it persists, so set it explicitly.
 2. **`:OUTPut:OCP:CLEar CH1` (4.8.5)**, which clears any OCP event left latched from a previous run.
 
-The guide doesn't say how often the current readback updates, so the experiment in the appendix is still needed.
+Make **`get_current`** pause between measurements. Each `:MEASure:CURRent?` takes a new measurement of about 180 ms, and measurements that follow each other too closely stop the supply applying setpoint changes (see "Appendix: the supply's current readback").
+
+- Keep the `Instant` the last measurement's reply arrived in the supply's state.
+- Before each query, while holding the lock, sleep until `MEASUREMENT_PAUSE` has passed since then. `MEASUREMENT_PAUSE` is 200 ms, a constant in `power_supply.rs`.
+- Enforcing the pause in `host` means it covers every caller: the procedure's samples and the snapshot poll, which would otherwise interleave their measurements.
+- Setpoint writes are unaffected, apart from waiting for the lock. In the tests, with this pause, a setpoint written just before a measurement always showed in the measurement after it, about 0.6 s later.
 
 Add `serde` (with `derive`) to `host`, hoisted to `[workspace.dependencies]` as in ARCHITECTURE.md §4.1, and derive `Serialize` and `Deserialize` on `Polarity` and `RegulationMode` so `results.rs` can store them directly. This supersedes assumption A7; update A7 and §7.2 in ARCHITECTURE.md to say so.
 
@@ -198,7 +201,7 @@ The commands below are confirmed against the DHO800/DHO900 programming guide; se
   - `get_overcurrent_tripped() -> Result<bool, HardwareError>`;
   - `set_overcurrent_protection(current: f64) -> Result<(), HardwareError>`;
   - `set_vertical_scale(scale: f64) -> Result<(), HardwareError>`, in volts per division;
-- **Mocks** (§7.6). For `--mock` to get through the procedure's checks, the mock's filament voltage must be `MOCK_FILAMENT_RESISTANCE_OHMS` (0.096) × the set current × +1 for `Forward` / −1 for `Reverse`, or 0 V with the output off or `Nil`. The average, maximum and minimum are all that value. The mock current readback returns the set current, the regulation mode is always `ConstantCurrent`, and OCP never trips. This is still a contract rather than a simulation: no noise, no time dependence, no heating. The run will emit "identical samples" warnings under `--mock`, which is expected.
+- **Mocks** (§7.6). For `--mock` to get through the procedure's checks, the mock's filament voltage must be `MOCK_FILAMENT_RESISTANCE_OHMS` (0.096) × the set current × +1 for `Forward` / −1 for `Reverse`, or 0 V with the output off or `Nil`. The average, maximum and minimum are all that value. The mock current readback returns the set current, the regulation mode is always `ConstantCurrent`, and OCP never trips. This is still a contract rather than a simulation: no noise, no time dependence, no heating.
 
 ## `procedure` module
 
@@ -306,7 +309,7 @@ pub struct ColdResistancePointAnalysis {
     pub resistance_ohms: Derived,
     pub voltage_volts: Derived,
 
-    /// Warnings raised by the analysis, e.g. identical samples.
+    /// Warnings raised by the analysis, e.g. a large offset voltage.
     pub warnings: Vec<String>,
 }
 
@@ -410,7 +413,6 @@ These go at the top of `characterisation.rs`, one doc comment each, replacing th
 | `RELAY_SETTLE_TIME`                                                                                            | 50 ms                                        | Output off while relays move                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `SETTLE_WINDOW` / `SETTLE_TOLERANCE` / `MAXIMUM_SETTLE_TIME`                                                   | 2 s / 2e-4 / 60 s                            | See `wait_for_settle`. The earliest possible settle is 2 × `SETTLE_WINDOW` = 4 s.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `CURRENT_READBACK_RESOLUTION_AMPS`                                                                             | 1e-4                                         | DP932E with HIRES                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `CURRENT_READBACK_INTERVAL`                                                                                    | 200 ms (`TODO`: measure)                     | The minimum spacing between recorded current readings, so each is a fresh readback (see the appendix)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `CURRENT_GAIN_BOUND`                                                                                           | 0.0015                                       | DP900 readback accuracy, % part                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `CURRENT_OFFSET_BOUND_AMPS`                                                                                    | 0.005                                        | DP900 readback accuracy, offset part                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `CURRENT_GAIN_TEMPERATURE_COEFFICIENT_PER_CELSIUS` / `CURRENT_OFFSET_TEMPERATURE_COEFFICIENT_AMPS_PER_CELSIUS` | 1e-4 / 0.002                                 | Applied outside 20–30 °C                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -443,12 +445,12 @@ Private async functions in `characterisation.rs`.
 - **`check_conditions(ctx, hardware)`:** fails with `ProcedureError::Check` if `ctx.snapshot()` shows the pressure above `FILAMENT_ABORT_PRESSURE_MBAR` or the TMP not running. Call it between every sample and every ramp step.
 - **`ramp_to(target)`:** step the current towards `target` by `RAMP_STEP_AMPS` every `RAMP_STEP_INTERVAL`, finishing exactly on `target`.
 - **`change_polarity(polarity)`:** disable the output, `set_polarity`, sleep `RELAY_SETTLE_TIME`, and enable the output again at the unchanged setpoint. `set_polarity` already refuses while the output is on. There's deliberately no ramp down and back up. The filament dissipates the same power in either polarity, and at ≤300 mA the jump is harmless. Ramping would only lengthen the time the filament spends cooling, and so the settle that follows.
-- **`take_samples(n)`:** `n` pairs of (`get_filament_voltages`, `get_heating_current`), then `get_overcurrent_tripped` and `get_regulation_mode`, after every sample. The average is what's recorded. Current readings are at least `CURRENT_READBACK_INTERVAL` apart; if the scope's single acquisition takes less time than that, wait out the difference before the next sample.
+- **`take_samples(n)`:** `n` pairs of (`get_filament_voltages`, `get_heating_current`), then `get_overcurrent_tripped` and `get_regulation_mode`, after every sample. The average is what's recorded. Each current reading is a new measurement of about 180 ms, and `get_current` pauses 200 ms before each one, so a sample takes about 0.4 s and 20 samples about 8 s. No extra spacing is needed: every reading is already independent.
   - An OCP trip fails with `Check` ("overcurrent protection tripped"). Check this before the mode, because a tripped output also isn't in constant current, and the OCP message is the more useful one.
   - Anything other than `ConstantCurrent` fails with `Check`, since the filament circuit is probably open.
   - A clipped reading (as defined by `CLIPPING_HEADROOM`) fails with `Check` ("clipped; the scale must not change mid-run, restart the run").
   - Each `get_filament_voltages` is a fresh 20 ms acquisition (see the oscilloscope changes), so samples are independent.
-- **`wait_for_settle()`:** inside `ctx.waiting`, sample repeatedly at the same cadence as `take_samples` (respecting `CURRENT_READBACK_INTERVAL`), without recording the samples, and fail on clipping as `take_samples` does.
+- **`wait_for_settle()`:** inside `ctx.waiting`, sample repeatedly at the same cadence as `take_samples`, without recording the samples, and fail on clipping as `take_samples` does.
   - For each sample, compute $R_{quick} = V_{avg}/I$. It comes from one polarity, so it includes offsets and thermal EMFs, but those are constant over seconds and cancel in the comparison below.
   - After each new sample, once at least 2 × `SETTLE_WINDOW` has passed since the change, split the samples into the latest `SETTLE_WINDOW` (B) and the one before it (A). Compute each window's mean $m$ and standard error $\text{SE} = s/\sqrt n$ (sample standard deviation, `ddof = 1`), and let $u_{diff} = \sqrt{\text{SE}_A^2 + \text{SE}_B^2}$, which is ordinary propagation for a difference of two independent means.
   - Settled means $\lvert m_B - m_A\rvert < \max(\text{SETTLE\_TOLERANCE}\times m_B,\ 2\,u_{diff})$. The windows slide forward one sample at a time, so the earliest settle is 2 × `SETTLE_WINDOW`.
@@ -456,6 +458,9 @@ Private async functions in `characterisation.rs`.
     - When noise is low, $2u_{diff}$ is tiny and on its own would demand arbitrary flatness, so slow harmless drifts (offsets, the rig's temperature) could keep the run waiting until timeout. The tolerance sets a floor on what counts as flat enough.
     - When noise is high, a fixed tolerance could be exceeded by chance alone every time. $2u_{diff}$ accepts a difference that's indistinguishable from noise. Any drift that small is also small compared with the point's own uncertainty, which comes from the same noise, and whatever remains shows up in $\chi^2_\nu$ and the Birge inflation.
   - Choosing `SETTLE_TOLERANCE`: 2e-4 is about one point's statistical uncertainty in $R$ at the lowest setpoint. The current-quantisation floor alone is $0.1\ \text{mA}/\sqrt{12} \approx 0.029$ mA per polarity, which is about $2\times10^{-4}$ of 100 mA once the two polarities are averaged. So "settled" means any remaining drift is below what the point can resolve anyway. At that level the $2u_{diff}$ term will probably govern most of the time, which is fine. Treat 2e-4 as a starting point, and tune it from the logged settle times and per-point uncertainties after the first runs on the rig.
+  - The supply can take about 0.6 s to apply a setpoint change (see `get_current`'s pause), so the first readings may still be at the previous current.
+    - That's well inside the 4 s minimum, and any heating after the late change shows up as a difference between the windows.
+    - Checking the readback against the setpoint wouldn't work instead: the readback offset bound (5 mA) is as large as the last ramp step.
   - This comparison is control flow, not a reported statistic, so it's fine in Rust (note that in a comment).
   - At `MAXIMUM_SETTLE_TIME`, add a warning to the point and carry on.
   - Return the settle time, which is recorded. These become useful when the thermal time constants are characterised later.
@@ -507,19 +512,18 @@ Why this matters: the scope's gain error is only a single multiplicative factor 
 
 ### 3.3 Per-point analysis: `cold_resistance_point.py`
 
-**Input and output:** see "`python/`". The output is a `ColdResistancePointAnalysis`, stored as the point's `analysis`. The samples in each `Measurement` are only used to detect identical samples.
+**Input and output:** see "`python/`". The output is a `ColdResistancePointAnalysis`, stored as the point's `analysis`. Only each `Measurement`'s value and uncertainty are used, not its samples.
 
 Using `uncertainties`:
 
-1. For each polarity, $u(\bar I_s) = \sqrt{\text{SE}_I^2 + \Delta_I^2/12}$, where $\text{SE}_I$ is the `Measurement`'s standard error and $\Delta_I$ is the readback resolution. The $\Delta_I^2/12$ term is a quantisation floor: if the readback doesn't change between samples (quantised or not yet updated), the standard error is 0 but the value is still only known to within one resolution step. The recorded `Measurement` keeps the plain standard error, as its doc comment promises. The voltage uses its standard error as is.
-2. If every sample in any of the four lists is identical, add a warning: the samples probably aren't independent.
-3. Fail with a clear error unless $\bar V_P > 0$ and $\bar V_N < 0$, since otherwise the relay-to-sign mapping from 3.1.4 didn't hold. Then, with $P$ and $N$ for the positive and negative polarities:
+1. For each polarity, $u(\bar I_s) = \sqrt{\text{SE}_I^2 + \Delta_I^2/12}$, where $\text{SE}_I$ is the `Measurement`'s standard error and $\Delta_I$ is the readback resolution. The $\Delta_I^2/12$ term is a quantisation floor: the current is usually steadier than one resolution step, so every sample reads the same and the standard error is 0, but the value is still only known to within one step. The recorded `Measurement` keeps the plain standard error, as its doc comment promises. The voltage uses its standard error as is.
+2. Fail with a clear error unless $\bar V_P > 0$ and $\bar V_N < 0$, since otherwise the relay-to-sign mapping from 3.1.4 didn't hold. Then, with $P$ and $N$ for the positive and negative polarities:
    1. $V = (\bar V_P - \bar V_N)/2$. Voltages that don't reverse with the current (scope DC offset, Seebeck/thermal EMFs, constant pickup) cancel.
    2. $I = (\bar I_P + \bar I_N)/2$. Both readbacks are positive, because the supply always sources positive current and the relays do the reversal.
    3. $R = V/I$.
    4. $x = I^2$.
-4. As a diagnostic, $V_{off} = (\bar V_P + \bar V_N)/2$, the residual non-reversing voltage. Warn if $\lvert V_{off}\rvert$ exceeds `offset_warning_volts`, which Rust passes as the same limit as the check in 3.1.4.
-5. Fail with a clear error if $V \le 0$ or $u(R) = 0$.
+3. As a diagnostic, $V_{off} = (\bar V_P + \bar V_N)/2$, the residual non-reversing voltage. Warn if $\lvert V_{off}\rvert$ exceeds `offset_warning_volts`, which Rust passes as the same limit as the check in 3.1.4.
+4. Fail with a clear error if $V \le 0$ or $u(R) = 0$.
 
 ### 3.4 Fit and uncertainty budget: `cold_resistance_fit.py`
 
@@ -716,7 +720,7 @@ Tests 1–3 share a fixture. It uses the default setpoints $I_i$ = 0.100, 0.125,
 2. **Gain invariance:** scaling every $V$ by $(1+\varepsilon)$ must scale $R_0$ by exactly $(1+\varepsilon)$. Scaling every $I$ by $(1+g)$ must scale $R_0$ by exactly $1/(1+g)$.
 3. **Offset corners:** on the fixture with $\delta_{max} = 5$ mA, the corners are $R_0(+5\ \text{mA}) \approx 0.099849$ Ω and $R_0(-5\ \text{mA}) \approx 0.092317$ Ω, so $h \approx 0.003766$ Ω and $u_{offset} \approx 0.002174$ Ω (≈2.3% of $R_0$). $R_0(+5\ \text{mA})$ means $I'_i = I_i - 0.005$. Once the currents are shifted the data is no longer a line, so these values depend on the weights. They were computed by propagating the fixture's uncertainties for the shifted currents and fitting with `curve_fit(..., absolute_sigma=True)`, exactly as 3.4.5 specifies. Check to about $10^{-5}$ relative.
 4. **Temperature correction:** $R_0 = 0.096$ Ω at $T_f = 25$ °C with $\alpha = 0.0045$ gives $R_{20} \approx 0.093888$ Ω. With $a_T = 1$ K, $u_T \approx 2.39\times10^{-4}$ Ω; with $a_\alpha = 0.0003$, $u_\alpha \approx 7.95\times10^{-5}$ Ω. At $T_f = 20$ °C, $R_{20} = R_0$ and $u_\alpha = 0$.
-5. **Quantisation floor:** a current with a standard error of 0 must come out with $u = \Delta_I/\sqrt{12}$, and identical samples must produce a warning.
+5. **Quantisation floor:** a current with a standard error of 0 must come out with $u = \Delta_I/\sqrt{12}$.
 6. **Fit cross-check:** on noisy synthetic data with unequal uncertainties, the fit's $R_0$, $b$, $u(R_0)$ and $u(b)$ match the closed-form weighted least squares, computed in the test itself, to within $10^{-5}$ relative (`curve_fit` is iterative, and its uncertainties agree to about $5\times10^{-7}$). This catches a missing `absolute_sigma=True`, which would scale the uncertainties by $\sqrt{\chi^2_\nu}$. With $w_i = 1/u(R_i)^2$:
 
    $$S=\sum w_i,\ S_x=\sum w_i x_i,\ S_y=\sum w_i R_i,\ S_{xx}=\sum w_i x_i^2,\ S_{xy}=\sum w_i x_i R_i,\ \Delta = S\,S_{xx}-S_x^2$$
@@ -755,35 +759,34 @@ What does depend on $R_0$ is the signal size and the self-heating:
 
 In both cases, what matters is roughly constant heating power ($I^2R$ up to about 10 mW) at the top setpoint, and a 3:1 ratio between the largest and smallest setpoints.
 
-# Appendix: measuring the supply's readback update interval
+# Appendix: the supply's current readback
 
-Do this once, with a throwaway binary in `usb-tmc/src/bin/` like the existing `power_supply.rs`. It isn't part of the characteriser. Load the channel with the filament rig (or a ~1 Ω power resistor) and let the supply warm up first.
+The DP900 programming guide doesn't say how `:MEASure:CURRent?` works. It could take a new measurement for each query, or return the latest result of a measurement the supply repeats on its own schedule. This was tested on the DP932E with throwaway binaries (since deleted), with a 10 Ω resistor across CH1 at 100–110 mA.
 
-**How the readback works.** The supply measures its output current internally on its own fixed schedule, once every update interval $T_u$, and a `:MEASure:CURRent?` query returns the most recent of those measurements. Querying faster than $T_u$ just returns the same stored value again.
+**Each query takes a new measurement of about 180 ms.** Each query's round trip was timed ten times after a second of idle, and ten times back to back:
 
-**Method A (watching the value change).** Set a constant current, e.g. 200 mA. Query `:MEASure:CURRent? CH1` in a tight loop for 30 s, logging a host timestamp and the value for each reply.
+| Query                   | After idle     | Back to back   |
+| ----------------------- | -------------- | -------------- |
+| `*IDN?`                 | 1.1–19.4 ms    | 0.8–2.4 ms     |
+| `:SOURce1:CURRent?`     | 1.1–1.9 ms     | 0.8–1.3 ms     |
+| `:MEASure:CURRent? CH1` | 173.1–199.5 ms | 173.6–212.2 ms |
 
-- **The query period.** In a tight loop, each query starts as soon as the previous reply arrives, so the gap between consecutive timestamps is one query's round trip (USB transfer plus the supply's processing). Take the median of those gaps as the typical round-trip time $t_q$. The median ignores the occasional long gap when the operating system briefly schedules something else. $t_q$ is the fastest you can sample, whatever $T_u$ is.
-- **The update interval.** If $t_q < T_u$, several consecutive replies repeat the same value, and the value can only change when the supply makes a new measurement. Find every point where the value changes and histogram the times between changes. Sometimes a new measurement happens to give the same value as the last one, so the gaps cluster at $T_u$, $2T_u$, $3T_u$ and so on, and the smallest cluster is $T_u$.
-- **When it doesn't work.** If the value almost never changes, the current is steadier than the 0.1 mA resolution, so new measurements look identical to old ones and this method can't see them. Use method B.
+- The USB link and the supply's command handling are fast: the queries that don't measure answer in a few milliseconds.
+- `MEASure?` takes about 180 ms even after a second of idle.
+  - If it returned a stored value, the reply would come in a few milliseconds.
+  - If it waited for the next result of a repeating measurement, the wait would land anywhere in that cycle and some replies would be quick.
+  - The fastest was 173 ms, so each query starts its own measurement.
+- So consecutive readings are always independent, and there's no update interval to wait out between samples.
 
-**Method B (stepping the current).** Repeat about 50 times:
+**The current is steadier than the readback resolution.** Querying back to back at a constant 100 mA for 30 s, the value changed only twice. That's why every sample at a point usually reads the same, and why the $\Delta_I/\sqrt{12}$ quantisation floor (3.3) matters.
 
-1. Set 200 mA and wait 1 s.
-2. Write 210 mA and immediately start querying in a tight loop.
-3. Record the delay $D$ from the write to the first reply that differs from the settled 200 mA value by more than 1 mA. The first changed reply is used, rather than the first one at 210 mA, because the supply's measurement may straddle the step and report a value partway between.
+**Measurements that follow each other too closely hold up setpoint changes.** Each trial settled at 100 mA, wrote 110 mA, then queried the current until it showed the step, with a pause between queries.
 
-Each trial's delay is made up of three parts: $D = d_{fixed} + W + e$.
+- With a 20 ms pause, the step still hadn't shown after 2 s. Once the queries stopped, the supply applied it.
+- With a 100 ms pause, the step took about 0.8 s on average to show.
+- With a 200 ms pause, all 50 trials saw the step 0.55–0.63 s after the write, which is when the second reply arrives. The first reply, about 180 ms after the write, still showed 100 mA. No reply lay between 100 and 110 mA.
 
-- **$d_{fixed}$** is everything that takes the same time in every trial: getting the command to the supply, the supply processing it, and the output current settling to the new value.
-- **$W$** is the wait from the moment the current has changed until the supply's next internal measurement. The supply measures on its own schedule, unrelated to when you sent the command, so the change can land anywhere in its cycle. If it lands just before a measurement, $W \approx 0$. If it lands just after one, $W \approx T_u$. Over many trials every position is equally likely, so $W$ is spread evenly between 0 and $T_u$. That's what "uniform" means here, and it describes $W$, not $D$.
-- **$e$** is up to one query period $t_q$, because the loop only notices the new value at its next reply.
-
-**Reading off $T_u$.** Across the 50 trials, the shortest delay is one where $W$ was near 0: $D_{min} \approx d_{fixed}$. The longest is one where $W$ was near $T_u$: $D_{max} \approx d_{fixed} + T_u$. Subtracting gives $D_{max} - D_{min} \approx T_u$, and $d_{fixed}$ disappears because it's in both. That matters because $d_{fixed}$ is unknown and could easily be larger than $T_u$.
-
-The estimate is uncertain by roughly $t_q$ (from $e$) plus any trial-to-trial jitter in $d_{fixed}$. Make the loop fast so that $t_q \ll T_u$. As a sanity check, histogram the delays: they should be spread roughly flat between $D_{min}$ and $D_{max}$. Two clusters about $T_u$ apart would mean a straddled measurement sometimes didn't count as changed, so tighten the change threshold.
-
-Set `CURRENT_READBACK_INTERVAL` to the measured interval plus about 20% margin. The per-point warning for identical samples (3.3) then acts as an ongoing check that the value is still right.
+The supply presumably only applies a setpoint while it isn't measuring. Hence the 200 ms `MEASUREMENT_PAUSE` in `get_current`: it's the pause that was tested and shown to work.
 
 # Appendix: error sources
 
@@ -879,8 +882,8 @@ Systematic terms that are common to every point are applied to $R_0$ after the f
 **Readback noise, ripple and regulation drift.**
 
 - Model: random.
-- Standard uncertainty: Type A, the standard error of the current samples. It's only valid if the samples are independent, which is what `CURRENT_READBACK_INTERVAL` ensures.
-- Handling: the identical-samples warning flags when they aren't.
+- Standard uncertainty: Type A, the standard error of the current samples. It's only valid if the samples are independent, which they are: each `:MEASure:CURRent?` takes a new measurement (see "Appendix: the supply's current readback").
+- Handling: none needed beyond the standard error. When the current is steadier than the resolution, the standard error is 0 and the quantisation floor above takes over.
 
 **Programming accuracy** (0.2% + 5 mA).
 
