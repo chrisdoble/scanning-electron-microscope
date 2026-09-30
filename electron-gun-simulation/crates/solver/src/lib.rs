@@ -228,9 +228,8 @@ pub fn solve_laplace_cylindrical(
     }
 
     // --- Step 4: Assemble CSC matrix, factorise, solve ---
-    let mat =
-        SparseColMat::<usize, f64>::try_new_from_triplets(n_free, n_free, &triplets)
-            .map_err(|e| SolverError::FactorisationFailed(format!("matrix assembly: {e}")))?;
+    let mat = SparseColMat::<usize, f64>::try_new_from_triplets(n_free, n_free, &triplets)
+        .map_err(|e| SolverError::FactorisationFailed(format!("matrix assembly: {e}")))?;
 
     let llt = mat
         .sp_cholesky(Side::Lower)
@@ -267,36 +266,76 @@ pub fn compute_electric_field(potential: &Grid) -> (Grid, Grid) {
     // Interior: 1 ≤ i_r ≤ N_r−2, 1 ≤ i_z ≤ N_z−2 — central differences.
     for i_z in 1..n_z - 1 {
         for i_r in 1..n_r - 1 {
-            set_e(&mut e_r, i_r, i_z, -(v(i_r + 1, i_z) - v(i_r - 1, i_z)) / (2.0 * h));
-            set_e(&mut e_z, i_r, i_z, -(v(i_r, i_z + 1) - v(i_r, i_z - 1)) / (2.0 * h));
+            set_e(
+                &mut e_r,
+                i_r,
+                i_z,
+                -(v(i_r + 1, i_z) - v(i_r - 1, i_z)) / (2.0 * h),
+            );
+            set_e(
+                &mut e_z,
+                i_r,
+                i_z,
+                -(v(i_r, i_z + 1) - v(i_r, i_z - 1)) / (2.0 * h),
+            );
         }
     }
 
     // Axis: i_r = 0, 1 ≤ i_z ≤ N_z−2.
     // E_r[0, j] = 0 by symmetry (already zero from Grid::new).
     for i_z in 1..n_z - 1 {
-        set_e(&mut e_z, 0, i_z, -(v(0, i_z + 1) - v(0, i_z - 1)) / (2.0 * h));
+        set_e(
+            &mut e_z,
+            0,
+            i_z,
+            -(v(0, i_z + 1) - v(0, i_z - 1)) / (2.0 * h),
+        );
     }
 
     // Outer radial edge: i_r = N_r−1, 1 ≤ i_z ≤ N_z−2.
     // E_r: backward one-sided; E_z: central.
     for i_z in 1..n_z - 1 {
-        set_e(&mut e_r, n_r - 1, i_z, -(v(n_r - 1, i_z) - v(n_r - 2, i_z)) / h);
-        set_e(&mut e_z, n_r - 1, i_z, -(v(n_r - 1, i_z + 1) - v(n_r - 1, i_z - 1)) / (2.0 * h));
+        set_e(
+            &mut e_r,
+            n_r - 1,
+            i_z,
+            -(v(n_r - 1, i_z) - v(n_r - 2, i_z)) / h,
+        );
+        set_e(
+            &mut e_z,
+            n_r - 1,
+            i_z,
+            -(v(n_r - 1, i_z + 1) - v(n_r - 1, i_z - 1)) / (2.0 * h),
+        );
     }
 
     // Bottom edge: 1 ≤ i_r ≤ N_r−2, i_z = 0.
     // E_r: central; E_z: forward one-sided.
     for i_r in 1..n_r - 1 {
-        set_e(&mut e_r, i_r, 0, -(v(i_r + 1, 0) - v(i_r - 1, 0)) / (2.0 * h));
+        set_e(
+            &mut e_r,
+            i_r,
+            0,
+            -(v(i_r + 1, 0) - v(i_r - 1, 0)) / (2.0 * h),
+        );
         set_e(&mut e_z, i_r, 0, -(v(i_r, 1) - v(i_r, 0)) / h);
     }
 
     // Top edge: 1 ≤ i_r ≤ N_r−2, i_z = N_z−1.
     // E_r: central; E_z: backward one-sided.
     for i_r in 1..n_r - 1 {
-        set_e(&mut e_r, i_r, n_z - 1, -(v(i_r + 1, n_z - 1) - v(i_r - 1, n_z - 1)) / (2.0 * h));
-        set_e(&mut e_z, i_r, n_z - 1, -(v(i_r, n_z - 1) - v(i_r, n_z - 2)) / h);
+        set_e(
+            &mut e_r,
+            i_r,
+            n_z - 1,
+            -(v(i_r + 1, n_z - 1) - v(i_r - 1, n_z - 1)) / (2.0 * h),
+        );
+        set_e(
+            &mut e_z,
+            i_r,
+            n_z - 1,
+            -(v(i_r, n_z - 1) - v(i_r, n_z - 2)) / h,
+        );
     }
 
     // Corners — one-sided in both directions; E_r = 0 at axis corners.
@@ -308,8 +347,18 @@ pub fn compute_electric_field(potential: &Grid) -> (Grid, Grid) {
     set_e(&mut e_r, n_r - 1, 0, -(v(n_r - 1, 0) - v(n_r - 2, 0)) / h);
     set_e(&mut e_z, n_r - 1, 0, -(v(n_r - 1, 1) - v(n_r - 1, 0)) / h);
     // (N_r−1, N_z−1)
-    set_e(&mut e_r, n_r - 1, n_z - 1, -(v(n_r - 1, n_z - 1) - v(n_r - 2, n_z - 1)) / h);
-    set_e(&mut e_z, n_r - 1, n_z - 1, -(v(n_r - 1, n_z - 1) - v(n_r - 1, n_z - 2)) / h);
+    set_e(
+        &mut e_r,
+        n_r - 1,
+        n_z - 1,
+        -(v(n_r - 1, n_z - 1) - v(n_r - 2, n_z - 1)) / h,
+    );
+    set_e(
+        &mut e_z,
+        n_r - 1,
+        n_z - 1,
+        -(v(n_r - 1, n_z - 1) - v(n_r - 1, n_z - 2)) / h,
+    );
 
     (e_r, e_z)
 }

@@ -1,4 +1,4 @@
-use solver::{compute_electric_field, solve_laplace_cylindrical, Cell, Grid, Mask};
+use solver::{Cell, Grid, Mask, compute_electric_field, solve_laplace_cylindrical};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]

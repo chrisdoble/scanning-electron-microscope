@@ -1,6 +1,4 @@
-use solver::{
-    compute_electric_field, solve_laplace_cylindrical, Cell, Grid, Mask, SolverError,
-};
+use solver::{Cell, Grid, Mask, SolverError, compute_electric_field, solve_laplace_cylindrical};
 
 fn grid(n_r: usize, n_z: usize) -> Grid {
     Grid::new(n_r, n_z, 1e-3)
@@ -148,7 +146,7 @@ fn solve_concentric_cylinders_matches_analytical() {
 
     // All other cells are Free (i_r=0..a-1 inside conductor, i_r=a+1..b-1 in the gap).
 
-    solve_laplace_cylindrical(&mut potential, &mut mask).unwrap();
+    solve_laplace_cylindrical(&mut potential, &mask).unwrap();
 
     // Cells inside the conductor should converge to v_a (uniform potential).
     for i_z in 1..n_z - 1 {
