@@ -182,6 +182,14 @@ pub trait FilamentSystem: std::fmt::Debug + Send + Sync {
     /// than trusting the caller.
     async fn set_polarity(&self, polarity: Polarity) -> Result<(), HardwareError>;
 
+    /// Sets the oscilloscope's vertical scale in volts per division.
+    ///
+    /// Returns once the scope reports the new scale, so the next reading is
+    /// taken on it.
+    // Used from commit 7 of COLD_RESISTANCE.md's implementation order.
+    #[expect(dead_code)]
+    async fn set_vertical_scale(&self, scale: f64) -> Result<(), HardwareError>;
+
     /// Reads every value shown in the filament block in a single pass.
     ///
     /// `get_filament_voltages` and `get_heating_current` exist separately because

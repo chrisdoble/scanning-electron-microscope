@@ -135,6 +135,10 @@ impl FilamentSystem for RealFilamentSystem {
         Ok(self.power_supply.set_polarity(polarity).await?)
     }
 
+    async fn set_vertical_scale(&self, scale: f64) -> Result<(), HardwareError> {
+        Ok(self.oscilloscope.set_vertical_scale(scale).await?)
+    }
+
     async fn snapshot(&self) -> Result<FilamentSnapshot, HardwareError> {
         Ok(FilamentSnapshot {
             filament_voltage: match self.oscilloscope.get_voltages().await? {

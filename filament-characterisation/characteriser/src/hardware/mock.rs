@@ -147,6 +147,12 @@ impl FilamentSystem for MockFilamentSystem {
         Ok(())
     }
 
+    async fn set_vertical_scale(&self, _scale: f64) -> Result<(), HardwareError> {
+        // The mock's readings never clip, so nothing reads the scale back and
+        // there's nothing to store.
+        Ok(())
+    }
+
     async fn snapshot(&self) -> Result<FilamentSnapshot, HardwareError> {
         let state = self.state();
         Ok(FilamentSnapshot {
