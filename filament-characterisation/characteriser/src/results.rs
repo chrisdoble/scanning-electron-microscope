@@ -35,6 +35,7 @@ pub enum ResultsError {
 /// of the field holding it — `filament_voltage_volts: Measurement` — since the
 /// consumer is another program with no doc comments to read.
 #[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Measurement {
     /// The individual samples, in the order they were taken.
     pub samples: Vec<f64>,
@@ -44,6 +45,147 @@ pub struct Measurement {
 
     /// The mean of the samples.
     pub value: f64,
+}
+
+/// A value derived by Python from measurements, with its standard uncertainty.
+///
+/// Unlike `Measurement` there are no samples: it's calculated from other
+/// quantities, not sampled.
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Derived {
+    /// The standard uncertainty.
+    pub uncertainty: f64,
+
+    /// The value.
+    pub value: f64,
+}
+
+/// The fit's scalar inputs.
+///
+/// With the points, this is everything `cold_resistance_fit.py` needs, so the
+/// fit can be re-run from the results file alone, and anyone reading the file
+/// can see which assumptions produced the result.
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ColdResistanceFitParameters {
+    /// The bound on the supply's current readback gain error, relative, after
+    /// widening for the room temperature.
+    pub current_gain_bound: f64,
+
+    /// The bound on the supply's current readback offset in amperes, after
+    /// widening for the room temperature.
+    pub current_offset_bound_amps: f64,
+
+    /// The bound on the filament temperature in kelvin, $a_T$: the
+    /// thermometer's bound plus half the drift over the run.
+    pub filament_temperature_bound_kelvin: f64,
+
+    /// The filament temperature, $T_f$: the mean of the start and end chamber
+    /// temperatures.
+    pub filament_temperature_celsius: f64,
+
+    /// The temperature the resistance is corrected to.
+    pub reference_temperature_celsius: f64,
+
+    /// The bound on tungsten's temperature coefficient of resistance, $a_\alpha$.
+    pub temperature_coefficient_bound_per_kelvin: f64,
+
+    /// Tungsten's temperature coefficient of resistance near room
+    /// temperature, $\alpha$.
+    pub temperature_coefficient_per_kelvin: f64,
+
+    /// The bound on the oscilloscope's gain error, relative.
+    pub voltage_gain_bound: f64,
+}
+
+/// The analysis of one setpoint: exactly the output of
+/// `cold_resistance_point.py`.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ColdResistancePointAnalysis {
+    /// The mean of the two polarities' currents, with the quantisation floor.
+    pub current_amps: Derived,
+
+    /// The square of `current_amps`, the fit's $x$.
+    pub current_squared_amps_squared: Derived,
+
+    /// Half the sum of the two polarities' voltages: what didn't reverse with
+    /// the current. A diagnostic.
+    pub offset_voltage_volts: Derived,
+
+    /// `voltage_volts` / `current_amps`.
+    pub resistance_ohms: Derived,
+
+    /// Half the difference between the two polarities' voltages, so that
+    /// anything that doesn't reverse with the current cancels.
+    pub voltage_volts: Derived,
+
+    /// Warnings raised by the analysis, e.g. a large offset voltage.
+    pub warnings: Vec<String>,
+}
+
+/// The fit and uncertainty budget: exactly the output of
+/// `cold_resistance_fit.py`.
+///
+/// Every uncertainty is a standard uncertainty. Expanded uncertainties aren't
+/// stored: they're twice these, and are computed for display.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ColdResistanceAnalysis {
+    /// The probability of a chi-squared at least this large if the line and
+    /// the per-point uncertainties are right.
+    pub chi_squared_p_value: f64,
+
+    /// The contribution of the supply's readback gain error.
+    pub current_gain_uncertainty_ohms: f64,
+
+    /// The contribution of the supply's readback offset error, from the corner
+    /// analysis.
+    pub current_offset_uncertainty_ohms: f64,
+
+    /// The statistical uncertainty of the fit's intercept, inflated by the
+    /// Birge ratio when that's above 1.
+    pub fit_uncertainty_ohms: f64,
+
+    /// The fitted intercept with the readback offset at its lower and upper
+    /// bounds, in that order.
+    pub offset_corner_resistances_ohms: [f64; 2],
+
+    /// Chi-squared divided by its degrees of freedom.
+    pub reduced_chi_squared: f64,
+
+    /// The cold resistance corrected to the reference temperature, $R_{20}$,
+    /// with its combined standard uncertainty.
+    pub reference_resistance_ohms: Derived,
+
+    /// The cold resistance at the filament temperature, $R_0$: the fit's
+    /// intercept, with its combined standard uncertainty. The other
+    /// `*_uncertainty_ohms` fields are that uncertainty's components.
+    pub resistance_ohms: Derived,
+
+    /// The fit's slope, $b$, which measures how strongly the filament heats
+    /// itself.
+    pub slope_ohms_per_amp_squared: Derived,
+
+    /// The contribution of the uncertainty in tungsten's temperature
+    /// coefficient to `reference_resistance_ohms`' uncertainty.
+    pub temperature_coefficient_uncertainty_ohms: f64,
+
+    /// The contribution of the uncertainty in the filament temperature to
+    /// `reference_resistance_ohms`' uncertainty.
+    pub temperature_uncertainty_ohms: f64,
+
+    /// The filament's effective thermal conductance to its mount, $G = \alpha
+    /// R_0^2/b$. `None` if the slope isn't clearly positive (more than twice
+    /// its uncertainty), when dividing by it would be meaningless.
+    pub thermal_conductance_watts_per_kelvin: Option<Derived>,
+
+    /// The contribution of the oscilloscope's gain error.
+    pub voltage_gain_uncertainty_ohms: f64,
+
+    /// Warnings raised by the analysis, e.g. a poor fit.
+    pub warnings: Vec<String>,
 }
 
 /// Everything measured during one characterisation run.

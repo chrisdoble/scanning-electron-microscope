@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ColdResistanceFitInput",
+  "description": "The input to `cold_resistance_fit.py`.",
+  "type": "object",
+  "properties": {
+    "parameters": {
+      "description": "The fit's scalar inputs.",
+      "$ref": "#/$defs/ColdResistanceFitParameters"
+    },
+    "points": {
+      "description": "Every setpoint's reversal-corrected voltage and current.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ColdResistanceFitPoint"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "parameters",
+    "points"
+  ],
+  "$defs": {
+    "ColdResistanceFitParameters": {
+      "description": "The fit's scalar inputs.\n\nWith the points, this is everything `cold_resistance_fit.py` needs, so the\nfit can be re-run from the results file alone, and anyone reading the file\ncan see which assumptions produced the result.",
+      "type": "object",
+      "properties": {
+        "current_gain_bound": {
+          "description": "The bound on the supply's current readback gain error, relative, after\nwidening for the room temperature.",
+          "type": "number",
+          "format": "double"
+        },
+        "current_offset_bound_amps": {
+          "description": "The bound on the supply's current readback offset in amperes, after\nwidening for the room temperature.",
+          "type": "number",
+          "format": "double"
+        },
+        "filament_temperature_bound_kelvin": {
+          "description": "The bound on the filament temperature in kelvin, $a_T$: the\nthermometer's bound plus half the drift over the run.",
+          "type": "number",
+          "format": "double"
+        },
+        "filament_temperature_celsius": {
+          "description": "The filament temperature, $T_f$: the mean of the start and end chamber\ntemperatures.",
+          "type": "number",
+          "format": "double"
+        },
+        "reference_temperature_celsius": {
+          "description": "The temperature the resistance is corrected to.",
+          "type": "number",
+          "format": "double"
+        },
+        "temperature_coefficient_bound_per_kelvin": {
+          "description": "The bound on tungsten's temperature coefficient of resistance, $a_\\alpha$.",
+          "type": "number",
+          "format": "double"
+        },
+        "temperature_coefficient_per_kelvin": {
+          "description": "Tungsten's temperature coefficient of resistance near room\ntemperature, $\\alpha$.",
+          "type": "number",
+          "format": "double"
+        },
+        "voltage_gain_bound": {
+          "description": "The bound on the oscilloscope's gain error, relative.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "current_gain_bound",
+        "current_offset_bound_amps",
+        "filament_temperature_bound_kelvin",
+        "filament_temperature_celsius",
+        "reference_temperature_celsius",
+        "temperature_coefficient_bound_per_kelvin",
+        "temperature_coefficient_per_kelvin",
+        "voltage_gain_bound"
+      ]
+    },
+    "ColdResistanceFitPoint": {
+      "description": "One setpoint's input to the fit, from its `ColdResistancePointAnalysis`.",
+      "type": "object",
+      "properties": {
+        "current_amps": {
+          "description": "The mean of the two polarities' currents, with the quantisation floor.",
+          "$ref": "#/$defs/Derived"
+        },
+        "voltage_volts": {
+          "description": "Half the difference between the two polarities' voltages.",
+          "$ref": "#/$defs/Derived"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "current_amps",
+        "voltage_volts"
+      ]
+    },
+    "Derived": {
+      "description": "A value derived by Python from measurements, with its standard uncertainty.\n\nUnlike `Measurement` there are no samples: it's calculated from other\nquantities, not sampled.",
+      "type": "object",
+      "properties": {
+        "uncertainty": {
+          "description": "The standard uncertainty.",
+          "type": "number",
+          "format": "double"
+        },
+        "value": {
+          "description": "The value.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "uncertainty",
+        "value"
+      ]
+    }
+  }
+}

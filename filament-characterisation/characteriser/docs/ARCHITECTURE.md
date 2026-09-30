@@ -73,10 +73,13 @@ filament-characterisation/
     Cargo.toml
     python/
       .venv/                        // created by the operator, gitignored
-      requirements.txt              // pins `jsonschema` and `uncertainties`
+      requirements.txt              // pins `jsonschema`, `numpy`, `scipy` and `uncertainties`
       schemas/                      // input and output schemas, generated from the Rust types
       script_io.py                  // reads and validates a script's input, writes its output
       mean_and_standard_error.py    // samples in, value and uncertainty out
+      cold_resistance_point.py      // one setpoint's two polarities in, its resistance out
+      cold_resistance_fit.py        // every setpoint in, R0 and its uncertainty budget out
+      test_cold_resistance.py       // the scripts' tests, run with `python -m unittest`
     src/
       main.rs                 // args, logging, start-up checks, task wiring, error handling
       app.rs                  // App state, event loop, key handling
@@ -1438,7 +1441,7 @@ const PYTHON_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/python");
 const VENV_PYTHON: &str = ".venv/bin/python";
 ```
 
-`python/requirements.txt` pins `jsonschema` and `uncertainties`. A comment at the top of
+`python/requirements.txt` pins `jsonschema`, `numpy`, `scipy` and `uncertainties`. A comment at the top of
 `python.rs` states the one-off setup:
 
 ```
@@ -1453,7 +1456,7 @@ alternate screen:
 
 1. Check `PYTHON_DIR` resolves to an existing directory, falling back as above.
 2. Check the interpreter at `<python dir>/.venv/bin/python` exists.
-3. Run `<interpreter> -c "import uncertainties, jsonschema"` with a short timeout
+3. Run `<interpreter> -c "import jsonschema, numpy, scipy, uncertainties"` with a short timeout
    (`PYTHON_CHECK_TIMEOUT`, 10 s) and require exit status 0.
 
 Any failure aborts start-up with an error naming the missing piece **and the two
@@ -1496,9 +1499,9 @@ pub async fn mean_and_standard_error(samples: &[f64]) -> Result<(f64, f64), Pyth
 `python/mean_and_standard_error.py` reads `{"samples": [...]}` on stdin and
 prints `{"value": <mean>, "uncertainty": <standard error>}`. It imports
 `uncertainties` even though the mean and standard error don't strictly need it,
-so the venv is exercised on the path that will later do the real propagation,
-and carries a `TODO` saying that resistance and its propagated uncertainty are
-calculated by scripts added beside it.
+so the venv is exercised on the same path as the real propagation. Resistance
+and its propagated uncertainty are calculated by `cold_resistance_point.py` and
+`cold_resistance_fit.py` beside it (COLD_RESISTANCE.md 3.3 and 3.4).
 
 ---
 

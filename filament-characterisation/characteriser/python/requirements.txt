@@ -1,2 +1,4 @@
 jsonschema==4.26.0
+numpy==2.5.3
+scipy==1.18.1
 uncertainties==3.2.3

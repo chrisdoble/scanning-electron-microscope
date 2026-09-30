@@ -317,7 +317,6 @@ pub struct ColdResistancePointAnalysis {
 /// The fit and uncertainty budget: exactly the output of `cold_resistance_fit.py` (3.4).
 pub struct ColdResistanceAnalysis {
     pub chi_squared_p_value: f64,
-    pub combined_uncertainty_ohms: f64,
     pub current_gain_uncertainty_ohms: f64,
     pub current_offset_uncertainty_ohms: f64,
 
@@ -329,12 +328,11 @@ pub struct ColdResistanceAnalysis {
 
     pub reduced_chi_squared: f64,
 
-    /// $R_{20}$, the cold resistance corrected to 20 °C (3.4.7), and its uncertainties.
-    pub reference_resistance_ohms: f64,
-    pub reference_combined_uncertainty_ohms: f64,
+    /// $R_{20}$, the cold resistance corrected to 20 °C (3.4.7), with $u_c(R_{20})$.
+    pub reference_resistance_ohms: Derived,
 
-    /// The nominal $R_0$, at the filament temperature.
-    pub resistance_ohms: f64,
+    /// The nominal $R_0$, at the filament temperature, with $u_c(R_0)$ (3.4.6).
+    pub resistance_ohms: Derived,
 
     pub voltage_gain_uncertainty_ohms: f64,
 
@@ -344,8 +342,9 @@ pub struct ColdResistanceAnalysis {
 
     pub slope_ohms_per_amp_squared: Derived,
 
-    /// $G = \alpha R_0^2/b$ (3.5).
-    pub thermal_conductance_watts_per_kelvin: Derived,
+    /// $G = \alpha R_0^2/b$ (3.5), or `None` if $b$ isn't clearly positive
+    /// (more than twice its uncertainty), when dividing by it is meaningless.
+    pub thermal_conductance_watts_per_kelvin: Option<Derived>,
 
     pub warnings: Vec<String>,
 }
@@ -703,7 +702,7 @@ Record the analysis and save. Show:
 - $R_{20} \pm u_c(R_{20})$ and $U = 2u_c(R_{20})$ ($k = 2$) as the headline result, with $R_0 \pm u_c$ at $T_f$ alongside it;
 - the correction's terms ($u_T$ and $u_\alpha$);
 - each budget component, in Ω and as a percentage of $R_0$;
-- $b$, the slope of the fit in Ω/A². From 'Why extrapolating to $I^2 = 0$ gives $R_0$', $b = R_0 c = \alpha R_0^2/G$, so it measures how strongly the filament self-heats. $G = \alpha R_0^2/b$ is a first estimate of the filament's effective thermal conductance to its mount, which will be useful for the thermal time constant work ($\tau = C/G$). Show $G$ too. The fit script computes it with its uncertainty, using the covariance between $R_0$ and $b$ from 3.4.1;
+- $b$, the slope of the fit in Ω/A². From 'Why extrapolating to $I^2 = 0$ gives $R_0$', $b = R_0 c = \alpha R_0^2/G$, so it measures how strongly the filament self-heats. $G = \alpha R_0^2/b$ is a first estimate of the filament's effective thermal conductance to its mount, which will be useful for the thermal time constant work ($\tau = C/G$). Show $G$ too. The fit script computes it with its uncertainty, using the covariance between $R_0$ and $b$ from 3.4.1 (Birge-scaled as in 3.4.2) and the uncertainty in $\alpha$. If $b$ isn't clearly positive, as under `--mock`, where there's no self-heating, there's no estimate and the fit warns instead;
 - $\chi^2_\nu$ and its p-value;
 - any warnings.
 

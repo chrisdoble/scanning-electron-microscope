@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ColdResistancePointAnalysis",
+  "description": "The analysis of one setpoint: exactly the output of\n`cold_resistance_point.py`.",
+  "type": "object",
+  "properties": {
+    "current_amps": {
+      "description": "The mean of the two polarities' currents, with the quantisation floor.",
+      "$ref": "#/$defs/Derived"
+    },
+    "current_squared_amps_squared": {
+      "description": "The square of `current_amps`, the fit's $x$.",
+      "$ref": "#/$defs/Derived"
+    },
+    "offset_voltage_volts": {
+      "description": "Half the sum of the two polarities' voltages: what didn't reverse with\nthe current. A diagnostic.",
+      "$ref": "#/$defs/Derived"
+    },
+    "resistance_ohms": {
+      "description": "`voltage_volts` / `current_amps`.",
+      "$ref": "#/$defs/Derived"
+    },
+    "voltage_volts": {
+      "description": "Half the difference between the two polarities' voltages, so that\nanything that doesn't reverse with the current cancels.",
+      "$ref": "#/$defs/Derived"
+    },
+    "warnings": {
+      "description": "Warnings raised by the analysis, e.g. a large offset voltage.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "current_amps",
+    "current_squared_amps_squared",
+    "offset_voltage_volts",
+    "resistance_ohms",
+    "voltage_volts",
+    "warnings"
+  ],
+  "$defs": {
+    "Derived": {
+      "description": "A value derived by Python from measurements, with its standard uncertainty.\n\nUnlike `Measurement` there are no samples: it's calculated from other\nquantities, not sampled.",
+      "type": "object",
+      "properties": {
+        "uncertainty": {
+          "description": "The standard uncertainty.",
+          "type": "number",
+          "format": "double"
+        },
+        "value": {
+          "description": "The value.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "uncertainty",
+        "value"
+      ]
+    }
+  }
+}

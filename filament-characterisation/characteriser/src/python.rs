@@ -11,6 +11,10 @@
 //! `python/schemas/`, where the scripts validate their input against them. The
 //! `schemas_are_up_to_date` test fails if the two drift apart.
 
+use crate::results::{
+    ColdResistanceAnalysis, ColdResistanceFitParameters, ColdResistancePointAnalysis, Derived,
+    Measurement,
+};
 use log::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -107,6 +111,54 @@ pub struct MeanAndStandardErrorOutput {
     pub value: f64,
 }
 
+/// The input to `cold_resistance_point.py`: one setpoint's measurements in
+/// both polarities.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ColdResistancePointInput {
+    /// The supply's current readback resolution in amperes, for the
+    /// quantisation floor.
+    pub current_resolution_amps: f64,
+
+    /// The current in the polarity that gives a negative voltage.
+    pub negative_current_amps: Measurement,
+
+    /// The voltage in the polarity that gives a negative voltage.
+    pub negative_voltage_volts: Measurement,
+
+    /// How large the voltage that doesn't reverse with the current may be
+    /// before it's warned about, in volts.
+    pub offset_warning_volts: f64,
+
+    /// The current in the polarity that gives a positive voltage.
+    pub positive_current_amps: Measurement,
+
+    /// The voltage in the polarity that gives a positive voltage.
+    pub positive_voltage_volts: Measurement,
+}
+
+/// The input to `cold_resistance_fit.py`.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ColdResistanceFitInput {
+    /// The fit's scalar inputs.
+    pub parameters: ColdResistanceFitParameters,
+
+    /// Every setpoint's reversal-corrected voltage and current.
+    pub points: Vec<ColdResistanceFitPoint>,
+}
+
+/// One setpoint's input to the fit, from its `ColdResistancePointAnalysis`.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ColdResistanceFitPoint {
+    /// The mean of the two polarities' currents, with the quantisation floor.
+    pub current_amps: Derived,
+
+    /// Half the difference between the two polarities' voltages.
+    pub voltage_volts: Derived,
+}
+
 /// Checks that the virtual environment exists and has the packages the scripts
 /// import.
 ///
@@ -125,7 +177,7 @@ pub async fn check_environment() -> Result<(), PythonError> {
 
     // Importing the packages is the only way to tell a complete environment
     // from one whose `pip install` never ran.
-    let import = "import uncertainties, jsonschema";
+    let import = "import jsonschema, numpy, scipy, uncertainties";
     debug!("running {} -c \"{}\"", interpreter.display(), import);
     let output = run(
         &interpreter,
@@ -162,6 +214,30 @@ pub async fn mean_and_standard_error(samples: &[f64]) -> Result<(f64, f64), Pyth
     )
     .await?;
     Ok((output.value, output.uncertainty))
+}
+
+/// Analyses one setpoint: reverses out what doesn't change sign with the
+/// current, and derives the resistance and its uncertainty.
+///
+/// Wraps `cold_resistance_point.py`.
+// Used from commit 8 of COLD_RESISTANCE.md's implementation order.
+#[expect(dead_code)]
+pub async fn cold_resistance_point(
+    input: &ColdResistancePointInput,
+) -> Result<ColdResistancePointAnalysis, PythonError> {
+    run_script("cold_resistance_point.py", input).await
+}
+
+/// Fits the setpoints' resistances against the square of their currents,
+/// extrapolates to zero current, and works out the uncertainty budget.
+///
+/// Wraps `cold_resistance_fit.py`.
+// Used from commit 9 of COLD_RESISTANCE.md's implementation order.
+#[expect(dead_code)]
+pub async fn cold_resistance_fit(
+    input: &ColdResistanceFitInput,
+) -> Result<ColdResistanceAnalysis, PythonError> {
+    run_script("cold_resistance_fit.py", input).await
 }
 
 /// Runs a script from the crate's `python` directory.
@@ -290,11 +366,23 @@ mod tests {
     fn schemas_are_up_to_date() {
         // Each script, by the name its schemas are filed under, with its input
         // and output schemas.
-        let scripts: [(&str, Schema, Schema); 1] = [(
-            "mean_and_standard_error",
-            schema_for!(MeanAndStandardErrorInput),
-            schema_for!(MeanAndStandardErrorOutput),
-        )];
+        let scripts: [(&str, Schema, Schema); 3] = [
+            (
+                "cold_resistance_fit",
+                schema_for!(ColdResistanceFitInput),
+                schema_for!(ColdResistanceAnalysis),
+            ),
+            (
+                "cold_resistance_point",
+                schema_for!(ColdResistancePointInput),
+                schema_for!(ColdResistancePointAnalysis),
+            ),
+            (
+                "mean_and_standard_error",
+                schema_for!(MeanAndStandardErrorInput),
+                schema_for!(MeanAndStandardErrorOutput),
+            ),
+        ];
 
         let update = std::env::var_os("UPDATE_SCHEMAS").is_some();
         let schemas_dir = Path::new(PYTHON_DIR).join("schemas");

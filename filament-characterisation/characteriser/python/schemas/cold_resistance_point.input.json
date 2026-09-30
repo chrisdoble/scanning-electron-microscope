@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ColdResistancePointInput",
+  "description": "The input to `cold_resistance_point.py`: one setpoint's measurements in\nboth polarities.",
+  "type": "object",
+  "properties": {
+    "current_resolution_amps": {
+      "description": "The supply's current readback resolution in amperes, for the\nquantisation floor.",
+      "type": "number",
+      "format": "double"
+    },
+    "negative_current_amps": {
+      "description": "The current in the polarity that gives a negative voltage.",
+      "$ref": "#/$defs/Measurement"
+    },
+    "negative_voltage_volts": {
+      "description": "The voltage in the polarity that gives a negative voltage.",
+      "$ref": "#/$defs/Measurement"
+    },
+    "offset_warning_volts": {
+      "description": "How large the voltage that doesn't reverse with the current may be\nbefore it's warned about, in volts.",
+      "type": "number",
+      "format": "double"
+    },
+    "positive_current_amps": {
+      "description": "The current in the polarity that gives a positive voltage.",
+      "$ref": "#/$defs/Measurement"
+    },
+    "positive_voltage_volts": {
+      "description": "The voltage in the polarity that gives a positive voltage.",
+      "$ref": "#/$defs/Measurement"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "current_resolution_amps",
+    "negative_current_amps",
+    "negative_voltage_volts",
+    "offset_warning_volts",
+    "positive_current_amps",
+    "positive_voltage_volts"
+  ],
+  "$defs": {
+    "Measurement": {
+      "description": "A measured quantity: the samples taken, and the value derived from them.\n\n`value` and `uncertainty` are the mean and standard error returned by\n`mean_and_standard_error.py`, not calculated in Rust.\n\nThis is the shape every measured field takes, and the unit goes in the name\nof the field holding it — `filament_voltage_volts: Measurement` — since the\nconsumer is another program with no doc comments to read.",
+      "type": "object",
+      "properties": {
+        "samples": {
+          "description": "The individual samples, in the order they were taken.",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "uncertainty": {
+          "description": "The standard error of the mean.",
+          "type": "number",
+          "format": "double"
+        },
+        "value": {
+          "description": "The mean of the samples.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "samples",
+        "uncertainty",
+        "value"
+      ]
+    }
+  }
+}

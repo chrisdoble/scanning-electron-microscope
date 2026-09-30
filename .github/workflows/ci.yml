@@ -1,6 +1,7 @@
 # Runs the tests, clippy and fmt on every push.
 #
-# The two Rust workspaces are separate jobs. The controller firmware is left
+# The two Rust workspaces and the characteriser's Python analysis scripts are
+# separate jobs. The controller firmware is left
 # out: it only builds for its thumbv8m target, which is selected by its
 # directory's .cargo/config.toml, so the root workspace's crates are named with
 # -p rather than --workspace.
@@ -83,3 +84,25 @@ jobs:
 
       - name: Test
         run: cargo test -p solver --manifest-path "$MANIFEST"
+
+  python:
+    name: Python analysis scripts
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: filament-characterisation/characteriser/python
+    steps:
+      - uses: actions/checkout@v7
+
+      # The same version as the characteriser's virtual environment.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: filament-characterisation/characteriser/python/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Test
+        run: python -m unittest -v

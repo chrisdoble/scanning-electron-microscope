@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ColdResistanceAnalysis",
+  "description": "The fit and uncertainty budget: exactly the output of\n`cold_resistance_fit.py`.\n\nEvery uncertainty is a standard uncertainty. Expanded uncertainties aren't\nstored: they're twice these, and are computed for display.",
+  "type": "object",
+  "properties": {
+    "chi_squared_p_value": {
+      "description": "The probability of a chi-squared at least this large if the line and\nthe per-point uncertainties are right.",
+      "type": "number",
+      "format": "double"
+    },
+    "current_gain_uncertainty_ohms": {
+      "description": "The contribution of the supply's readback gain error.",
+      "type": "number",
+      "format": "double"
+    },
+    "current_offset_uncertainty_ohms": {
+      "description": "The contribution of the supply's readback offset error, from the corner\nanalysis.",
+      "type": "number",
+      "format": "double"
+    },
+    "fit_uncertainty_ohms": {
+      "description": "The statistical uncertainty of the fit's intercept, inflated by the\nBirge ratio when that's above 1.",
+      "type": "number",
+      "format": "double"
+    },
+    "offset_corner_resistances_ohms": {
+      "description": "The fitted intercept with the readback offset at its lower and upper\nbounds, in that order.",
+      "type": "array",
+      "items": {
+        "type": "number",
+        "format": "double"
+      },
+      "maxItems": 2,
+      "minItems": 2
+    },
+    "reduced_chi_squared": {
+      "description": "Chi-squared divided by its degrees of freedom.",
+      "type": "number",
+      "format": "double"
+    },
+    "reference_resistance_ohms": {
+      "description": "The cold resistance corrected to the reference temperature, $R_{20}$,\nwith its combined standard uncertainty.",
+      "$ref": "#/$defs/Derived"
+    },
+    "resistance_ohms": {
+      "description": "The cold resistance at the filament temperature, $R_0$: the fit's\nintercept, with its combined standard uncertainty. The other\n`*_uncertainty_ohms` fields are that uncertainty's components.",
+      "$ref": "#/$defs/Derived"
+    },
+    "slope_ohms_per_amp_squared": {
+      "description": "The fit's slope, $b$, which measures how strongly the filament heats\nitself.",
+      "$ref": "#/$defs/Derived"
+    },
+    "temperature_coefficient_uncertainty_ohms": {
+      "description": "The contribution of the uncertainty in tungsten's temperature\ncoefficient to `reference_resistance_ohms`' uncertainty.",
+      "type": "number",
+      "format": "double"
+    },
+    "temperature_uncertainty_ohms": {
+      "description": "The contribution of the uncertainty in the filament temperature to\n`reference_resistance_ohms`' uncertainty.",
+      "type": "number",
+      "format": "double"
+    },
+    "thermal_conductance_watts_per_kelvin": {
+      "description": "The filament's effective thermal conductance to its mount, $G = \\alpha\nR_0^2/b$. `None` if the slope isn't clearly positive (more than twice\nits uncertainty), when dividing by it would be meaningless.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Derived"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "voltage_gain_uncertainty_ohms": {
+      "description": "The contribution of the oscilloscope's gain error.",
+      "type": "number",
+      "format": "double"
+    },
+    "warnings": {
+      "description": "Warnings raised by the analysis, e.g. a poor fit.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "chi_squared_p_value",
+    "current_gain_uncertainty_ohms",
+    "current_offset_uncertainty_ohms",
+    "fit_uncertainty_ohms",
+    "offset_corner_resistances_ohms",
+    "reduced_chi_squared",
+    "reference_resistance_ohms",
+    "resistance_ohms",
+    "slope_ohms_per_amp_squared",
+    "temperature_coefficient_uncertainty_ohms",
+    "temperature_uncertainty_ohms",
+    "voltage_gain_uncertainty_ohms",
+    "warnings"
+  ],
+  "$defs": {
+    "Derived": {
+      "description": "A value derived by Python from measurements, with its standard uncertainty.\n\nUnlike `Measurement` there are no samples: it's calculated from other\nquantities, not sampled.",
+      "type": "object",
+      "properties": {
+        "uncertainty": {
+          "description": "The standard uncertainty.",
+          "type": "number",
+          "format": "double"
+        },
+        "value": {
+          "description": "The value.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "uncertainty",
+        "value"
+      ]
+    }
+  }
+}

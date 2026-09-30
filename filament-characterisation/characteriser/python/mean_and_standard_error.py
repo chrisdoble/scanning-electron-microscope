@@ -7,9 +7,6 @@ Reads one JSON object on stdin, with at least two samples:
 and prints one JSON object on stdout:
 
     {"value": <mean>, "uncertainty": <standard error of the mean>}
-
-TODO: resistance and its propagated uncertainty are calculated by scripts added
-beside this one.
 """
 
 import math
