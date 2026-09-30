@@ -59,7 +59,7 @@ differently.
 | A4 | The vacuum hardware is reached exactly as the existing binary does: one `Controller` over serial, shared by `Adc` and `Tmp` via `Arc`. The same `Controller` is shared with `PowerSupply`. |
 | A5 | Shared dependency versions are hoisted from `host` into `[workspace.dependencies]` and pinned there (§4.1). Take the versions `host` currently declares; do not upgrade anything as part of the move. |
 | A6 | Keep `#[tokio::main(flavor = "current_thread")]` as in the existing binary. All blocking serial I/O already happens inside `spawn_blocking` within `Controller`. |
-| A7 | `host` stays free of `serde`. |
+| A7 | `host` depends on `serde` only to derive `Serialize`/`Deserialize` on plain data types that the results store directly, such as `Polarity` (§7.2). This supersedes the original "`host` stays free of `serde`"; see COLD_RESISTANCE.md. |
 | A8 | The Python virtual environment lives at `characteriser/python/.venv` and is created by the operator, not by the application (§12). |
 | A9 | Development and operation are on macOS/Linux. Paths like `python/.venv/bin/python` are used directly, without a Windows branch. |
 
@@ -111,6 +111,7 @@ crossterm = "<as in host>"
 env_logger = "<as in host>"
 log = "<as in host>"
 ratatui = "<as in host>"
+serde = { version = "<as resolved>", features = ["derive"] }
 serialport = "<as in host>"
 thiserror = "<as in host>"
 tokio = { version = "<as in host>", features = ["macros", "rt", "sync", "time"] }
@@ -135,7 +136,7 @@ futures = "0.3"              # StreamExt, for the crossterm EventStream
 host = { path = "../../host" }
 log = { workspace = true }
 ratatui = { workspace = true }
-serde = { version = "1", features = ["derive"] }
+serde = { workspace = true }
 serde_json = "1"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["process"] }
@@ -297,7 +298,7 @@ distinct connections matter, and only these are exposed:
 ///
 /// A fourth relay state exists — both energised, both sides on the positive
 /// rail — which is equivalent to `Nil` and is never used.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Polarity {
     /// Relay 1 energised: current flows through the filament one way.
     Forward,
@@ -312,7 +313,8 @@ pub enum Polarity {
 ```
 
 This enum belongs in `host` beside `PowerSupply` (§7.5), since the supply is
-what switches the relays.
+what switches the relays. It derives `Serialize` and `Deserialize` so
+`results.rs` can store it directly (A7).
 
 ### 7.3 Traits
 

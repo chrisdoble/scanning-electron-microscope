@@ -1,6 +1,7 @@
 use crate::controller::{Controller, Destination};
 use common::ControllerError;
 use log::*;
+use serde::{Deserialize, Serialize};
 use std::{fmt::Display, num::ParseFloatError, sync::Arc};
 use thiserror::Error;
 use usb_tmc::UsbTmcDevice;
@@ -54,7 +55,7 @@ pub enum PowerSupplyError {
 ///
 /// A fourth relay state exists — both energised, both sides on the positive
 /// rail — which is equivalent to `Nil` and is never used.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Polarity {
     /// Relay 1 energised: current flows through the filament one way.
     Forward,
