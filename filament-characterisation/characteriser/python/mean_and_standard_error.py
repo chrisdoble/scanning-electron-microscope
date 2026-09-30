@@ -1,7 +1,10 @@
 """Summarises a set of samples as a value and an uncertainty.
 
-Consumes the samples as positional arguments, at least two of them, and prints
-one JSON object on stdout:
+Reads one JSON object on stdin, with at least two samples:
+
+    {"samples": [<sample>, ...]}
+
+and prints one JSON object on stdout:
 
     {"value": <mean>, "uncertainty": <standard error of the mean>}
 
@@ -9,20 +12,17 @@ TODO: resistance and its propagated uncertainty are calculated by scripts added
 beside this one.
 """
 
-import json
 import math
 import statistics
 import sys
 
 from uncertainties import ufloat
 
+from script_io import read_input, write_output
 
-def main(arguments: list[str]) -> int:
-    try:
-        samples = [float(argument) for argument in arguments]
-    except ValueError as e:
-        print(f"couldn't parse the samples: {e}", file=sys.stderr)
-        return 1
+
+def main() -> int:
+    samples = read_input("mean_and_standard_error")["samples"]
 
     # The standard error of the mean needs the sample standard deviation, which
     # isn't defined for fewer than two samples.
@@ -40,12 +40,9 @@ def main(arguments: list[str]) -> int:
         statistics.stdev(samples) / math.sqrt(len(samples)),
     )
 
-    json.dump(
-        {"value": quantity.nominal_value, "uncertainty": quantity.std_dev},
-        sys.stdout,
-    )
+    write_output({"value": quantity.nominal_value, "uncertainty": quantity.std_dev})
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())

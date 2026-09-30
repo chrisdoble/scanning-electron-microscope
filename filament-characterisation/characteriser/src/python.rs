@@ -4,12 +4,19 @@
 //! creates once with `SETUP_COMMANDS` below. `check_environment` is called at
 //! start-up so a missing or broken environment is reported before the
 //! application takes over the terminal.
+//!
+//! Every script reads one JSON object on stdin and writes one on stdout. The
+//! Rust types here are the source of truth for their shapes: each derives
+//! `JsonSchema`, and the schemas generated from them are committed in
+//! `python/schemas/`, where the scripts validate their input against them. The
+//! `schemas_are_up_to_date` test fails if the two drift apart.
 
 use log::*;
-use serde::{Deserialize, de::DeserializeOwned};
-use std::{path::Path, process::Stdio, time::Duration};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use std::{io::ErrorKind, path::Path, process::Stdio, time::Duration};
 use thiserror::Error;
-use tokio::process::Command;
+use tokio::{io::AsyncWriteExt, process::Command};
 
 /// The directory holding the analysis scripts and their virtual environment.
 ///
@@ -51,6 +58,14 @@ pub enum PythonError {
         stderr: String,
     },
 
+    /// A script's input couldn't be serialised.
+    #[error("couldn't serialise the input to {script}: {source}")]
+    InvalidInput {
+        script: String,
+        #[source]
+        source: serde_json::Error,
+    },
+
     /// A script's output couldn't be deserialised.
     #[error("couldn't parse the output of {script}: {source}: {stderr}")]
     InvalidOutput {
@@ -73,7 +88,27 @@ pub enum PythonError {
     TimedOut { script: String },
 }
 
-/// Checks that the virtual environment exists and has `uncertainties` in it.
+/// The input to `mean_and_standard_error.py`.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MeanAndStandardErrorInput {
+    /// The samples, at least two of them.
+    pub samples: Vec<f64>,
+}
+
+/// The output of `mean_and_standard_error.py`.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MeanAndStandardErrorOutput {
+    /// The standard error of the mean.
+    pub uncertainty: f64,
+
+    /// The mean of the samples.
+    pub value: f64,
+}
+
+/// Checks that the virtual environment exists and has the packages the scripts
+/// import.
 ///
 /// Call this before `ratatui::init` so a failure prints normally rather than
 /// into the alternate screen.
@@ -88,25 +123,23 @@ pub async fn check_environment() -> Result<(), PythonError> {
         )));
     }
 
-    // Importing the package is the only way to tell a complete environment
+    // Importing the packages is the only way to tell a complete environment
     // from one whose `pip install` never ran.
-    let script = "-c \"import uncertainties\"";
-    debug!(
-        "running {} -c \"import uncertainties\"",
-        interpreter.display()
-    );
+    let import = "import uncertainties, jsonschema";
+    debug!("running {} -c \"{}\"", interpreter.display(), import);
     let output = run(
         &interpreter,
-        &["-c".to_string(), "import uncertainties".to_string()],
-        script,
+        &["-c".to_string(), import.to_string()],
+        &format!("-c \"{}\"", import),
+        &[],
     )
     .await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        error!("couldn't import uncertainties: {}", stderr);
+        error!("couldn't import the required packages: {}", stderr);
         return Err(PythonError::Environment(format!(
-            "{} can't import uncertainties: {}",
+            "{} can't import the required packages: {}",
             interpreter.display(),
             stderr
         )));
@@ -121,40 +154,44 @@ pub async fn check_environment() -> Result<(), PythonError> {
 /// Wraps `mean_and_standard_error.py`, which is the calculation behind every
 /// measurement.
 pub async fn mean_and_standard_error(samples: &[f64]) -> Result<(f64, f64), PythonError> {
-    /// The object `mean_and_standard_error.py` prints.
-    #[derive(Deserialize)]
-    struct Output {
-        uncertainty: f64,
-        value: f64,
-    }
-
-    let args: Vec<String> = samples.iter().map(f64::to_string).collect();
-    let output: Output = run_script("mean_and_standard_error.py", &args).await?;
+    let output: MeanAndStandardErrorOutput = run_script(
+        "mean_and_standard_error.py",
+        &MeanAndStandardErrorInput {
+            samples: samples.to_vec(),
+        },
+    )
+    .await?;
     Ok((output.value, output.uncertainty))
 }
 
 /// Runs a script from the crate's `python` directory.
 ///
-/// `args` are passed positionally. The script is expected to print a single
-/// JSON object on stdout, which is deserialised into `T`. Anything it prints on
-/// stderr is logged.
-pub async fn run_script<T: DeserializeOwned>(
+/// `input` is written to the script's stdin as JSON. The script is expected to
+/// print a single JSON object on stdout, which is deserialised into `O`.
+/// Anything it prints on stderr is logged.
+pub async fn run_script<I: Serialize, O: DeserializeOwned>(
     script: &str,
-    args: &[String],
-) -> Result<T, PythonError> {
+    input: &I,
+) -> Result<O, PythonError> {
     let python_dir = Path::new(PYTHON_DIR);
     let interpreter = python_dir.join(VENV_PYTHON);
+    let script_path = python_dir.join(script).display().to_string();
 
-    let mut script_args = Vec::with_capacity(args.len() + 1);
-    script_args.push(python_dir.join(script).display().to_string());
-    script_args.extend_from_slice(args);
+    let input = serde_json::to_vec(input).map_err(|source| {
+        error!("couldn't serialise the input to {}: {}", script, source);
+        PythonError::InvalidInput {
+            script: script.to_string(),
+            source,
+        }
+    })?;
 
     debug!(
-        "running {} {}",
+        "running {} {} with {}",
         interpreter.display(),
-        script_args.join(" ")
+        script_path,
+        String::from_utf8_lossy(&input)
     );
-    let output = run(&interpreter, &script_args, script).await?;
+    let output = run(&interpreter, &[script_path], script, &input).await?;
 
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     if !stderr.is_empty() {
@@ -180,21 +217,42 @@ pub async fn run_script<T: DeserializeOwned>(
     })
 }
 
-/// Runs `interpreter` with `args`, capturing its output.
+/// Runs `interpreter` with `args`, writing `input` to its stdin and capturing
+/// its output.
 ///
 /// `script` names what's being run, for errors. Never goes through a shell.
 async fn run(
     interpreter: &Path,
     args: &[String],
     script: &str,
+    input: &[u8],
 ) -> Result<std::process::Output, PythonError> {
-    let child = Command::new(interpreter)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .output();
+    let child = async {
+        let mut child = Command::new(interpreter)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()?;
+
+        let mut stdin = child.stdin.take().expect("stdin is piped");
+
+        // A script that exits before reading its input, e.g. because an import
+        // failed, closes the pipe. That isn't the error worth reporting: its
+        // exit status and stderr are, so carry on and collect them.
+        if let Err(e) = stdin.write_all(input).await
+            && e.kind() != ErrorKind::BrokenPipe
+        {
+            return Err(e);
+        }
+
+        // Close the pipe before waiting. Otherwise the script never sees the
+        // end of its input and blocks until the timeout.
+        drop(stdin);
+
+        child.wait_with_output().await
+    };
 
     match tokio::time::timeout(PYTHON_TIMEOUT, child).await {
         Ok(Ok(output)) => Ok(output),
@@ -213,6 +271,54 @@ async fn run(
             Err(PythonError::TimedOut {
                 script: script.to_string(),
             })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use schemars::{Schema, schema_for};
+    use std::fs;
+
+    /// Checks that the schemas committed in `python/schemas/` match the Rust
+    /// types, so a change to a type can't silently diverge from what the
+    /// scripts expect.
+    ///
+    /// Run with `UPDATE_SCHEMAS=1` to write them instead.
+    #[test]
+    fn schemas_are_up_to_date() {
+        // Each script, by the name its schemas are filed under, with its input
+        // and output schemas.
+        let scripts: [(&str, Schema, Schema); 1] = [(
+            "mean_and_standard_error",
+            schema_for!(MeanAndStandardErrorInput),
+            schema_for!(MeanAndStandardErrorOutput),
+        )];
+
+        let update = std::env::var_os("UPDATE_SCHEMAS").is_some();
+        let schemas_dir = Path::new(PYTHON_DIR).join("schemas");
+        if update {
+            fs::create_dir_all(&schemas_dir).unwrap();
+        }
+
+        for (script, input, output) in scripts {
+            for (kind, schema) in [("input", input), ("output", output)] {
+                let path = schemas_dir.join(format!("{}.{}.json", script, kind));
+                let expected = serde_json::to_string_pretty(&schema).unwrap() + "\n";
+
+                if update {
+                    fs::write(&path, expected).unwrap();
+                } else {
+                    let actual = fs::read_to_string(&path).unwrap_or_default();
+                    assert_eq!(
+                        actual,
+                        expected,
+                        "{} is out of date; run the test with UPDATE_SCHEMAS=1",
+                        path.display()
+                    );
+                }
+            }
         }
     }
 }

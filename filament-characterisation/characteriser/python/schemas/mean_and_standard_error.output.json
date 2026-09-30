@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MeanAndStandardErrorOutput",
+  "description": "The output of `mean_and_standard_error.py`.",
+  "type": "object",
+  "properties": {
+    "uncertainty": {
+      "description": "The standard error of the mean.",
+      "type": "number",
+      "format": "double"
+    },
+    "value": {
+      "description": "The mean of the samples.",
+      "type": "number",
+      "format": "double"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "uncertainty",
+    "value"
+  ]
+}

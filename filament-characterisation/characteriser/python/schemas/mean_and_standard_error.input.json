@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MeanAndStandardErrorInput",
+  "description": "The input to `mean_and_standard_error.py`.",
+  "type": "object",
+  "properties": {
+    "samples": {
+      "description": "The samples, at least two of them.",
+      "type": "array",
+      "items": {
+        "type": "number",
+        "format": "double"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "samples"
+  ]
+}

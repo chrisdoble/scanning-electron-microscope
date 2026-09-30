@@ -1,6 +1,7 @@
 //! What a characterisation run measures, and how it's written to disk.
 
 use log::*;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -33,7 +34,7 @@ pub enum ResultsError {
 /// This is the shape every measured field takes, and the unit goes in the name
 /// of the field holding it — `filament_voltage_volts: Measurement` — since the
 /// consumer is another program with no doc comments to read.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 pub struct Measurement {
     /// The individual samples, in the order they were taken.
     pub samples: Vec<f64>,

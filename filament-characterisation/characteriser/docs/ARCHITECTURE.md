@@ -73,8 +73,10 @@ filament-characterisation/
     Cargo.toml
     python/
       .venv/                        // created by the operator, gitignored
-      requirements.txt              // pins `uncertainties`
-      mean_and_standard_error.py    // stub: samples in, value and uncertainty out
+      requirements.txt              // pins `jsonschema` and `uncertainties`
+      schemas/                      // input and output schemas, generated from the Rust types
+      script_io.py                  // reads and validates a script's input, writes its output
+      mean_and_standard_error.py    // samples in, value and uncertainty out
     src/
       main.rs                 // args, logging, start-up checks, task wiring, error handling
       app.rs                  // App state, event loop, key handling
@@ -1406,9 +1408,21 @@ Statistics and uncertainty propagation are done in Python with the
 `uncertainties` package, so the crate ships scripts and expects a virtual
 environment beside them.
 
-Each script has **its own interface**: arguments in, one JSON object on stdout.
-Nothing passes the whole `Characterisation` struct to Python — the Rust side
-sends the numbers a particular calculation needs and stores what comes back.
+Each script has **its own interface**: one JSON object on stdin, one JSON object
+on stdout. Nothing passes the whole `Characterisation` struct to Python — the
+Rust side sends the numbers a particular calculation needs and stores what comes
+back.
+
+The Rust types are the source of truth for those objects. Every input and output
+type derives `Serialize`, `Deserialize` and `schemars::JsonSchema`, with
+`#[serde(deny_unknown_fields)]`. The schemas generated from them are committed
+as `python/schemas/<script>.input.json` and `<script>.output.json`, and the
+`schemas_are_up_to_date` test in `python.rs` fails if they differ from the types
+(run it with `UPDATE_SCHEMAS=1` to rewrite them). `python/script_io.py` gives
+every script two helpers: `read_input(script_name)` reads stdin and validates it
+against the input schema, exiting with the error on stderr if it doesn't match,
+and `write_output(obj)` writes with `allow_nan=False`, since `NaN` isn't valid
+JSON and `serde_json` rejects it.
 
 ### 12.1 Layout and constants
 
@@ -1424,7 +1438,7 @@ const PYTHON_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/python");
 const VENV_PYTHON: &str = ".venv/bin/python";
 ```
 
-`python/requirements.txt` pins `uncertainties`. A comment at the top of
+`python/requirements.txt` pins `jsonschema` and `uncertainties`. A comment at the top of
 `python.rs` states the one-off setup:
 
 ```
@@ -1439,7 +1453,7 @@ alternate screen:
 
 1. Check `PYTHON_DIR` resolves to an existing directory, falling back as above.
 2. Check the interpreter at `<python dir>/.venv/bin/python` exists.
-3. Run `<interpreter> -c "import uncertainties"` with a short timeout
+3. Run `<interpreter> -c "import uncertainties, jsonschema"` with a short timeout
    (`PYTHON_CHECK_TIMEOUT`, 10 s) and require exit status 0.
 
 Any failure aborts start-up with an error naming the missing piece **and the two
@@ -1451,13 +1465,13 @@ resolved interpreter path with `info!` on success.
 ```rust
 /// Runs a script from the crate's `python` directory.
 ///
-/// `args` are passed positionally. The script is expected to print a single
-/// JSON object on stdout, which is deserialised into `T`. Anything it prints on
-/// stderr is logged.
-pub async fn run_script<T: DeserializeOwned>(
+/// `input` is written to the script's stdin as JSON. The script is expected to
+/// print a single JSON object on stdout, which is deserialised into `O`.
+/// Anything it prints on stderr is logged.
+pub async fn run_script<I: Serialize, O: DeserializeOwned>(
     script: &str,
-    args: &[String],
-) -> Result<T, PythonError>;
+    input: &I,
+) -> Result<O, PythonError>;
 
 /// The mean and standard error of a set of samples.
 ///
@@ -1468,6 +1482,9 @@ pub async fn mean_and_standard_error(samples: &[f64]) -> Result<(f64, f64), Pyth
 
 - Uses `tokio::process::Command` with the venv interpreter, never the system
   `python3`, and never a shell.
+- Spawns the script with stdin piped, writes the serialised input, and **drops
+  the stdin handle before waiting**, so the script's `json.load(sys.stdin)` sees
+  end-of-file rather than blocking until the timeout.
 - Wrapped in `tokio::time::timeout(PYTHON_TIMEOUT, ...)`; a script that hangs
   must not hang the procedure.
 - A non-zero exit status, a timeout, or unparseable stdout are all errors
@@ -1476,8 +1493,8 @@ pub async fn mean_and_standard_error(samples: &[f64]) -> Result<(f64, f64), Pyth
 
 ### 12.4 The first script
 
-`python/mean_and_standard_error.py` takes the samples as positional arguments
-and prints `{"value": <mean>, "uncertainty": <standard error>}`. It imports
+`python/mean_and_standard_error.py` reads `{"samples": [...]}` on stdin and
+prints `{"value": <mean>, "uncertainty": <standard error>}`. It imports
 `uncertainties` even though the mean and standard error don't strictly need it,
 so the venv is exercised on the path that will later do the real propagation,
 and carries a `TODO` saying that resistance and its propagated uncertainty are

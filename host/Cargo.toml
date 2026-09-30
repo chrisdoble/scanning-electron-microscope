@@ -12,6 +12,7 @@ env_logger = { workspace = true }
 log = { workspace = true }
 plotters = { default-features = false, features = ["bitmap_backend", "bitmap_encoder", "image", "line_series", "ttf"], version = "0.3.7" }
 ratatui = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serialport = { workspace = true }
 thiserror = { workspace = true }

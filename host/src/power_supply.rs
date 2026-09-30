@@ -1,6 +1,7 @@
 use crate::controller::{Controller, Destination};
 use common::ControllerError;
 use log::*;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, num::ParseFloatError, sync::Arc, time::Duration};
 use thiserror::Error;
@@ -64,7 +65,7 @@ pub enum PowerSupplyError {
 ///
 /// A fourth relay state exists — both energised, both sides on the positive
 /// rail — which is equivalent to `Nil` and is never used.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub enum Polarity {
     /// Relay 1 energised: current flows through the filament one way.
     Forward,
