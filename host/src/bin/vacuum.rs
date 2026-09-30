@@ -289,16 +289,16 @@ impl App {
                 && event.is_press()
             {
                 match event.code {
-                    KeyCode::Char('c') | KeyCode::Char('C') => {
-                        if state.show_roughing_pump_confirmation {
-                            // If the "confirm the roughing pump is running"
-                            // message is visible then we know the chamber
-                            // pressure is low enough. The user has pressed 'P'
-                            // again to confirm, so we can start the TMP.
-                            self.tmp.set_running(true).await?;
-                            state.show_roughing_pump_confirmation = false;
-                            state.tmp_running = true;
-                        }
+                    KeyCode::Char('c') | KeyCode::Char('C')
+                        if state.show_roughing_pump_confirmation =>
+                    {
+                        // If the "confirm the roughing pump is running"
+                        // message is visible then we know the chamber
+                        // pressure is low enough. The user has pressed 'P'
+                        // again to confirm, so we can start the TMP.
+                        self.tmp.set_running(true).await?;
+                        state.show_roughing_pump_confirmation = false;
+                        state.tmp_running = true;
                     }
 
                     KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {

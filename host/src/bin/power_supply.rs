@@ -9,7 +9,7 @@ type AnyError = Box<dyn std::error::Error>;
 async fn main() -> Result<(), AnyError> {
     let args = Arguments::parse();
     let controller = Arc::new(Controller::new(&args.device_path)?);
-    let power_supply = PowerSupply::new(controller).await?;
+    let _power_supply = PowerSupply::new(controller).await?;
 
     Ok(())
 }
