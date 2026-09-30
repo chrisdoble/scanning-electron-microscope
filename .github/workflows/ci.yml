@@ -1,0 +1,85 @@
+# Runs the tests, clippy and fmt on every push.
+#
+# The two Rust workspaces are separate jobs. The controller firmware is left
+# out: it only builds for its thumbv8m target, which is selected by its
+# directory's .cargo/config.toml, so the root workspace's crates are named with
+# -p rather than --workspace.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same ref cancels the run for the first.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  root:
+    name: Root workspace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # rustup is preinstalled on the runner, so no toolchain action is needed.
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      # libusb for rusb (usb-tmc), libudev for serialport, and fontconfig for
+      # plotters' ttf feature (font-kit).
+      - name: Install native libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libusb-1.0-0-dev libudev-dev libfontconfig1-dev pkg-config
+
+      - name: Check formatting
+        run: cargo fmt --check -p common -p host -p usb-tmc -p characteriser
+
+      - name: Clippy
+        run: cargo clippy -p common -p host -p usb-tmc -p characteriser --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test -p common -p host -p usb-tmc -p characteriser
+
+  electron-gun-simulation:
+    name: Electron gun simulation
+    runs-on: ubuntu-latest
+    env:
+      MANIFEST: electron-gun-simulation/crates/Cargo.toml
+    steps:
+      - uses: actions/checkout@v7
+
+      # wasm32 is for wasm-api, which only builds for wasm.
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt --target wasm32-unknown-unknown
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "electron-gun-simulation/crates -> target"
+
+      # --all because the workspace's root manifest has no package of its own.
+      - name: Check formatting
+        run: cargo fmt --check --all --manifest-path "$MANIFEST"
+
+      - name: Clippy (solver)
+        run: cargo clippy -p solver --manifest-path "$MANIFEST" --all-targets -- -D warnings
+
+      - name: Clippy (wasm-api)
+        run: cargo clippy -p wasm-api --manifest-path "$MANIFEST" --target wasm32-unknown-unknown -- -D warnings
+
+      - name: Test
+        run: cargo test -p solver --manifest-path "$MANIFEST"

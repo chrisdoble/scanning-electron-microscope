@@ -101,6 +101,7 @@ Commits 5 and 6 don't depend on 2–4, and can be done before them.
    - `numpy` and `scipy` in `requirements.txt`, and the extended `check_environment`.
    - The input types (in `python.rs`), and the output and parameter types (`Derived`, `ColdResistancePointAnalysis`, `ColdResistanceAnalysis` and `ColdResistanceFitParameters` in `results.rs`), for both scripts, with their wrappers and regenerated schemas.
    - `cold_resistance_point.py`, `cold_resistance_fit.py` and `test_cold_resistance.py`.
+   - A `python` job in `.github/workflows/ci.yml`, added here rather than earlier because `python -m unittest` fails when there are no tests. It sets up Python 3.14 (the venv's version) with `actions/setup-python@v7`, runs `pip install -r requirements.txt`, and runs `python -m unittest`, all in `filament-characterisation/characteriser/python`.
    - Done when `python -m unittest` and the schema test pass.
 7. **Lay the procedure's groundwork.**
    - The `constants.rs` changes.
