@@ -2,8 +2,9 @@ use crate::controller::{Controller, Destination};
 use common::ControllerError;
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, num::ParseFloatError, sync::Arc};
+use std::{fmt::Display, num::ParseFloatError, sync::Arc, time::Duration};
 use thiserror::Error;
+use tokio::time::Instant;
 use usb_tmc::UsbTmcDevice;
 
 /// The USB product ID of the Rigol DP-932E power supply.
@@ -35,6 +36,14 @@ pub enum PowerSupplyError {
     /// The controller returned an unknown relay polarity.
     #[error("unknown relay polarity: {0}")]
     UnknownRelayPolarity(String),
+
+    /// The supply returned an unknown overcurrent protection state.
+    #[error("unknown overcurrent protection state: {0}")]
+    UnknownOvercurrentProtectionState(String),
+
+    /// The supply returned an unknown regulation mode.
+    #[error("unknown regulation mode: {0}")]
+    UnknownRegulationMode(String),
 
     /// An error encountered while communicating with the supply over USBTMC.
     #[error("usb-tmc error: {0}")]
@@ -68,6 +77,19 @@ pub enum Polarity {
     Reverse,
 }
 
+/// How channel 1 is regulating its output.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RegulationMode {
+    /// The current limit binds: the channel holds the set current.
+    ConstantCurrent,
+
+    /// The voltage limit binds: the channel holds the set voltage.
+    ConstantVoltage,
+
+    /// Neither limit binds.
+    Unregulated,
+}
+
 impl Display for Polarity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -91,6 +113,10 @@ struct PowerSupplyState {
 
     /// The supply itself.
     device: UsbTmcDevice,
+
+    /// When the reply to the last current measurement arrived, if there's been
+    /// one.
+    last_measurement: Option<Instant>,
 }
 
 /// Interacts with the Rigol DP-932E power supply and the SPDT polarity relays.
@@ -116,25 +142,61 @@ impl PowerSupply {
             .inspect_err(|e| error!("failed to open the power supply: {}", e))?;
 
         Ok(Self {
-            state: tokio::sync::Mutex::new(PowerSupplyState { controller, device }),
+            state: tokio::sync::Mutex::new(PowerSupplyState {
+                controller,
+                device,
+                last_measurement: None,
+            }),
         })
     }
 
     /// Gets the current flowing out of channel 1 in amperes.
+    ///
+    /// Each query takes a new measurement of about 180 ms. Measurements that
+    /// follow each other too closely stop the supply applying setpoint
+    /// changes, so this waits until `MEASUREMENT_PAUSE` has passed since the
+    /// last one. The lock is held while waiting, so the pause covers every
+    /// caller.
     pub async fn get_current(&self) -> Result<f64, PowerSupplyError> {
-        let state = self.state.lock().await;
-        Ok(state
-            .device
-            .query_str(":MEASure:CURRent? CH1")
-            .await?
-            .trim()
-            .parse()?)
+        /// The minimum time between one measurement's reply and the next
+        /// query. 200 ms is what was tested and shown to work (see "Appendix:
+        /// the supply's current readback" in the characteriser's
+        /// COLD_RESISTANCE.md).
+        const MEASUREMENT_PAUSE: Duration = Duration::from_millis(200);
+
+        let mut state = self.state.lock().await;
+        if let Some(last_measurement) = state.last_measurement {
+            tokio::time::sleep_until(last_measurement + MEASUREMENT_PAUSE).await;
+        }
+
+        let reply = state.device.query_str(":MEASure:CURRent? CH1").await;
+        state.last_measurement = Some(Instant::now());
+        Ok(reply?.trim().parse()?)
     }
 
     /// Gets whether channel 1's output is enabled.
     pub async fn get_output_enabled(&self) -> Result<bool, PowerSupplyError> {
         let state = self.state.lock().await;
         Ok(state.device.query_str(":OUTPut? CH1").await?.trim() == "1")
+    }
+
+    /// Gets whether channel 1's overcurrent protection has tripped.
+    ///
+    /// When it trips, the supply disables the output itself.
+    pub async fn get_overcurrent_tripped(&self) -> Result<bool, PowerSupplyError> {
+        let state = self.state.lock().await;
+        let tripped = state
+            .device
+            .query_str(":OUTPut:OCP:QUES? CH1")
+            .await?
+            .trim()
+            .to_string();
+
+        match tripped.as_str() {
+            "1" => Ok(true),
+            "0" => Ok(false),
+            _ => Err(PowerSupplyError::UnknownOvercurrentProtectionState(tripped)),
+        }
     }
 
     /// Gets the direction of the current through the filament.
@@ -154,14 +216,45 @@ impl PowerSupply {
         }
     }
 
-    /// Puts the supply and the relays into a known, unpowered state: the output
+    /// Gets how channel 1 is regulating its output.
+    pub async fn get_regulation_mode(&self) -> Result<RegulationMode, PowerSupplyError> {
+        let state = self.state.lock().await;
+        let mode = state
+            .device
+            .query_str(":OUTPut:MODE? CH1")
+            .await?
+            .trim()
+            .to_string();
+        match mode.as_str() {
+            "CC" => Ok(RegulationMode::ConstantCurrent),
+            "CV" => Ok(RegulationMode::ConstantVoltage),
+            "UR" => Ok(RegulationMode::Unregulated),
+            _ => Err(PowerSupplyError::UnknownRegulationMode(mode)),
+        }
+    }
+
+    /// Puts the supply and the relays into a known, unpowered state: a disabled
+    /// output held at 0 V, no latched overcurrent protection event, the output
     /// off, both limits at zero, and the relays de-energised.
     ///
-    /// The output is disabled first so that the relays are never switched under
-    /// load. If anything fails, this stops there and returns the error — in
-    /// particular it won't switch the relays if the output couldn't be
-    /// disabled.
+    /// The output is disabled before the relays are switched so that they're
+    /// never switched under load. If anything fails, this stops there and
+    /// returns the error — in particular it won't switch the relays if the
+    /// output couldn't be disabled.
     pub async fn reset(&self) -> Result<(), PowerSupplyError> {
+        {
+            let state = self.state.lock().await;
+
+            // Makes a disabled output actively hold 0 V, so the output really
+            // is at 0 V by the time the relays switch. The alternatives don't
+            // guarantee that. It's the default, but it's a global setting that
+            // persists, so set it explicitly.
+            state.device.write_str(":OUTPut:OFFMode 0V").await?;
+
+            // Clears any event left latched from a previous run.
+            state.device.write_str(":OUTPut:OCP:CLEar CH1").await?;
+        }
+
         self.set_output_enabled(false).await?;
         self.set_current_limit(0.0).await?;
         self.set_voltage_limit(0.0).await?;
@@ -185,6 +278,22 @@ impl PowerSupply {
             .device
             .write_str(format!(":OUTPut CH1,{}", enabled as u8).as_str())
             .await?;
+        Ok(())
+    }
+
+    /// Enables channel 1's overcurrent protection at `current` amperes.
+    ///
+    /// The protection ignores the first 10 ms after the output changes, which
+    /// covers a turn-on overshoot. That's the default, but set it explicitly
+    /// rather than inheriting whatever it was left at.
+    pub async fn set_overcurrent_protection(&self, current: f64) -> Result<(), PowerSupplyError> {
+        let state = self.state.lock().await;
+        state
+            .device
+            .write_str(format!(":OUTPut:OCP:VALue CH1,{}", current).as_str())
+            .await?;
+        state.device.write_str(":OUTPut:OCP:DELay CH1,10").await?;
+        state.device.write_str(":OUTPut:OCP CH1,ON").await?;
         Ok(())
     }
 

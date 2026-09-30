@@ -145,7 +145,7 @@ Add these methods, following the existing style (lock the state, one USBTMC tran
 
   When OCP trips, the supply disables the output itself.
 
-- **`get_overcurrent_tripped() -> Result<bool, _>`**: `:OUTPut:OCP:QUES? CH1` (4.8.4). The guide gives the return format as `1`/`0`, but an example elsewhere in it shows `YES`/`NO`, so accept both and error on anything else.
+- **`get_overcurrent_tripped() -> Result<bool, _>`**: `:OUTPut:OCP:QUES? CH1` (4.8.4). It returns `1` or `0` (an example in the guide shows `YES`/`NO`, but testing confirmed `1`/`0`), so error on anything else.
 
 Extend `reset` to put two more things into a known state before anything else. Both go first, before the output is disabled:
 

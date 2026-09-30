@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use host::{
     adc::{AdcError, Pressure},
     oscilloscope::OscilloscopeError,
-    power_supply::{Polarity, PowerSupplyError},
+    power_supply::{Polarity, PowerSupplyError, RegulationMode},
     tmp::TmpError,
 };
 use log::*;
@@ -134,10 +134,28 @@ pub trait FilamentSystem: std::fmt::Debug + Send + Sync {
     /// Measures the current through the filament in amperes.
     async fn get_heating_current(&self) -> Result<f64, HardwareError>;
 
+    /// Whether the supply's overcurrent protection has tripped, which disables
+    /// the output.
+    // Used from commit 7 of COLD_RESISTANCE.md's implementation order.
+    #[expect(dead_code)]
+    async fn get_overcurrent_tripped(&self) -> Result<bool, HardwareError>;
+
+    /// How the supply is regulating its output. Anything other than constant
+    /// current while heating means the filament circuit is probably open.
+    // Used from commit 7 of COLD_RESISTANCE.md's implementation order.
+    #[expect(dead_code)]
+    async fn get_regulation_mode(&self) -> Result<RegulationMode, HardwareError>;
+
     /// Sets the channel's current limit in amperes.
     ///
     /// Must be rejected above `MAXIMUM_HEATING_CURRENT_AMPS`.
     async fn set_heating_current(&self, current: f64) -> Result<(), HardwareError>;
+
+    /// Enables the supply's overcurrent protection at `current` amperes, as a
+    /// hardware backstop.
+    // Used from commit 7 of COLD_RESISTANCE.md's implementation order.
+    #[expect(dead_code)]
+    async fn set_overcurrent_protection(&self, current: f64) -> Result<(), HardwareError>;
 
     /// Sets the channel's voltage limit in volts.
     ///

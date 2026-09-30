@@ -12,7 +12,7 @@ use host::{
     adc::{Adc, PressureUnit},
     controller::Controller,
     oscilloscope::Oscilloscope,
-    power_supply::{Polarity, PowerSupply},
+    power_supply::{Polarity, PowerSupply, RegulationMode},
     tmp::Tmp,
 };
 use log::*;
@@ -87,6 +87,14 @@ impl FilamentSystem for RealFilamentSystem {
         Ok(self.power_supply.get_current().await?)
     }
 
+    async fn get_overcurrent_tripped(&self) -> Result<bool, HardwareError> {
+        Ok(self.power_supply.get_overcurrent_tripped().await?)
+    }
+
+    async fn get_regulation_mode(&self) -> Result<RegulationMode, HardwareError> {
+        Ok(self.power_supply.get_regulation_mode().await?)
+    }
+
     async fn set_heating_current(&self, current: f64) -> Result<(), HardwareError> {
         if current > MAXIMUM_HEATING_CURRENT_AMPS {
             error!("refusing to set a heating current of {} A", current);
@@ -101,6 +109,13 @@ impl FilamentSystem for RealFilamentSystem {
 
     async fn set_heating_voltage(&self, voltage: f64) -> Result<(), HardwareError> {
         Ok(self.power_supply.set_voltage_limit(voltage).await?)
+    }
+
+    async fn set_overcurrent_protection(&self, current: f64) -> Result<(), HardwareError> {
+        Ok(self
+            .power_supply
+            .set_overcurrent_protection(current)
+            .await?)
     }
 
     async fn set_output_enabled(&self, enabled: bool) -> Result<(), HardwareError> {

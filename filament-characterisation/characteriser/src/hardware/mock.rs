@@ -14,7 +14,7 @@ use crate::constants::{MAXIMUM_HEATING_CURRENT_AMPS, TMP_MAXIMUM_BACKING_PRESSUR
 use async_trait::async_trait;
 use host::{
     adc::{Pressure, PressureUnit},
-    power_supply::Polarity,
+    power_supply::{Polarity, RegulationMode},
 };
 use log::*;
 use std::sync::{Mutex, MutexGuard};
@@ -74,6 +74,14 @@ impl FilamentSystem for MockFilamentSystem {
         Ok(self.state().heating_current)
     }
 
+    async fn get_overcurrent_tripped(&self) -> Result<bool, HardwareError> {
+        Ok(false)
+    }
+
+    async fn get_regulation_mode(&self) -> Result<RegulationMode, HardwareError> {
+        Ok(RegulationMode::ConstantCurrent)
+    }
+
     async fn set_heating_current(&self, current: f64) -> Result<(), HardwareError> {
         if current > MAXIMUM_HEATING_CURRENT_AMPS {
             error!("refusing to set a heating current of {} A", current);
@@ -89,6 +97,11 @@ impl FilamentSystem for MockFilamentSystem {
 
     async fn set_heating_voltage(&self, _voltage: f64) -> Result<(), HardwareError> {
         // Nothing reads the voltage limit back, so there's nothing to store.
+        Ok(())
+    }
+
+    async fn set_overcurrent_protection(&self, _current: f64) -> Result<(), HardwareError> {
+        // Overcurrent protection never trips here, so there's nothing to store.
         Ok(())
     }
 
