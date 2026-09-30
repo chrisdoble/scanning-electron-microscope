@@ -9,7 +9,7 @@ pub use real::{RealFilamentSystem, RealVacuumSystem};
 use async_trait::async_trait;
 use host::{
     adc::{AdcError, Pressure},
-    oscilloscope::OscilloscopeError,
+    oscilloscope::{OscilloscopeError, Voltages},
     power_supply::{Polarity, PowerSupplyError, RegulationMode},
     tmp::TmpError,
 };
@@ -62,8 +62,14 @@ pub enum HardwareError {
 /// A snapshot of the filament system, taken by the hardware poll task.
 #[derive(Clone, Copy, Debug)]
 pub struct FilamentSnapshot {
-    /// The voltage across the filament in volts, from four-terminal sensing.
-    pub filament_voltage: f64,
+    /// The average voltage across the filament in volts, from four-terminal
+    /// sensing.
+    ///
+    /// `None` if any of the acquisition's average, maximum and minimum was
+    /// clipped — a slightly wider meaning than on `Voltages`, because an
+    /// average with clipped peaks is biased and shouldn't be shown as if it
+    /// were good.
+    pub filament_voltage: Option<f64>,
 
     /// The current flowing through the filament in amperes.
     pub heating_current: f64,
@@ -125,11 +131,12 @@ pub trait FilamentSystem: std::fmt::Debug + Send + Sync {
     /// system may still be powered.
     async fn enter_safe_state(&self) -> Result<(), HardwareError>;
 
-    /// Measures the voltage across the filament in volts.
+    /// Measures the average, maximum and minimum voltages across the filament
+    /// in volts, from a single acquisition.
     ///
     /// This is the sense pair of the four-terminal measurement, so it excludes
     /// the drop across the supply leads and the feedthroughs.
-    async fn get_filament_voltage(&self) -> Result<f64, HardwareError>;
+    async fn get_filament_voltages(&self) -> Result<Voltages, HardwareError>;
 
     /// Measures the current through the filament in amperes.
     async fn get_heating_current(&self) -> Result<f64, HardwareError>;
@@ -177,7 +184,7 @@ pub trait FilamentSystem: std::fmt::Debug + Send + Sync {
 
     /// Reads every value shown in the filament block in a single pass.
     ///
-    /// `get_filament_voltage` and `get_heating_current` exist separately because
+    /// `get_filament_voltages` and `get_heating_current` exist separately because
     /// a measurement takes its samples in quick succession, far faster than the
     /// one per second this provides.
     async fn snapshot(&self) -> Result<FilamentSnapshot, HardwareError>;

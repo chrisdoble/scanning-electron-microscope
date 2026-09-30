@@ -17,6 +17,7 @@ use crate::{
     results::Measurement,
 };
 use host::power_supply::Polarity;
+use log::*;
 use std::time::Duration;
 
 /// The current the cold resistance is measured at in amperes.
@@ -172,7 +173,18 @@ async fn measure_at(
             let mut voltages = Vec::with_capacity(SAMPLE_COUNT);
             let mut currents = Vec::with_capacity(SAMPLE_COUNT);
             for _ in 0..SAMPLE_COUNT {
-                voltages.push(filament.get_filament_voltage().await?);
+                // The average is what's recorded, but an average with clipped
+                // peaks is biased, so any clipped value fails the sample.
+                let sample = filament.get_filament_voltages().await?;
+                let (Some(average), Some(_), Some(_)) =
+                    (sample.average, sample.maximum, sample.minimum)
+                else {
+                    error!("the filament voltage was clipped: {:?}", sample);
+                    return Err(ProcedureError::Check(String::from(
+                        "the filament voltage was clipped",
+                    )));
+                };
+                voltages.push(average);
                 currents.push(filament.get_heating_current().await?);
             }
             Ok((voltages, currents))

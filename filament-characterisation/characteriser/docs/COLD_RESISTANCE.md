@@ -178,11 +178,11 @@ The commands below are confirmed against the DHO800/DHO900 programming guide; se
 
 - **Replace `get_voltage` with `get_voltages() -> Result<Voltages, OscilloscopeError>`**, where `Voltages { average, maximum, minimum }` holds each value as an `Option<f64>`. `None` means the scope still reported its invalid value (9.9E37) after the existing retries. Remove `OscilloscopeError::ClippedVoltage`. Because `reset` now adds all three measurement items, `get_voltages` doesn't add any: remove the lazy `:MEASure:ITEM VAVG,CHANnel1` from the old `get_voltage`, and the `is_measuring_voltage` flag in the oscilloscope's state that tracked it. The average alone can't detect clipping: it stays defined while the peaks are clipped, and is then biased, because the clipped samples are pinned at the edge of the range. While holding the lock:
   1. Arm a single acquisition (`:SINGle`, 3.1.4).
-  2. Poll `:TRIGger:STATus?` (3.27.3), which returns `TD`, `WAIT`, `RUN`, `AUTO` or `STOP`, every few milliseconds:
+  2. Poll `:TRIGger:STATus?` (3.27.3), which returns `TD`, `WAIT`, `RUN`, `AUTO` or `STOP`, sleeping 50 ms between queries:
      - On `WAIT`, the scope is armed and waiting. Send `:TFORce` (3.1.5) once, since a DC signal may never cross the trigger level. The guide says `:TFORce` works in single mode.
      - On `STOP`, the acquisition is complete. Noise crossing the trigger level can trigger it before the force is sent; that's fine, because it's still an acquisition that began after the arm.
      - Anything else, keep polling.
-     - If `STOP` doesn't arrive within `ACQUISITION_TIMEOUT` (500 ms, a constant in `oscilloscope.rs`), return an error. Waiting for `WAIT` before forcing avoids sending the force before the scope has filled its pre-trigger buffer and armed, when it might be ignored and leave the scope waiting forever.
+     - If `STOP` doesn't arrive within `ACQUISITION_TIMEOUT` (2 s, a constant in `oscilloscope.rs`; an acquisition has been seen to take ~360 ms), return an error. Waiting for `WAIT` before forcing avoids sending the force before the scope has filled its pre-trigger buffer and armed, when it might be ignored and leave the scope waiting forever.
   3. Query `:MEASure:ITEM? VAVG,CHANnel1`, then `VMAX` and `VMIN`, each with the existing retry-on-9.9E37 logic. The scope is stopped, so all three come from the same acquisition. The guide doesn't give the invalid value itself; it only says that results out of the valid range are invalid. 9.9E37 is what your existing code has observed, and that's what `CLIPPED_VOLTAGE` encodes.
 
   Taking a single acquisition, rather than querying a running scope at least 20 ms apart, guarantees three things:

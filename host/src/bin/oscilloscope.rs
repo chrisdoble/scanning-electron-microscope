@@ -8,7 +8,7 @@ async fn main() -> Result<(), AnyError> {
     let oscilloscope = Oscilloscope::new().await?;
     oscilloscope.reset().await?;
     oscilloscope.set_vertical_scale(1.).await?;
-    println!("{}", oscilloscope.get_voltage().await?);
+    println!("{:?}", oscilloscope.get_voltages().await?);
 
     Ok(())
 }

@@ -29,6 +29,10 @@ pub enum ProcedureError {
     #[error("cancelled")]
     Cancelled,
 
+    /// One of the procedure's own checks failed, e.g. a clipped reading.
+    #[error("check failed: {0}")]
+    Check(String),
+
     #[error("hardware error: {0}")]
     Hardware(#[from] HardwareError),
 

@@ -1,8 +1,8 @@
 //! Canned implementations, so the application runs with no rig attached.
 //!
-//! These are **not** a simulation. Every getter returns a constant and every
-//! setter stores what it was given, so a snapshot reflects what was set. No time
-//! dependence, no noise, no physics.
+//! These are **not** a simulation. Every setter stores what it was given, and
+//! every getter returns a constant or follows what was set, so a snapshot
+//! reflects what was set. No time dependence, no noise, no physics.
 //!
 //! The contracts the traits define are kept, because they're contracts rather
 //! than simulation: a heating current above the maximum is rejected, the
@@ -14,13 +14,14 @@ use crate::constants::{MAXIMUM_HEATING_CURRENT_AMPS, TMP_MAXIMUM_BACKING_PRESSUR
 use async_trait::async_trait;
 use host::{
     adc::{Pressure, PressureUnit},
+    oscilloscope::Voltages,
     power_supply::{Polarity, RegulationMode},
 };
 use log::*;
 use std::sync::{Mutex, MutexGuard};
 
-/// The voltage across the filament in volts.
-const FILAMENT_VOLTAGE: f64 = 0.4821;
+/// The filament's resistance in ohms, from which its voltage follows.
+const MOCK_FILAMENT_RESISTANCE_OHMS: f64 = 0.096;
 
 /// The chamber pressure in millibar.
 const PRESSURE_MBAR: f64 = 1.2e-5;
@@ -45,6 +46,23 @@ struct MockFilamentState {
     polarity: Polarity,
 }
 
+impl MockFilamentState {
+    /// The voltage across the filament in volts: Ohm's law at the set current,
+    /// signed by the polarity so that reversal can be checked, or 0 V when no
+    /// current flows.
+    fn filament_voltage(&self) -> f64 {
+        if !self.output_enabled {
+            return 0.0;
+        }
+
+        match self.polarity {
+            Polarity::Forward => MOCK_FILAMENT_RESISTANCE_OHMS * self.heating_current,
+            Polarity::Nil => 0.0,
+            Polarity::Reverse => -MOCK_FILAMENT_RESISTANCE_OHMS * self.heating_current,
+        }
+    }
+}
+
 impl MockFilamentSystem {
     /// The values the setters have been given.
     ///
@@ -66,8 +84,13 @@ impl FilamentSystem for MockFilamentSystem {
         Ok(())
     }
 
-    async fn get_filament_voltage(&self) -> Result<f64, HardwareError> {
-        Ok(FILAMENT_VOLTAGE)
+    async fn get_filament_voltages(&self) -> Result<Voltages, HardwareError> {
+        let voltage = self.state().filament_voltage();
+        Ok(Voltages {
+            average: Some(voltage),
+            maximum: Some(voltage),
+            minimum: Some(voltage),
+        })
     }
 
     async fn get_heating_current(&self) -> Result<f64, HardwareError> {
@@ -127,7 +150,7 @@ impl FilamentSystem for MockFilamentSystem {
     async fn snapshot(&self) -> Result<FilamentSnapshot, HardwareError> {
         let state = self.state();
         Ok(FilamentSnapshot {
-            filament_voltage: FILAMENT_VOLTAGE,
+            filament_voltage: Some(state.filament_voltage()),
             heating_current: state.heating_current,
             output_enabled: state.output_enabled,
             polarity: state.polarity,

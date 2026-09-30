@@ -471,6 +471,9 @@ impl Oscilloscope {
 
 If the real signatures differ, `real.rs` is the only file that changes. Keep it
 that way — nothing outside `hardware/real.rs` may name a `host` instrument type.
+Plain data types from `host`, such as `Polarity` and `host::oscilloscope::Voltages`,
+are an exception: they're values, not instruments, so the traits use them
+directly.
 
 While the supply and oscilloscope are stubbed, `build_hardware` substitutes the
 mock filament system even without `--mock` and logs that it has done so.

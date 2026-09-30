@@ -2,7 +2,7 @@
 //!
 //! These map types and errors and enforce the contracts the traits define.
 //! No other logic belongs here, and nothing outside this file names a `host`
-//! instrument type — so if a `host` signature changes, this is the only file
+//! instrument type (plain data like `Polarity` and `Voltages` is fine) — so if a `host` signature changes, this is the only file
 //! that follows it.
 
 use super::{FilamentSnapshot, FilamentSystem, HardwareError, VacuumSnapshot, VacuumSystem};
@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use host::{
     adc::{Adc, PressureUnit},
     controller::Controller,
-    oscilloscope::Oscilloscope,
+    oscilloscope::{Oscilloscope, Voltages},
     power_supply::{Polarity, PowerSupply, RegulationMode},
     tmp::Tmp,
 };
@@ -79,8 +79,8 @@ impl FilamentSystem for RealFilamentSystem {
         first
     }
 
-    async fn get_filament_voltage(&self) -> Result<f64, HardwareError> {
-        Ok(self.oscilloscope.get_voltage().await?)
+    async fn get_filament_voltages(&self) -> Result<Voltages, HardwareError> {
+        Ok(self.oscilloscope.get_voltages().await?)
     }
 
     async fn get_heating_current(&self) -> Result<f64, HardwareError> {
@@ -137,7 +137,14 @@ impl FilamentSystem for RealFilamentSystem {
 
     async fn snapshot(&self) -> Result<FilamentSnapshot, HardwareError> {
         Ok(FilamentSnapshot {
-            filament_voltage: self.oscilloscope.get_voltage().await?,
+            filament_voltage: match self.oscilloscope.get_voltages().await? {
+                Voltages {
+                    average: Some(average),
+                    maximum: Some(_),
+                    minimum: Some(_),
+                } => Some(average),
+                _ => None,
+            },
             heating_current: self.power_supply.get_current().await?,
             output_enabled: self.power_supply.get_output_enabled().await?,
             polarity: self.power_supply.get_polarity().await?,

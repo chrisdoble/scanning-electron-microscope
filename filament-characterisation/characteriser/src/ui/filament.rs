@@ -37,7 +37,10 @@ impl Widget for FilamentBlock<'_> {
                 ),
                 (
                     "Voltage",
-                    format!("{:.1} mV", snapshot.filament_voltage * 1000.0),
+                    match snapshot.filament_voltage {
+                        Some(voltage) => format!("{:.1} mV", voltage * 1000.0),
+                        None => String::from("Clipped"),
+                    },
                 ),
             ],
         ))
