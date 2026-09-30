@@ -5,13 +5,13 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full specification.
 # Requirements
 
 - [Rust](https://rust-lang.org/)
-- [Python 3](https://www.python.org/)
+- [uv](https://docs.astral.sh/uv/)
 
-Statistics and uncertainty propagation are done by the scripts in [`python`](python), which need a virtual environment beside them. Create it once, from this directory:
+Statistics and uncertainty propagation are done by the scripts in [`python`](python), which need a virtual environment beside them. The Python version is pinned in [`python/.python-version`](python/.python-version). Create the environment once, from this directory, with uv, which reads that file and downloads the pinned Python if it isn't installed:
 
 ```
-python3 -m venv python/.venv
-python/.venv/bin/pip install -r python/requirements.txt
+uv venv --directory python
+uv pip install --directory python -r requirements.txt
 ```
 
 The application checks for it at start-up and refuses to run without it, printing these same two commands.

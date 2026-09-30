@@ -72,7 +72,8 @@ filament-characterisation/
   characteriser/
     Cargo.toml
     python/
-      .venv/                        // created by the operator, gitignored
+      .venv/                        // created by the operator with uv, gitignored
+      .python-version               // the Python version the environment uses
       requirements.txt              // pins `jsonschema`, `numpy`, `scipy` and `uncertainties`
       schemas/                      // input and output schemas, generated from the Rust types
       script_io.py                  // reads and validates a script's input, writes its output
@@ -1441,12 +1442,15 @@ const PYTHON_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/python");
 const VENV_PYTHON: &str = ".venv/bin/python";
 ```
 
-`python/requirements.txt` pins `jsonschema`, `numpy`, `scipy` and `uncertainties`. A comment at the top of
-`python.rs` states the one-off setup:
+`python/requirements.txt` pins `jsonschema`, `numpy`, `scipy` and `uncertainties`,
+and `python/.python-version` pins the Python version. The environment is created
+with uv, which respects `.python-version` where `python3 -m venv` would use
+whichever `python3` is on the `PATH`. `--directory python` makes uv look for the
+file there. A comment at the top of `python.rs` states the one-off setup:
 
 ```
-python3 -m venv python/.venv
-python/.venv/bin/pip install -r python/requirements.txt
+uv venv --directory python
+uv pip install --directory python -r requirements.txt
 ```
 
 ### 12.2 Start-up check

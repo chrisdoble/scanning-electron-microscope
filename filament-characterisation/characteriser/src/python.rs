@@ -39,10 +39,14 @@ const PYTHON_TIMEOUT: Duration = Duration::from_secs(5);
 /// The commands that create the virtual environment, run from the crate
 /// directory.
 ///
+/// They use uv rather than `python3 -m venv` so the Python version pinned in
+/// `python/.python-version` is respected: uv reads it, and `--directory python`
+/// is what makes it look there.
+///
 /// Reported as part of `PythonError::Environment` so the operator can fix a
 /// broken environment without reading the source.
 const SETUP_COMMANDS: &str =
-    "    python3 -m venv python/.venv\n    python/.venv/bin/pip install -r python/requirements.txt";
+    "    uv venv --directory python\n    uv pip install --directory python -r requirements.txt";
 
 /// The interpreter inside the virtual environment.
 const VENV_PYTHON: &str = ".venv/bin/python";
