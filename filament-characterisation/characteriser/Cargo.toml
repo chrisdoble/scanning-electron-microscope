@@ -12,6 +12,7 @@ env_logger = { workspace = true }
 futures = "0.3"
 host = { path = "../../host" }
 log = { workspace = true }
+rand = "0.10.3"
 ratatui = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }

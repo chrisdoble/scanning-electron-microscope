@@ -224,8 +224,6 @@ pub async fn mean_and_standard_error(samples: &[f64]) -> Result<(f64, f64), Pyth
 /// current, and derives the resistance and its uncertainty.
 ///
 /// Wraps `cold_resistance_point.py`.
-// Used from commit 8 of COLD_RESISTANCE.md's implementation order.
-#[expect(dead_code)]
 pub async fn cold_resistance_point(
     input: &ColdResistancePointInput,
 ) -> Result<ColdResistancePointAnalysis, PythonError> {

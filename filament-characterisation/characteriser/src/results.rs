@@ -1,5 +1,6 @@
 //! What a characterisation run measures, and how it's written to disk.
 
+use host::power_supply::Polarity;
 use log::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -34,7 +35,7 @@ pub enum ResultsError {
 /// This is the shape every measured field takes, and the unit goes in the name
 /// of the field holding it — `filament_voltage_volts: Measurement` — since the
 /// consumer is another program with no doc comments to read.
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Measurement {
     /// The individual samples, in the order they were taken.
@@ -188,6 +189,83 @@ pub struct ColdResistanceAnalysis {
     pub warnings: Vec<String>,
 }
 
+/// Everything recorded while measuring the cold resistance.
+///
+/// Created once both temperatures are known and saved at every step after, so
+/// the `Option` fields are exactly the ones not yet known at those saves, and
+/// an aborted run still leaves everything measured up to that point on disk.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ColdResistance {
+    /// The fit and uncertainty budget, once every setpoint has been measured.
+    pub analysis: Option<ColdResistanceAnalysis>,
+
+    /// The operator-entered chamber temperature at the filament's flange after
+    /// the setpoints, in °C, once they've all been measured.
+    pub chamber_end_temperature_celsius: Option<f64>,
+
+    /// The operator-entered chamber temperature at the filament's flange
+    /// before the setpoints, in °C.
+    pub chamber_start_temperature_celsius: f64,
+
+    /// Every scalar input to the fit, recorded when the fit runs.
+    pub fit_parameters: Option<ColdResistanceFitParameters>,
+
+    /// One entry per setpoint, in the order measured.
+    pub points: Vec<ColdResistancePoint>,
+
+    /// The relay state that gave a positive voltage, once the vertical scale
+    /// has been chosen. Never `Nil`.
+    pub positive_polarity: Option<Polarity>,
+
+    /// The operator-entered room temperature near the supply in °C, for the
+    /// supply's accuracy band.
+    pub room_temperature_celsius: f64,
+
+    /// The oscilloscope's vertical scale for every measurement, once it's been
+    /// chosen.
+    pub vertical_scale_volts_per_division: Option<f64>,
+}
+
+/// The measurements at one setpoint, filed by the sign of the voltage rather
+/// than by relay state, so nothing downstream needs to know which relay state
+/// is which.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ColdResistancePoint {
+    /// The output of `cold_resistance_point.py`, once it's run.
+    pub analysis: Option<ColdResistancePointAnalysis>,
+
+    /// The relay state measured first. With `positive_polarity`, this says
+    /// which measurement came first and so which settle followed the ramp from
+    /// the previous setpoint. Never `Nil`.
+    pub first_polarity: Polarity,
+
+    /// The current in the polarity that gives a negative voltage.
+    pub negative_current_amps: Measurement,
+
+    /// How long the filament took to settle in the polarity that gives a
+    /// negative voltage, in seconds.
+    pub negative_settle_seconds: f64,
+
+    /// The voltage in the polarity that gives a negative voltage.
+    pub negative_voltage_volts: Measurement,
+
+    /// The current in the polarity that gives a positive voltage.
+    pub positive_current_amps: Measurement,
+
+    /// How long the filament took to settle in the polarity that gives a
+    /// positive voltage, in seconds.
+    pub positive_settle_seconds: f64,
+
+    /// The voltage in the polarity that gives a positive voltage.
+    pub positive_voltage_volts: Measurement,
+
+    /// The current this point was measured at in amperes.
+    pub setpoint_amps: f64,
+
+    /// Warnings raised while measuring this point, e.g. a settle timeout.
+    pub warnings: Vec<String>,
+}
+
 /// Everything measured during one characterisation run.
 ///
 /// Written to disk at checkpoints throughout the procedure so that a run which
@@ -198,21 +276,9 @@ pub struct ColdResistanceAnalysis {
 /// rest as `null`.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Characterisation {
-    /// The current through the filament while measuring its cold resistance
-    /// in `Polarity::Forward`.
-    pub cold_forward_current_amps: Option<Measurement>,
-
-    /// The voltage across the filament while measuring its cold resistance in
-    /// `Polarity::Forward`.
-    pub cold_forward_voltage_volts: Option<Measurement>,
-
-    /// The current through the filament while measuring its cold resistance
-    /// in `Polarity::Reverse`.
-    pub cold_reverse_current_amps: Option<Measurement>,
-
-    /// The voltage across the filament while measuring its cold resistance in
-    /// `Polarity::Reverse`.
-    pub cold_reverse_voltage_volts: Option<Measurement>,
+    /// Everything recorded while measuring the cold resistance, once its
+    /// setup has finished.
+    pub cold_resistance: Option<ColdResistance>,
 
     /// An identifier for the filament under test, entered by the operator.
     ///
@@ -230,10 +296,7 @@ impl Characterisation {
     /// Creates the results for a run starting now.
     pub fn new() -> Self {
         Self {
-            cold_forward_current_amps: None,
-            cold_forward_voltage_volts: None,
-            cold_reverse_current_amps: None,
-            cold_reverse_voltage_volts: None,
+            cold_resistance: None,
             filament_id: None,
 
             // Only fails if the system clock is set before 1970.
