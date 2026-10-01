@@ -306,9 +306,15 @@ async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(),
     // that cancel on average rather than bias every point the same way. The
     // scale search leaves the relays reversed.
     let mut polarity = Polarity::Reverse;
-    for setpoint in setpoints {
+    for (index, setpoint) in setpoints.iter().copied().enumerate() {
+        let title = format!(
+            "Measuring at {:.0} mA ({}/{})",
+            setpoint * 1000.0,
+            index + 1,
+            setpoints.len()
+        );
         polarity = ctx
-            .section(format!("Measuring at {:.0} mA", setpoint * 1000.0), |ctx| {
+            .section(title, |ctx| {
                 measure_setpoint(
                     ctx,
                     hardware.clone(),

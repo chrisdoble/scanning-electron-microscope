@@ -499,7 +499,7 @@ Why this matters: the scope's gain error is only a single multiplicative factor 
 ### 3.2 Measuring the setpoints
 
 1. Shuffle `COLD_RESISTANCE_SETPOINTS_AMPS` at random. The random order stops slow drifts (e.g. thermal drift of the rig) from correlating with current.
-2. For each setpoint $I_k$, in a sub-section titled "Measuring at $I_k$ mA":
+2. For each setpoint $I_k$, in a sub-section titled "Measuring at $I_k$ mA ($k$/$N$)", where $k$ counts from 1 and $N$ is the number of setpoints, so the operator can see how far through they are:
    1. The first polarity is whichever the relays are already in. Since each setpoint ends in its second polarity, the order alternates (F→R, then R→F, and so on), and each new setpoint needs no extra flip. The alternation matters because a slowly drifting non-reversing voltage (the scope's offset, thermal EMFs as the rig warms) biases $V$ by $\pm d/2$, where $d$ is the drift between the two measurements, with the sign set by which polarity came first. A fixed order would make that a consistent bias at every point. Alternating makes it cancel on average, and the shuffled setpoint order keeps the alternation from correlating with current.
    2. `ramp_to(I_k)`.
    3. `wait_for_settle`, then `take_samples(SAMPLE_COUNT)`.
