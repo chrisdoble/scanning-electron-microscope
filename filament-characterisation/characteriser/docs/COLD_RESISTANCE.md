@@ -744,6 +744,16 @@ These are in addition to ARCHITECTURE.md §20.
 - A clipped voltage after the scale is chosen, an OCP trip, a supply leaving constant-current mode, or a pressure above `FILAMENT_ABORT_PRESSURE_MBAR` each end the run with a `Check` error step, followed by the usual cleanup.
 - The relays are only ever switched with the output off. Setpoint changes only ever happen in `RAMP_STEP_AMPS` steps. A polarity change turns the output off and back on at the same setpoint.
 
+# Bench testing without vacuum
+
+`--no-vacuum` runs the procedure against something that doesn't need a vacuum, such as a 1 Ω, 1% precision resistor wired in place of a filament (four-terminal, as for a filament), to check the result against a known value. It skips the pump-down, the chamber-sealed confirmation and the TMP spin-down, `check_conditions` checks nothing, and the temperature prompts ask for the air temperature around the device. The results file records `in_vacuum: false`.
+
+Reading the result:
+
+- **Compare $R_0$, not $R_{20}$, with the resistor's value.** The correction to 20 °C (3.4.7) uses tungsten's temperature coefficient, which is wrong for a resistor. A precision resistor's own coefficient is tiny, so $R_0$ at the bench temperature is the number to check.
+- **Expect agreement within the uncertainty, not within the resistor's tolerance.** The supply's readback offset dominates the budget, at about 2.5% of $R_0$ ($U \approx 5\%$). The test passes if the resistor's value lies within $R_0 \pm U$. Because the offset term dominates, a real difference mostly reflects the supply's actual offset.
+- At 300 mA a 1 Ω resistor drops 0.3 V and dissipates 90 mW, so check its power rating. The scale search steps up to 0.1 V/div by itself.
+
 # Other filaments
 
 Every systematic term in the budget is relative, so none of them depends on $R_0$:

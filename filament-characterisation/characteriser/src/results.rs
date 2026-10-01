@@ -283,16 +283,24 @@ pub struct Characterisation {
     /// (`null` in the file) says so honestly where an empty string wouldn't.
     pub filament_id: Option<String>,
 
+    /// Whether the run was in a pumped-down chamber.
+    ///
+    /// `false` for a bench test with `--no-vacuum`, e.g. against a precision
+    /// resistor standing in for a filament, which needs no vacuum. Recorded so
+    /// a results file always says which it was.
+    pub in_vacuum: bool,
+
     /// When the run started, in seconds since the Unix epoch.
     pub started_at: u64,
 }
 
 impl Characterisation {
-    /// Creates the results for a run starting now.
-    pub fn new() -> Self {
+    /// Creates the results for a run starting now, `in_vacuum` or not.
+    pub fn new(in_vacuum: bool) -> Self {
         Self {
             cold_resistance: None,
             filament_id: None,
+            in_vacuum,
 
             // Only fails if the system clock is set before 1970.
             started_at: SystemTime::now()
@@ -392,7 +400,7 @@ mod tests {
         let scratch = Scratch::new("round-trip");
         let path = scratch.0.join("results.json");
 
-        let mut characterisation = Characterisation::new();
+        let mut characterisation = Characterisation::new(true);
         characterisation.filament_id = Some(String::from("W-0007"));
         characterisation.save_to(&path).unwrap();
 
@@ -406,7 +414,7 @@ mod tests {
         let scratch = Scratch::new("overwrite");
         let path = scratch.0.join("results.json");
 
-        let mut characterisation = Characterisation::new();
+        let mut characterisation = Characterisation::new(true);
         characterisation.filament_id = Some(String::from("first"));
         characterisation.save_to(&path).unwrap();
         characterisation.filament_id = Some(String::from("second"));
@@ -422,7 +430,7 @@ mod tests {
         let scratch = Scratch::new("unset-id");
         let path = scratch.0.join("results.json");
 
-        Characterisation::new().save_to(&path).unwrap();
+        Characterisation::new(true).save_to(&path).unwrap();
 
         let json: serde_json::Value =
             serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
@@ -435,14 +443,14 @@ mod tests {
         let scratch = Scratch::new("directory");
         let path = scratch.0.join("out").join("results.json");
 
-        Characterisation::new().save_to(&path).unwrap();
+        Characterisation::new(true).save_to(&path).unwrap();
 
         assert!(path.exists());
     }
 
     #[test]
     fn path_is_named_for_the_start_time() {
-        let characterisation = Characterisation::new();
+        let characterisation = Characterisation::new(true);
         assert_eq!(
             characterisation.path(),
             PathBuf::from(format!(

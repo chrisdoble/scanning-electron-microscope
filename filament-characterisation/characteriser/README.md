@@ -22,4 +22,6 @@ The application checks for it at start-up and refuses to run without it, printin
 
 To run against simulated hardware instead of the rig, run `cargo run -- --mock`.
 
+To test the measurement on the bench without pumping down the chamber, e.g. against a precision resistor in place of a filament, add `--no-vacuum`. The vacuum hardware must still be connected, but the TMP is never started, and the chamber's pressure and the TMP aren't checked while current flows. See "Bench testing without vacuum" in [`docs/COLD_RESISTANCE.md`](docs/COLD_RESISTANCE.md) for how to read the result.
+
 Diagnostics are written to `out/app.log` rather than the terminal. As with the vacuum control binary, the log level comes from `RUST_LOG`, which defaults to `error` — so run with `RUST_LOG=info` (or `debug`) to get anything useful in the file.

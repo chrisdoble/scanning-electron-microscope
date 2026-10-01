@@ -169,19 +169,28 @@ enum Settle {
 }
 
 /// Characterises a filament.
+///
+/// Without vacuum (`--no-vacuum`), the chamber is never pumped down, so the TMP
+/// is never started or stopped.
 pub async fn characterise(ctx: Context, hardware: Hardware) -> Result<(), ProcedureError> {
     ctx.section("Preparing", |ctx| prepare(ctx, hardware.clone()))
         .await?;
-    ctx.section("Pumping down chamber", |ctx| {
-        pump_down(ctx, hardware.clone())
-    })
-    .await?;
+    if ctx.in_vacuum() {
+        ctx.section("Pumping down chamber", |ctx| {
+            pump_down(ctx, hardware.clone())
+        })
+        .await?;
+    } else {
+        ctx.text("Running without vacuum, so the chamber isn't pumped down");
+    }
     ctx.section("Measuring cold resistance", |ctx| {
         measure_cold_resistance(ctx, hardware.clone())
     })
     .await?;
-    ctx.section("Spinning down TMP", |ctx| spin_down(ctx, hardware.clone()))
-        .await?;
+    if ctx.in_vacuum() {
+        ctx.section("Spinning down TMP", |ctx| spin_down(ctx, hardware.clone()))
+            .await?;
+    }
     ctx.section("Finishing", |ctx| finish(ctx, hardware.clone()))
         .await?;
     ctx.confirm("Press enter to exit").await?;
@@ -200,7 +209,9 @@ async fn prepare(ctx: Context, _hardware: Hardware) -> Result<(), ProcedureError
     ctx.save();
 
     ctx.confirm("Confirm that the filament is mounted").await?;
-    ctx.confirm("Confirm that the chamber is sealed").await?;
+    if ctx.in_vacuum() {
+        ctx.confirm("Confirm that the chamber is sealed").await?;
+    }
 
     // The scope's probe ratio is reset to 1×, so this is what makes that
     // correct. A probe switched to 10× would read 10× low.
@@ -279,7 +290,7 @@ async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(),
     // is in contact with the flange, not the room air. Asked here rather than
     // in `prepare`, because the TMP warms the chamber during the pump-down.
     let chamber_start_temperature: f64 = ctx
-        .input("Chamber temperature at the filament's flange", Some("°C"))
+        .input(filament_temperature_prompt(&ctx), Some("°C"))
         .await?;
 
     // Only for the supply's accuracy band.
@@ -361,7 +372,7 @@ async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(),
     ctx.text("Disabled the output");
 
     let chamber_end_temperature: f64 = ctx
-        .input("Chamber temperature at the filament's flange", Some("°C"))
+        .input(filament_temperature_prompt(&ctx), Some("°C"))
         .await?;
     record_cold_resistance(&ctx, |cold_resistance| {
         cold_resistance.chamber_end_temperature_celsius = Some(chamber_end_temperature)
@@ -747,8 +758,14 @@ async fn change_polarity(hardware: &Hardware, polarity: Polarity) -> Result<(), 
 /// filament: the pressure has risen above `FILAMENT_ABORT_PRESSURE_MBAR`, or
 /// the TMP has stopped.
 ///
-/// Called between every sample and every ramp step.
+/// Called between every sample and every ramp step. Checks nothing without
+/// vacuum (`--no-vacuum`), when the chamber is at atmospheric pressure and the
+/// TMP is off by design.
 fn check_conditions(ctx: &Context) -> Result<(), ProcedureError> {
+    if !ctx.in_vacuum() {
+        return Ok(());
+    }
+
     let vacuum = ctx.snapshot().vacuum;
 
     if vacuum.pressure.value > FILAMENT_ABORT_PRESSURE_MBAR {
@@ -786,6 +803,16 @@ fn current_readback_bounds(room_temperature_celsius: f64) -> (f64, f64) {
         CURRENT_OFFSET_BOUND_AMPS
             + CURRENT_OFFSET_TEMPERATURE_COEFFICIENT_AMPS_PER_CELSIUS * outside,
     )
+}
+
+/// The prompt for the temperature the unheated filament sits at: the chamber's
+/// at the filament's flange, or without vacuum (`--no-vacuum`), the air's.
+fn filament_temperature_prompt(ctx: &Context) -> &'static str {
+    if ctx.in_vacuum() {
+        "Chamber temperature at the filament's flange"
+    } else {
+        "Air temperature around the filament"
+    }
 }
 
 /// The fit's scalar inputs, from the supply's current readback bounds (see
@@ -1275,12 +1302,13 @@ mod tests {
         }
     }
 
-    // The whole procedure against the mocks, whose filament is 0.096 Ω with no
-    // self-heating. The clock is paused, so tokio skips through the ramps and
-    // settles instead of waiting minutes for them. It needs the Python virtual
-    // environment, for the analysis scripts.
-    #[tokio::test(start_paused = true)]
-    async fn the_procedure_measures_the_mock_filament() {
+    /// Runs the whole procedure against the mocks, `in_vacuum` or not, answering
+    /// its prompts. Returns the context, for the results, and the step tree.
+    ///
+    /// Call from a test on a paused clock, so tokio skips through the ramps and
+    /// settles instead of waiting minutes for them. Needs the Python virtual
+    /// environment, for the analysis scripts.
+    async fn run_against_mocks(in_vacuum: bool) -> (Context, Arc<Mutex<Section>>) {
         let hardware = Hardware {
             filament: Arc::new(MockFilamentSystem::default()),
             vacuum: Arc::new(MockVacuumSystem::default()),
@@ -1289,7 +1317,7 @@ mod tests {
         let (snapshots_tx, snapshots_rx) = watch::channel(None);
         let ctx = Context::new(
             CancellationToken::new(),
-            Characterisation::new(),
+            Characterisation::new(in_vacuum),
             Arc::clone(&root),
             snapshots_rx,
         );
@@ -1308,10 +1336,16 @@ mod tests {
         };
 
         // Saving writes to `out/`, which a test shouldn't leave behind.
-        let characterisation = ctx.characterisation.lock().unwrap();
-        let _ = fs::remove_file(characterisation.path());
+        let _ = fs::remove_file(ctx.characterisation.lock().unwrap().path());
         result.unwrap();
 
+        (ctx, root)
+    }
+
+    /// Checks the run measured every setpoint and found the mock filament's
+    /// 0.096 Ω, which has no self-heating.
+    fn assert_measured_the_mock_filament(ctx: &Context) {
+        let characterisation = ctx.characterisation.lock().unwrap();
         let cold_resistance = characterisation.cold_resistance.as_ref().unwrap();
         assert_eq!(cold_resistance.points.len(), 9);
         assert!(
@@ -1332,5 +1366,42 @@ mod tests {
             "expected 0.096 Ω, got {} Ω",
             resistance
         );
+    }
+
+    /// The titles of the top-level sections the run went through.
+    fn section_titles(root: &Mutex<Section>) -> Vec<String> {
+        root.lock()
+            .unwrap()
+            .children
+            .iter()
+            .filter_map(|step| match &step.kind {
+                StepKind::Section(section) => Some(section.title.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_procedure_measures_the_mock_filament() {
+        let (ctx, root) = run_against_mocks(true).await;
+        assert_measured_the_mock_filament(&ctx);
+        assert!(ctx.characterisation.lock().unwrap().in_vacuum);
+
+        let titles = section_titles(&root);
+        assert!(titles.iter().any(|title| title == "Pumping down chamber"));
+        assert!(titles.iter().any(|title| title == "Spinning down TMP"));
+    }
+
+    // Without vacuum, the chamber is never pumped down and the TMP is never
+    // started or stopped, but the measurement is the same.
+    #[tokio::test(start_paused = true)]
+    async fn the_procedure_measures_the_mock_filament_without_vacuum() {
+        let (ctx, root) = run_against_mocks(false).await;
+        assert_measured_the_mock_filament(&ctx);
+        assert!(!ctx.characterisation.lock().unwrap().in_vacuum);
+
+        let titles = section_titles(&root);
+        assert!(!titles.iter().any(|title| title == "Pumping down chamber"));
+        assert!(!titles.iter().any(|title| title == "Spinning down TMP"));
     }
 }

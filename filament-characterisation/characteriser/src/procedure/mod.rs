@@ -255,6 +255,12 @@ impl Context {
         result
     }
 
+    /// Whether the run is in a pumped-down chamber, rather than a bench test
+    /// with `--no-vacuum`.
+    pub fn in_vacuum(&self) -> bool {
+        lock(&self.characterisation).in_vacuum
+    }
+
     /// The most recent readings.
     pub fn snapshot(&self) -> Snapshots {
         // `run` doesn't start the procedure until the first snapshot has

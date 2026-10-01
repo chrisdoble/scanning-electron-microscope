@@ -101,7 +101,10 @@ async fn run() -> Result<(), AnyError> {
     // pass, and it's never held across an `.await`.
     let root = Arc::new(Mutex::new(Section::default()));
 
-    let characterisation = Characterisation::new();
+    let characterisation = Characterisation::new(!args.no_vacuum);
+    if args.no_vacuum {
+        info!("Running without vacuum");
+    }
     let results_path = characterisation.path();
     info!("Writing results to {}", results_path.display());
 
@@ -360,6 +363,15 @@ struct Arguments {
     /// Run against simulated hardware instead of the real rig.
     #[arg(long)]
     mock: bool,
+
+    /// Run without pumping down the chamber, e.g. to test against a precision
+    /// resistor on the bench.
+    ///
+    /// The vacuum hardware must still be connected, but the TMP is never
+    /// started, and the chamber's pressure and the TMP aren't checked while
+    /// current flows.
+    #[arg(long)]
+    no_vacuum: bool,
 }
 
 /// The message a panic was raised with, if it was a string.
