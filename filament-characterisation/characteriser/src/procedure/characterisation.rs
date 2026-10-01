@@ -369,7 +369,8 @@ async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(),
     ctx.save();
 
     let parameters = fit_parameters(
-        room_temperature,
+        gain_bound,
+        offset_bound,
         chamber_start_temperature,
         chamber_end_temperature,
     );
@@ -801,18 +802,19 @@ fn current_readback_bounds(room_temperature_celsius: f64) -> (f64, f64) {
     )
 }
 
-/// The fit's scalar inputs, from the temperatures the operator entered.
+/// The fit's scalar inputs, from the supply's current readback bounds (see
+/// `current_readback_bounds`) and the chamber temperatures the operator
+/// entered.
 ///
 /// The filament temperature is the mean of the chamber's start and end
 /// temperatures, and its bound covers the thermometer and placement plus half
 /// the drift over the run. The linear sum is deliberately conservative.
 fn fit_parameters(
-    room_temperature_celsius: f64,
+    current_gain_bound: f64,
+    current_offset_bound_amps: f64,
     chamber_start_temperature_celsius: f64,
     chamber_end_temperature_celsius: f64,
 ) -> ColdResistanceFitParameters {
-    let (current_gain_bound, current_offset_bound_amps) =
-        current_readback_bounds(room_temperature_celsius);
     ColdResistanceFitParameters {
         current_gain_bound,
         current_offset_bound_amps,
@@ -1147,21 +1149,15 @@ mod tests {
 
     #[test]
     fn fit_parameters_combine_the_temperatures() {
-        // The chamber warmed by 2 °C over the run, and the room is 3 °C below
-        // the supply's accuracy band.
-        let parameters = fit_parameters(17.0, 22.0, 24.0);
+        // The chamber warmed by 2 °C over the run.
+        let parameters = fit_parameters(0.002, 0.011, 22.0, 24.0);
         assert_eq!(parameters.filament_temperature_celsius, 23.0);
         assert_eq!(
             parameters.filament_temperature_bound_kelvin,
             THERMOMETER_BOUND_KELVIN + 1.0
         );
-        assert_eq!(
-            (
-                parameters.current_gain_bound,
-                parameters.current_offset_bound_amps
-            ),
-            current_readback_bounds(17.0)
-        );
+        assert_eq!(parameters.current_gain_bound, 0.002);
+        assert_eq!(parameters.current_offset_bound_amps, 0.011);
         assert_eq!(
             parameters.reference_temperature_celsius,
             REFERENCE_TEMPERATURE_CELSIUS
