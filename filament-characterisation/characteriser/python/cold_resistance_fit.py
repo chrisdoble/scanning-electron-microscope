@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.stats import chi2
-from uncertainties import correlated_values, ufloat
+from uncertainties import ufloat
 
 from script_io import read_input, write_output
 
@@ -41,9 +41,6 @@ class Fit:
     b: float
     u_r0: float
     u_b: float
-
-    # The covariance of $R_0$ and $b$ implied by the stated uncertainties.
-    covariance: np.ndarray
 
     chi_squared: float
     degrees_of_freedom: int
@@ -112,7 +109,6 @@ def fit_line(x: np.ndarray, r: np.ndarray, u_r: np.ndarray) -> Fit:
         b=float(b),
         u_r0=float(u_r0),
         u_b=float(u_b),
-        covariance=pcov,
         # `fvec` is the weighted residuals.
         chi_squared=float(np.sum(info["fvec"] ** 2)),
         degrees_of_freedom=len(x) - 2,
@@ -177,10 +173,11 @@ def analyse(data: dict[str, Any]) -> dict[str, Any]:
     # The Birge ratio inflates the statistical uncertainty to cover scatter
     # the per-point uncertainties missed, and is never applied as a deflation.
     # It's equivalent to inflating every point's uncertainty by a common
-    # factor, which scales the whole covariance, so the slope and G get it too.
-    birge_squared = max(1.0, reduced_chi_squared)
-    covariance = fit.covariance * birge_squared
-    fit_uncertainty = fit.u_r0 * math.sqrt(birge_squared)
+    # factor, which scales both parameters' uncertainties, so the slope gets it
+    # too.
+    birge_ratio = math.sqrt(max(1.0, reduced_chi_squared))
+    fit_uncertainty = fit.u_r0 * birge_ratio
+    slope_uncertainty = fit.u_b * birge_ratio
 
     # Systematic terms, each treated as rectangular.
     voltage_gain_uncertainty = r0 * parameters["voltage_gain_bound"] / math.sqrt(3)
@@ -210,23 +207,6 @@ def analyse(data: dict[str, Any]) -> dict[str, Any]:
         + temperature_coefficient_uncertainty**2
     )
 
-    # G = alpha R0^2 / b, using the covariance between R0 and b. A slope that
-    # isn't clearly positive means no measurable self-heating, and dividing by
-    # it would give a meaningless G, so there's no estimate.
-    r0_correlated, b_correlated = correlated_values([fit.r0, fit.b], covariance)
-    if b_correlated.nominal_value > 2 * b_correlated.std_dev:
-        conductance = ufloat(alpha, u_alpha) * r0_correlated**2 / b_correlated
-        thermal_conductance = {
-            "value": conductance.nominal_value,
-            "uncertainty": conductance.std_dev,
-        }
-    else:
-        thermal_conductance = None
-        warnings.append(
-            f"the slope ({fit.b:.3g} ± {b_correlated.std_dev:.2g} Ω/A²) isn't "
-            f"clearly positive, so the thermal conductance can't be estimated"
-        )
-
     return {
         "chi_squared_p_value": p_value,
         "current_gain_uncertainty_ohms": current_gain_uncertainty,
@@ -239,13 +219,9 @@ def analyse(data: dict[str, Any]) -> dict[str, Any]:
             "uncertainty": reference_combined_uncertainty,
         },
         "resistance_ohms": {"value": r0, "uncertainty": combined_uncertainty},
-        "slope_ohms_per_amp_squared": {
-            "value": b_correlated.nominal_value,
-            "uncertainty": b_correlated.std_dev,
-        },
+        "slope_ohms_per_amp_squared": {"value": fit.b, "uncertainty": slope_uncertainty},
         "temperature_coefficient_uncertainty_ohms": temperature_coefficient_uncertainty,
         "temperature_uncertainty_ohms": temperature_uncertainty,
-        "thermal_conductance_watts_per_kelvin": thermal_conductance,
         "voltage_gain_uncertainty_ohms": voltage_gain_uncertainty,
         "warnings": warnings,
     }

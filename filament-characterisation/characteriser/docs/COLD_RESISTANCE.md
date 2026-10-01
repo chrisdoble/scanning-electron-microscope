@@ -342,10 +342,6 @@ pub struct ColdResistanceAnalysis {
 
     pub slope_ohms_per_amp_squared: Derived,
 
-    /// $G = \alpha R_0^2/b$ (3.5), or `None` if $b$ isn't clearly positive
-    /// (more than twice its uncertainty), when dividing by it is meaningless.
-    pub thermal_conductance_watts_per_kelvin: Option<Derived>,
-
     pub warnings: Vec<String>,
 }
 ```
@@ -556,7 +552,6 @@ Using it correctly:
 - **Pass `p0`.** The default start of (1, 1) is far from the answer. The fit is linear, so it converges anyway, but a sensible start costs nothing.
 - **Pass `full_output=True`,** so `info["fvec"]` provides the weighted residuals $(f(x_i) - R_i)/u(R_i)$ for 3.4.2.
 - **Check the uncertainties before calling.** Every `u_r` must be finite and positive. A zero would make its weight infinite, and 3.3 already fails the point if $u(R) = 0$.
-- **Keep the covariance.** `pcov[0, 1]` is the covariance between $R_0$ and $b$, which matters for anything computed from both, such as $G$ in 3.5. Use `uncertainties.correlated_values(popt, pcov)` for those.
 
 The same call is reused for every refit in 3.4.5.
 
@@ -704,7 +699,7 @@ Record the analysis and save. Show:
 - $R_{20} \pm u_c(R_{20})$ and $U = 2u_c(R_{20})$ ($k = 2$) as the headline result, with $R_0 \pm u_c$ at $T_f$ alongside it;
 - the correction's terms ($u_T$ and $u_\alpha$);
 - each budget component, in Ω and as a percentage of $R_0$;
-- $b$, the slope of the fit in Ω/A². From 'Why extrapolating to $I^2 = 0$ gives $R_0$', $b = R_0 c = \alpha R_0^2/G$, so it measures how strongly the filament self-heats. $G = \alpha R_0^2/b$ is a first estimate of the filament's effective thermal conductance to its mount, which will be useful for the thermal time constant work ($\tau = C/G$). Show $G$ too. The fit script computes it with its uncertainty, using the covariance between $R_0$ and $b$ from 3.4.1 (Birge-scaled as in 3.4.2) and the uncertainty in $\alpha$. If $b$ isn't clearly positive, as under `--mock`, where there's no self-heating, there's no estimate and the fit warns instead;
+- $b$, the slope of the fit in Ω/A². From 'Why extrapolating to $I^2 = 0$ gives $R_0$', $b = R_0 c = \alpha R_0^2/G$, so it measures how strongly the filament self-heats. Its uncertainty is Birge-scaled as in 3.4.2;
 - $\chi^2_\nu$ and its p-value;
 - any warnings.
 

@@ -61,17 +61,6 @@
       "type": "number",
       "format": "double"
     },
-    "thermal_conductance_watts_per_kelvin": {
-      "description": "The filament's effective thermal conductance to its mount, $G = \\alpha\nR_0^2/b$. `None` if the slope isn't clearly positive (more than twice\nits uncertainty), when dividing by it would be meaningless.",
-      "anyOf": [
-        {
-          "$ref": "#/$defs/Derived"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
     "voltage_gain_uncertainty_ohms": {
       "description": "The contribution of the oscilloscope's gain error.",
       "type": "number",

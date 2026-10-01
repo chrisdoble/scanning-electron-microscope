@@ -177,11 +177,6 @@ pub struct ColdResistanceAnalysis {
     /// `reference_resistance_ohms`' uncertainty.
     pub temperature_uncertainty_ohms: f64,
 
-    /// The filament's effective thermal conductance to its mount, $G = \alpha
-    /// R_0^2/b$. `None` if the slope isn't clearly positive (more than twice
-    /// its uncertainty), when dividing by it would be meaningless.
-    pub thermal_conductance_watts_per_kelvin: Option<Derived>,
-
     /// The contribution of the oscilloscope's gain error.
     pub voltage_gain_uncertainty_ohms: f64,
 

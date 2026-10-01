@@ -470,26 +470,12 @@ async fn fit_setpoints(
         );
     }
 
-    // The slope measures how strongly the filament heats itself, and G is a
-    // first estimate of its thermal conductance to its mount, for the thermal
-    // time constant work later.
+    // The slope measures how strongly the filament heats itself.
     let slope = analysis.slope_ohms_per_amp_squared;
     ctx.measurement(
         "Slope",
         format!("{:.5} ± {:.5} Ω/A²", slope.value, slope.uncertainty),
     );
-    ctx.measurement(
-        "Thermal conductance",
-        match analysis.thermal_conductance_watts_per_kelvin {
-            Some(conductance) => format!(
-                "{:.3} ± {:.3} mW/K",
-                conductance.value * 1000.0,
-                conductance.uncertainty * 1000.0
-            ),
-            None => String::from("Not estimated"),
-        },
-    );
-
     ctx.measurement(
         "Reduced chi-squared",
         format!(
