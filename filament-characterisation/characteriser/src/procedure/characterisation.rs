@@ -4,9 +4,6 @@
 //! so the procedure reads as the sequence of things that happen. Every section
 //! takes the `Hardware`: that's how one reads an instrument more often than the
 //! once-a-second snapshot, as `take_samples` does.
-//!
-//! TODO: `measure_cold_resistance` measures every setpoint but doesn't fit them
-//! yet (docs/COLD_RESISTANCE.md, 3.4).
 
 use super::{Context, ProcedureError};
 use crate::{
@@ -15,8 +12,8 @@ use crate::{
         TMP_MAXIMUM_BACKING_PRESSURE_MBAR,
     },
     hardware::Hardware,
-    python::{self, ColdResistancePointInput},
-    results::{ColdResistance, ColdResistancePoint, Measurement},
+    python::{self, ColdResistanceFitInput, ColdResistanceFitPoint, ColdResistancePointInput},
+    results::{ColdResistance, ColdResistanceFitParameters, ColdResistancePoint, Measurement},
 };
 use host::{
     oscilloscope::Voltages,
@@ -24,7 +21,8 @@ use host::{
 };
 use log::*;
 use rand::seq::SliceRandom;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use tokio::time::Instant;
 
 /// A reading counts as clipped if the voltage's peak is more than this
 /// fraction of the way to the edge of the screen (4 divisions from the
@@ -100,6 +98,9 @@ const RELAY_SETTLE_TIME: Duration = Duration::from_millis(50);
 /// readings.
 const SETPOINT_APPLY_TIME: Duration = Duration::from_secs(1);
 
+/// The temperature the cold resistance is corrected to in °C.
+const REFERENCE_TEMPERATURE_CELSIUS: f64 = 20.0;
+
 /// How many samples each measured quantity is summarised from.
 const SAMPLE_COUNT: usize = 20;
 
@@ -116,12 +117,40 @@ const SETTLE_TOLERANCE: f64 = 2e-4;
 /// earliest possible settle is twice this.
 const SETTLE_WINDOW: Duration = Duration::from_secs(2);
 
+/// The bound on the filament temperature in kelvin, before adding the drift
+/// over the run: the thermometer's accuracy plus how far the filament might sit
+/// from the flange's temperature.
+///
+/// A judgement. Tighten it if the thermometer and its placement justify it.
+const THERMOMETER_BOUND_KELVIN: f64 = 1.0;
+
+/// The bound on `TUNGSTEN_TEMPERATURE_COEFFICIENT_PER_KELVIN`.
+///
+/// A judgement: published values span roughly 0.0042–0.0048 /K depending on
+/// purity and doping.
+const TUNGSTEN_TEMPERATURE_COEFFICIENT_BOUND_PER_KELVIN: f64 = 0.0003;
+
+/// Tungsten's temperature coefficient of resistance near room temperature,
+/// $\alpha$.
+const TUNGSTEN_TEMPERATURE_COEFFICIENT_PER_KELVIN: f64 = 0.0045;
+
 /// The oscilloscope's vertical scales in volts per division, smallest first.
 ///
 /// Starts at 10 mV/div, because the ±1% gain spec is only "typical" at 5 mV/div
 /// and below.
 const VERTICAL_SCALES_VOLTS_PER_DIVISION: [f64; 10] =
     [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0];
+
+/// The bound on the oscilloscope's gain error, relative.
+///
+/// The data sheet's ±1% of full scale is a bound on the absolute error at any
+/// reading. Under the pure-gain model it bounds the gain at 2% read against a
+/// single reading, the most that fits on screen, or 1% read against the
+/// difference between a reading at the top of the screen and one at the
+/// bottom. The second matches the measurement here, which takes half the
+/// difference between two polarities, but the first is what the data sheet
+/// literally guarantees (COLD_RESISTANCE.md, 3.4.3).
+const VOLTAGE_GAIN_BOUND: f64 = 0.02;
 
 /// The measurements in one polarity at one setpoint.
 struct PolarityMeasurement {
@@ -339,6 +368,151 @@ async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(),
     });
     ctx.save();
 
+    let parameters = fit_parameters(
+        room_temperature,
+        chamber_start_temperature,
+        chamber_end_temperature,
+    );
+    ctx.section("Fitting the setpoints", |ctx| {
+        fit_setpoints(ctx, parameters)
+    })
+    .await
+}
+
+/// Fits every setpoint's resistance against the square of its current,
+/// extrapolating to zero current, and shows the result and its uncertainty
+/// budget.
+async fn fit_setpoints(
+    ctx: Context,
+    parameters: ColdResistanceFitParameters,
+) -> Result<(), ProcedureError> {
+    // Recorded before the fit runs, so the fit can be re-run from the results
+    // file alone even if it fails.
+    let mut points = None;
+    record_cold_resistance(&ctx, |cold_resistance| {
+        cold_resistance.fit_parameters = Some(parameters);
+        points = cold_resistance
+            .points
+            .iter()
+            .map(|point| {
+                point
+                    .analysis
+                    .as_ref()
+                    .map(|analysis| ColdResistanceFitPoint {
+                        current_amps: analysis.current_amps,
+                        voltage_volts: analysis.voltage_volts,
+                    })
+            })
+            .collect::<Option<Vec<_>>>();
+    });
+    ctx.save();
+
+    // Can't happen: a setpoint whose analysis fails ends the run.
+    let Some(points) = points else {
+        error!("a setpoint has no analysis");
+        return Err(ProcedureError::Check(String::from(
+            "a setpoint has no analysis, so the setpoints can't be fitted",
+        )));
+    };
+
+    let analysis =
+        python::cold_resistance_fit(&ColdResistanceFitInput { parameters, points }).await?;
+
+    let r0 = analysis.resistance_ohms;
+    let r20 = analysis.reference_resistance_ohms;
+    ctx.measurement(
+        format!(
+            "Cold resistance at {:.0} °C",
+            parameters.reference_temperature_celsius
+        ),
+        resistance(r20.value, r20.uncertainty),
+    );
+    ctx.measurement(
+        format!(
+            "Cold resistance at {:.1} °C",
+            parameters.filament_temperature_celsius
+        ),
+        resistance(r0.value, r0.uncertainty),
+    );
+
+    // The budget, in ohms and as a percentage of R0.
+    for (label, uncertainty) in [
+        ("Statistical uncertainty", analysis.fit_uncertainty_ohms),
+        (
+            "Oscilloscope gain uncertainty",
+            analysis.voltage_gain_uncertainty_ohms,
+        ),
+        (
+            "Supply readback gain uncertainty",
+            analysis.current_gain_uncertainty_ohms,
+        ),
+        (
+            "Supply readback offset uncertainty",
+            analysis.current_offset_uncertainty_ohms,
+        ),
+        (
+            "Filament temperature uncertainty",
+            analysis.temperature_uncertainty_ohms,
+        ),
+        (
+            "Temperature coefficient uncertainty",
+            analysis.temperature_coefficient_uncertainty_ohms,
+        ),
+    ] {
+        ctx.measurement(
+            label,
+            format!(
+                "{:.3} mΩ ({:.2} %)",
+                uncertainty * 1000.0,
+                uncertainty / r0.value * 100.0
+            ),
+        );
+    }
+
+    // The slope measures how strongly the filament heats itself, and G is a
+    // first estimate of its thermal conductance to its mount, for the thermal
+    // time constant work later.
+    let slope = analysis.slope_ohms_per_amp_squared;
+    ctx.measurement(
+        "Slope",
+        format!("{:.5} ± {:.5} Ω/A²", slope.value, slope.uncertainty),
+    );
+    ctx.measurement(
+        "Thermal conductance",
+        match analysis.thermal_conductance_watts_per_kelvin {
+            Some(conductance) => format!(
+                "{:.3} ± {:.3} mW/K",
+                conductance.value * 1000.0,
+                conductance.uncertainty * 1000.0
+            ),
+            None => String::from("Not estimated"),
+        },
+    );
+
+    ctx.measurement(
+        "Reduced chi-squared",
+        format!(
+            "{:.2} (p = {:.3})",
+            analysis.reduced_chi_squared, analysis.chi_squared_p_value
+        ),
+    );
+
+    for warning in &analysis.warnings {
+        warn!("{}", warning);
+        ctx.text(format!("Warning: {}", warning));
+    }
+
+    // The data sheet bounds the scope's error without saying it's a pure gain
+    // (COLD_RESISTANCE.md, 3.4.3), so the result rests on that assumption
+    // until the scope's response is measured.
+    ctx.text(
+        "Note: the oscilloscope's gain uncertainty assumes its error is a pure gain, which its data sheet doesn't guarantee",
+    );
+
+    record_cold_resistance(&ctx, |cold_resistance| {
+        cold_resistance.analysis = Some(analysis)
+    });
+    ctx.save();
     Ok(())
 }
 
@@ -627,6 +801,33 @@ fn current_readback_bounds(room_temperature_celsius: f64) -> (f64, f64) {
     )
 }
 
+/// The fit's scalar inputs, from the temperatures the operator entered.
+///
+/// The filament temperature is the mean of the chamber's start and end
+/// temperatures, and its bound covers the thermometer and placement plus half
+/// the drift over the run. The linear sum is deliberately conservative.
+fn fit_parameters(
+    room_temperature_celsius: f64,
+    chamber_start_temperature_celsius: f64,
+    chamber_end_temperature_celsius: f64,
+) -> ColdResistanceFitParameters {
+    let (current_gain_bound, current_offset_bound_amps) =
+        current_readback_bounds(room_temperature_celsius);
+    ColdResistanceFitParameters {
+        current_gain_bound,
+        current_offset_bound_amps,
+        filament_temperature_bound_kelvin: THERMOMETER_BOUND_KELVIN
+            + (chamber_end_temperature_celsius - chamber_start_temperature_celsius).abs() / 2.0,
+        filament_temperature_celsius: (chamber_start_temperature_celsius
+            + chamber_end_temperature_celsius)
+            / 2.0,
+        reference_temperature_celsius: REFERENCE_TEMPERATURE_CELSIUS,
+        temperature_coefficient_bound_per_kelvin: TUNGSTEN_TEMPERATURE_COEFFICIENT_BOUND_PER_KELVIN,
+        temperature_coefficient_per_kelvin: TUNGSTEN_TEMPERATURE_COEFFICIENT_PER_KELVIN,
+        voltage_gain_bound: VOLTAGE_GAIN_BOUND,
+    }
+}
+
 /// The largest of `COLD_RESISTANCE_SETPOINTS_AMPS`.
 fn largest_setpoint() -> f64 {
     COLD_RESISTANCE_SETPOINTS_AMPS
@@ -722,6 +923,17 @@ async fn read_unclipped(
         );
         filament.set_vertical_scale(next).await?;
     }
+}
+
+/// A resistance and its standard uncertainty for display, with the expanded
+/// uncertainty at a coverage factor of 2 (about 95%).
+fn resistance(value: f64, uncertainty: f64) -> String {
+    format!(
+        "{:.3} ± {:.3} mΩ (U = {:.3} mΩ, k = 2)",
+        value * 1000.0,
+        uncertainty * 1000.0,
+        2.0 * uncertainty * 1000.0
+    )
 }
 
 /// Changes the cold resistance's results.
@@ -900,8 +1112,18 @@ async fn summarise(samples: Vec<f64>) -> Result<Measurement, ProcedureError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hardware::{MockFilamentSystem, MockVacuumSystem};
-    use std::sync::Arc;
+    use crate::{
+        hardware::{self, MockFilamentSystem, MockVacuumSystem},
+        procedure,
+        results::Characterisation,
+        steps::{Section, StepKind},
+    };
+    use std::{
+        fs,
+        sync::{Arc, Mutex},
+    };
+    use tokio::sync::watch;
+    use tokio_util::sync::CancellationToken;
 
     #[test]
     fn current_readback_bounds_widen_outside_20_to_30_celsius() {
@@ -921,6 +1143,29 @@ mod tests {
         let (gain, offset) = current_readback_bounds(33.0);
         assert!((gain - 0.0018).abs() < 1e-12);
         assert!((offset - 0.011).abs() < 1e-12);
+    }
+
+    #[test]
+    fn fit_parameters_combine_the_temperatures() {
+        // The chamber warmed by 2 °C over the run, and the room is 3 °C below
+        // the supply's accuracy band.
+        let parameters = fit_parameters(17.0, 22.0, 24.0);
+        assert_eq!(parameters.filament_temperature_celsius, 23.0);
+        assert_eq!(
+            parameters.filament_temperature_bound_kelvin,
+            THERMOMETER_BOUND_KELVIN + 1.0
+        );
+        assert_eq!(
+            (
+                parameters.current_gain_bound,
+                parameters.current_offset_bound_amps
+            ),
+            current_readback_bounds(17.0)
+        );
+        assert_eq!(
+            parameters.reference_temperature_celsius,
+            REFERENCE_TEMPERATURE_CELSIUS
+        );
     }
 
     #[test]
@@ -973,5 +1218,94 @@ mod tests {
         assert_eq!(snapshot.polarity, Polarity::Reverse);
         assert!(snapshot.output_enabled);
         assert_eq!(snapshot.heating_current, 0.1);
+    }
+
+    /// Answers whichever prompt is waiting, as the operator would: confirms a
+    /// gate, or enters a value for an input.
+    fn answer_prompt(root: &Mutex<Section>) {
+        let mut root = root.lock().unwrap();
+        let Some(step) = root.pending_mut() else {
+            return;
+        };
+
+        match &mut step.kind {
+            StepKind::Confirm { responder, .. } => {
+                if let Some(responder) = responder.take() {
+                    let _ = responder.send(());
+                }
+            }
+            StepKind::Input {
+                prompt, responder, ..
+            } => {
+                let value = match prompt.as_str() {
+                    "Filament ID" => "test",
+                    "Room temperature near the power supply" => "21",
+                    _ => "22",
+                };
+                if let Some(responder) = responder.take() {
+                    let _ = responder.send(String::from(value));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // The whole procedure against the mocks, whose filament is 0.096 Ω with no
+    // self-heating. The clock is paused, so tokio skips through the ramps and
+    // settles instead of waiting minutes for them. It needs the Python virtual
+    // environment, for the analysis scripts.
+    #[tokio::test(start_paused = true)]
+    async fn the_procedure_measures_the_mock_filament() {
+        let hardware = Hardware {
+            filament: Arc::new(MockFilamentSystem::default()),
+            vacuum: Arc::new(MockVacuumSystem::default()),
+        };
+        let root = Arc::new(Mutex::new(Section::default()));
+        let (snapshots_tx, snapshots_rx) = watch::channel(None);
+        let ctx = Context::new(
+            CancellationToken::new(),
+            Characterisation::new(),
+            Arc::clone(&root),
+            snapshots_rx,
+        );
+
+        let operator = async {
+            loop {
+                answer_prompt(&root);
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        };
+
+        let result = tokio::select! {
+            result = procedure::run(ctx.clone(), hardware.clone()) => result,
+            e = hardware::poll(hardware.clone(), &snapshots_tx) => panic!("the poll failed: {}", e),
+            _ = operator => unreachable!("the operator never stops"),
+        };
+
+        // Saving writes to `out/`, which a test shouldn't leave behind.
+        let characterisation = ctx.characterisation.lock().unwrap();
+        let _ = fs::remove_file(characterisation.path());
+        result.unwrap();
+
+        let cold_resistance = characterisation.cold_resistance.as_ref().unwrap();
+        assert_eq!(cold_resistance.points.len(), 9);
+        assert!(
+            cold_resistance
+                .points
+                .iter()
+                .all(|point| point.analysis.is_some())
+        );
+
+        let resistance = cold_resistance
+            .analysis
+            .as_ref()
+            .unwrap()
+            .resistance_ohms
+            .value;
+        assert!(
+            (resistance - 0.096).abs() < 1e-9,
+            "expected 0.096 Ω, got {} Ω",
+            resistance
+        );
     }
 }

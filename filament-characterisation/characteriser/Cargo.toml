@@ -21,3 +21,7 @@ serialport = { workspace = true }
 thiserror = { workspace = true }
 tokio = { features = ["io-util", "process", "signal"], workspace = true }
 tokio-util = "0.7"
+
+[dev-dependencies]
+# For the paused clock in the end-to-end test.
+tokio = { features = ["test-util"], workspace = true }

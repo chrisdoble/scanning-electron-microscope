@@ -737,6 +737,9 @@ Tests 1–3 share a fixture. It uses the default setpoints $I_i$ = 0.100, 0.125,
 - `ramp_to` produces the expected setpoint sequence, ending exactly on the target.
 - `change_polarity` disables the output before switching the relays and leaves the setpoint unchanged (against the mock, which refuses to switch relays with the output on).
 - Under `--mock`, the procedure runs end to end, and the results file contains a `cold_resistance` with nine points and an analysis whose $R_0$ is 0.096 Ω.
+  - The test answers the prompts itself, through the step tree's responders, as the application would.
+  - It runs on tokio's paused clock, so the ramps and settles take no real time, and the whole test takes a few seconds rather than minutes. For that, timing in the procedure uses `tokio::time::Instant`, and `run_script` has no timeout in test builds: tokio jumps a paused clock to the next timer whenever every task is waiting, including on a script, so the timeout would fire at once.
+  - It needs the Python virtual environment, which CI's root job creates.
 
 # Acceptance criteria
 

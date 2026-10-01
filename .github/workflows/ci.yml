@@ -51,6 +51,20 @@ jobs:
       - name: Clippy
         run: cargo clippy -p common -p host -p usb-tmc -p characteriser --all-targets -- -D warnings
 
+      # The characteriser's end-to-end test runs the analysis scripts, which
+      # need its virtual environment.
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: filament-characterisation/characteriser/python/.python-version
+          cache: pip
+          cache-dependency-path: filament-characterisation/characteriser/python/requirements.txt
+
+      - name: Create the Python virtual environment
+        working-directory: filament-characterisation/characteriser/python
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+
       - name: Test
         run: cargo test -p common -p host -p usb-tmc -p characteriser
 

@@ -234,8 +234,6 @@ pub async fn cold_resistance_point(
 /// extrapolates to zero current, and works out the uncertainty budget.
 ///
 /// Wraps `cold_resistance_fit.py`.
-// Used from commit 9 of COLD_RESISTANCE.md's implementation order.
-#[expect(dead_code)]
 pub async fn cold_resistance_fit(
     input: &ColdResistanceFitInput,
 ) -> Result<ColdResistanceAnalysis, PythonError> {
@@ -332,7 +330,15 @@ async fn run(
         child.wait_with_output().await
     };
 
-    match tokio::time::timeout(PYTHON_TIMEOUT, child).await {
+    // No timeout in tests, which run on a paused clock. Tokio jumps a paused
+    // clock forward to the next timer whenever every task is waiting, including
+    // on a script, so the timeout would fire straight away.
+    #[cfg(test)]
+    let result = Ok::<_, tokio::time::error::Elapsed>(child.await);
+    #[cfg(not(test))]
+    let result = tokio::time::timeout(PYTHON_TIMEOUT, child).await;
+
+    match result {
         Ok(Ok(output)) => Ok(output),
         Ok(Err(source)) => {
             error!("couldn't run {}: {}", script, source);
