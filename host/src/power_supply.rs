@@ -175,6 +175,20 @@ impl PowerSupply {
         Ok(reply?.trim().parse()?)
     }
 
+    /// Gets channel 1's current limit, the setpoint, in amperes.
+    ///
+    /// Unlike `get_current` this measures nothing: the supply returns the
+    /// stored setpoint in about a millisecond, so there's no pause.
+    pub async fn get_current_limit(&self) -> Result<f64, PowerSupplyError> {
+        let state = self.state.lock().await;
+        Ok(state
+            .device
+            .query_str(":SOURce1:CURRent?")
+            .await?
+            .trim()
+            .parse()?)
+    }
+
     /// Gets whether channel 1's output is enabled.
     pub async fn get_output_enabled(&self) -> Result<bool, PowerSupplyError> {
         let state = self.state.lock().await;

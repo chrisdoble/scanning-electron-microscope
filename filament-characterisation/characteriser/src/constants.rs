@@ -1,23 +1,26 @@
 //! The limits the procedure and the hardware adapters work within.
 
+/// The chamber pressure above which the procedure stops if the filament is
+/// powered, in mbar.
+pub const FILAMENT_ABORT_PRESSURE_MBAR: f64 = 5e-5;
+
+/// The chamber pressure that must be reached before any current flows through
+/// the filament, in mbar.
+///
+/// An arbitrary but comfortable threshold.
+pub const FILAMENT_OPERATING_PRESSURE_MBAR: f64 = 1e-5;
+
 /// The maximum heating current the filament may be driven with in amperes.
 ///
-/// Deliberately low while the procedure is a stub, so nothing it does can heat
-/// a filament even if it's run against the rig.
-///
-/// TODO: raise this with the real procedure, confirmed against what the
-/// filament tolerates. The Rigol DP-932E can supply 3 A per channel, so the
-/// supply isn't the binding constraint.
-pub const MAXIMUM_HEATING_CURRENT_AMPS: f64 = 0.1;
+/// The largest cold-resistance setpoint, which dissipates only about 10 mW in a
+/// 0.1 Ω filament. The Rigol DP-932E can supply 3 A per channel, so the supply
+/// isn't the binding constraint.
+pub const MAXIMUM_HEATING_CURRENT_AMPS: f64 = 0.3;
 
-/// The voltage limit the filament channel is set to in volts.
+/// The maximum voltage limit the filament channel may be set to in volts.
 ///
-/// The supply runs in whichever mode its limits make it, so this is set high
-/// once at the start of a run to leave the current limit as the binding one,
-/// putting the channel in constant current.
-///
-/// TODO: confirm this. The DP-932E's channel 1 goes to 32 V, so this is just
-/// under its ceiling.
+/// A general ceiling: the DP-932E's channels 1 and 2 go to 30 V. Each
+/// measurement sets its own, much lower, limit.
 pub const MAXIMUM_HEATING_VOLTAGE_VOLTS: f64 = 30.0;
 
 /// The maximum backing pressure supported by the TMP in mbar.

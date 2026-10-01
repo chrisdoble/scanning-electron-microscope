@@ -127,7 +127,7 @@ Commits 5 and 6 don't depend on 2–4, and can be done before them.
 
 ## `constants.rs`
 
-- Raise `MAXIMUM_HEATING_CURRENT_AMPS` to 0.3, the largest cold-resistance setpoint. `set_heating_current` refuses anything above it, and 300 mA dissipates only about 10 mW in a 0.1 Ω filament.
+- Raise `MAXIMUM_HEATING_CURRENT_AMPS` to 0.3, the largest cold-resistance setpoint. `set_heating_current_limit` refuses anything above it, and 300 mA dissipates only about 10 mW in a 0.1 Ω filament.
 - Fix the doc comment on `MAXIMUM_HEATING_VOLTAGE_VOLTS`: the DP932E's channels 1 and 2 go to 30 V, not 32 V (32 V is the DP932A/U). The constant stays as a general ceiling. The cold-resistance measurement sets its own, much lower, limit (see below).
 - Add `FILAMENT_OPERATING_PRESSURE_MBAR = 1e-5`. This is the pressure the chamber must reach before any current flows, and it resolves the `TODO` in `pump_down`. It's an arbitrary but comfortable threshold.
 - Add `FILAMENT_ABORT_PRESSURE_MBAR = 5e-5`. If the pressure rises above this while the filament is powered, the procedure stops.
@@ -427,7 +427,7 @@ These go at the top of `characterisation.rs`, one doc comment each, replacing th
 ## 1. Preparing (changes to `prepare`)
 
 1. Keep the existing filament ID prompt first.
-2. Remove the `set_heating_voltage(MAXIMUM_HEATING_VOLTAGE_VOLTS)` call. Each measurement section now sets the limit it needs; the cold-resistance section sets its own in 3.0.
+2. Remove the `set_heating_voltage_limit(MAXIMUM_HEATING_VOLTAGE_VOLTS)` call. Each measurement section now sets the limit it needs; the cold-resistance section sets its own in 3.0.
 3. Keep the existing "filament is mounted" and "chamber is sealed" confirmations, and add two more:
    - "Confirm that a 1× probe is connected to the oscilloscope's channel 1 and that its switch is set to 1×." `reset` has set the scope's probe ratio to 1×, so this is what makes that correct.
    - "Confirm that the oscilloscope has been on for at least 30 minutes and the power supply for at least 60 minutes." The supply's accuracy figures assume a 1-hour warm-up, and the pump-down usually covers it.

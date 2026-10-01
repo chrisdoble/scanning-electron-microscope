@@ -363,15 +363,15 @@ pub trait FilamentSystem: std::fmt::Debug + Send + Sync {
     /// Sets the channel's current limit in amperes.
     ///
     /// Must be rejected above `MAXIMUM_HEATING_CURRENT_AMPS`.
-    async fn set_heating_current(&self, current: f64) -> Result<(), HardwareError>;
+    async fn set_heating_current_limit(&self, current: f64) -> Result<(), HardwareError>;
 
     /// Sets the channel's voltage limit in volts.
     ///
     /// The supply runs in whichever mode its limits make it: with the voltage
     /// limit set high, the current limit is what binds and the channel runs in
     /// constant current. Called once at the start of a run with a large value
-    /// so every later `set_heating_current` is the limiting factor.
-    async fn set_heating_voltage(&self, voltage: f64) -> Result<(), HardwareError>;
+    /// so every later `set_heating_current_limit` is the limiting factor.
+    async fn set_heating_voltage_limit(&self, voltage: f64) -> Result<(), HardwareError>;
 
     /// Enables or disables the output.
     async fn set_output_enabled(&self, enabled: bool) -> Result<(), HardwareError>;
@@ -492,7 +492,7 @@ stores the value it was given, so the snapshot reflects what was set. Constants
 at the top of the file, one line each. No time dependence, no noise, no physics.
 
 Two behaviours are kept because they're contracts rather than simulation:
-`set_heating_current` above `MAXIMUM_HEATING_CURRENT_AMPS` errors, and
+`set_heating_current_limit` above `MAXIMUM_HEATING_CURRENT_AMPS` errors, and
 `set_polarity` errors while the output is enabled.
 
 ### 7.7 Errors
@@ -1388,7 +1388,7 @@ The rest:
 - `prepare` asks for the filament identifier (`ctx.input` → `ctx.record` →
   `ctx.save`) before anything else — the first save is what tells the operator
   where the results are being written — then calls
-  `set_heating_voltage(MAXIMUM_HEATING_VOLTAGE_VOLTS)` once so the channel runs
+  `set_heating_voltage_limit(MAXIMUM_HEATING_VOLTAGE_VOLTS)` once so the channel runs
   in constant current, and confirms the filament is mounted and the chamber is
   sealed.
 - `measure_cold_resistance` runs a sub-section per polarity, `Forward` then

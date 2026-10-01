@@ -4,13 +4,18 @@
 //! every getter returns a constant or follows what was set, so a snapshot
 //! reflects what was set. No time dependence, no noise, no physics.
 //!
+//! The one concession to timing is `MEASUREMENT_DELAY`, which is about how
+//! long readings take, not what they are.
+//!
 //! The contracts the traits define are kept, because they're contracts rather
-//! than simulation: a heating current above the maximum is rejected, the
-//! polarity can't be switched while the output is enabled, and the TMP can't be
-//! started above its maximum backing pressure.
+//! than simulation: a heating current or voltage above its maximum is rejected,
+//! the polarity can't be switched while the output is enabled, and the TMP
+//! can't be started above its maximum backing pressure.
 
 use super::{FilamentSnapshot, FilamentSystem, HardwareError, VacuumSnapshot, VacuumSystem};
-use crate::constants::{MAXIMUM_HEATING_CURRENT_AMPS, TMP_MAXIMUM_BACKING_PRESSURE_MBAR};
+use crate::constants::{
+    MAXIMUM_HEATING_CURRENT_AMPS, MAXIMUM_HEATING_VOLTAGE_VOLTS, TMP_MAXIMUM_BACKING_PRESSURE_MBAR,
+};
 use async_trait::async_trait;
 use host::{
     adc::{Pressure, PressureUnit},
@@ -18,13 +23,28 @@ use host::{
     power_supply::{Polarity, RegulationMode},
 };
 use log::*;
-use std::sync::{Mutex, MutexGuard};
+use std::{
+    sync::{Mutex, MutexGuard},
+    time::Duration,
+};
+
+/// How long the filament voltage and current take to read.
+///
+/// Stands in for the time a real acquisition or measurement takes. Without it,
+/// every mock read returns without waiting, so a loop of samples never yields
+/// to the rest of the application: the UI freezes while the procedure waits
+/// for the filament to settle, and the loop gathers millions of samples. Far
+/// shorter than the real thing, so `--mock` runs stay quick.
+const MEASUREMENT_DELAY: Duration = Duration::from_millis(20);
 
 /// The filament's resistance in ohms, from which its voltage follows.
 const MOCK_FILAMENT_RESISTANCE_OHMS: f64 = 0.096;
 
 /// The chamber pressure in millibar.
-const PRESSURE_MBAR: f64 = 1.2e-5;
+///
+/// Below `FILAMENT_OPERATING_PRESSURE_MBAR`, so the procedure's wait for it
+/// finishes.
+const PRESSURE_MBAR: f64 = 5e-6;
 
 /// The current draw of the TMP in amperes.
 const TMP_CURRENT_AMPS: f32 = 0.42;
@@ -85,6 +105,7 @@ impl FilamentSystem for MockFilamentSystem {
     }
 
     async fn get_filament_voltages(&self) -> Result<Voltages, HardwareError> {
+        tokio::time::sleep(MEASUREMENT_DELAY).await;
         let voltage = self.state().filament_voltage();
         Ok(Voltages {
             average: Some(voltage),
@@ -94,6 +115,11 @@ impl FilamentSystem for MockFilamentSystem {
     }
 
     async fn get_heating_current(&self) -> Result<f64, HardwareError> {
+        tokio::time::sleep(MEASUREMENT_DELAY).await;
+        Ok(self.state().heating_current)
+    }
+
+    async fn get_heating_current_limit(&self) -> Result<f64, HardwareError> {
         Ok(self.state().heating_current)
     }
 
@@ -105,7 +131,7 @@ impl FilamentSystem for MockFilamentSystem {
         Ok(RegulationMode::ConstantCurrent)
     }
 
-    async fn set_heating_current(&self, current: f64) -> Result<(), HardwareError> {
+    async fn set_heating_current_limit(&self, current: f64) -> Result<(), HardwareError> {
         if current > MAXIMUM_HEATING_CURRENT_AMPS {
             error!("refusing to set a heating current of {} A", current);
             return Err(HardwareError::Other(format!(
@@ -118,7 +144,15 @@ impl FilamentSystem for MockFilamentSystem {
         Ok(())
     }
 
-    async fn set_heating_voltage(&self, _voltage: f64) -> Result<(), HardwareError> {
+    async fn set_heating_voltage_limit(&self, voltage: f64) -> Result<(), HardwareError> {
+        if voltage > MAXIMUM_HEATING_VOLTAGE_VOLTS {
+            error!("refusing to set a heating voltage of {} V", voltage);
+            return Err(HardwareError::Other(format!(
+                "heating voltage must be at most {} V: {}",
+                MAXIMUM_HEATING_VOLTAGE_VOLTS, voltage
+            )));
+        }
+
         // Nothing reads the voltage limit back, so there's nothing to store.
         Ok(())
     }
