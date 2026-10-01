@@ -30,10 +30,6 @@ pub enum PowerSupplyError {
     #[error("invalid float: {0}")]
     InvalidFloatError(#[from] ParseFloatError),
 
-    /// The method hasn't been implemented yet.
-    #[error("not implemented")]
-    NotImplemented,
-
     /// The controller returned an unknown relay polarity.
     #[error("unknown relay polarity: {0}")]
     UnknownRelayPolarity(String),
@@ -101,9 +97,6 @@ impl Display for Polarity {
     }
 }
 
-// TODO: remove this once the methods below are implemented and read these
-// fields.
-#[allow(dead_code)]
 #[derive(Debug)]
 struct PowerSupplyState {
     /// Used to switch the SPDT polarity relays.
@@ -128,8 +121,6 @@ struct PowerSupplyState {
 /// programming guide for a list of all supported commands and queries.
 #[derive(Debug)]
 pub struct PowerSupply {
-    // TODO: remove this once the methods below read the state.
-    #[allow(dead_code)]
     state: tokio::sync::Mutex<PowerSupplyState>,
 }
 

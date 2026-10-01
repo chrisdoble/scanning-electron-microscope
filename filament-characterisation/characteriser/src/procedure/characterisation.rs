@@ -539,11 +539,11 @@ async fn choose_vertical_scale(
     let (forward, reverse) = ctx
         .waiting("Reading the voltage in both polarities", || async {
             tokio::time::sleep(SETPOINT_APPLY_TIME).await;
-            let forward = read_unclipped(&hardware, &mut scale_index).await?;
+            let forward = read_unclipped(&ctx, &hardware, &mut scale_index).await?;
 
             change_polarity(&hardware, Polarity::Reverse).await?;
             tokio::time::sleep(SETPOINT_APPLY_TIME).await;
-            let reverse = read_unclipped(&hardware, &mut scale_index).await?;
+            let reverse = read_unclipped(&ctx, &hardware, &mut scale_index).await?;
 
             Ok((forward, reverse))
         })
@@ -885,12 +885,16 @@ fn ramp_steps(from: f64, to: f64) -> Vec<f64> {
 /// Reads the filament voltage's average, stepping the vertical scale up through
 /// `VERTICAL_SCALES_VOLTS_PER_DIVISION` while it clips. `scale_index` is the
 /// scale in use, and is left at the one that didn't clip.
+///
+/// Checks the chamber before each reading, as `sample` does.
 async fn read_unclipped(
+    ctx: &Context,
     hardware: &Hardware,
     scale_index: &mut usize,
 ) -> Result<f64, ProcedureError> {
     let filament = &hardware.filament;
     loop {
+        check_conditions(ctx)?;
         let scale = VERTICAL_SCALES_VOLTS_PER_DIVISION[*scale_index];
         let voltages = filament.get_filament_voltages().await?;
         if let Some(average) = unclipped_average(voltages, scale) {
@@ -1131,6 +1135,45 @@ mod tests {
         let (gain, offset) = current_readback_bounds(33.0);
         assert!((gain - 0.0018).abs() < 1e-12);
         assert!((offset - 0.011).abs() < 1e-12);
+    }
+
+    // A reading is clipped if any value is invalid or its peak is past the
+    // headroom, even when the average is fine.
+    #[test]
+    fn unclipped_average_rejects_any_clipped_value() {
+        let scale = 0.01;
+        let limit = CLIPPING_HEADROOM * 4.0 * scale;
+        let voltages = |maximum, minimum| Voltages {
+            average: Some(0.001),
+            maximum,
+            minimum,
+        };
+
+        assert_eq!(
+            unclipped_average(voltages(Some(limit), Some(-limit)), scale),
+            Some(0.001)
+        );
+        assert_eq!(
+            unclipped_average(voltages(Some(limit * 1.01), Some(0.0)), scale),
+            None
+        );
+        assert_eq!(
+            unclipped_average(voltages(Some(0.0), Some(-limit * 1.01)), scale),
+            None
+        );
+        assert_eq!(unclipped_average(voltages(None, Some(0.0)), scale), None);
+        assert_eq!(unclipped_average(voltages(Some(0.0), None), scale), None);
+        assert_eq!(
+            unclipped_average(
+                Voltages {
+                    average: None,
+                    maximum: Some(0.0),
+                    minimum: Some(0.0),
+                },
+                scale
+            ),
+            None
+        );
     }
 
     #[test]

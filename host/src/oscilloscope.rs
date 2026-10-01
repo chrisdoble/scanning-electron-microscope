@@ -37,10 +37,6 @@ pub enum OscilloscopeError {
     #[error("invalid voltage: {0}")]
     InvalidVoltage(#[from] ParseFloatError),
 
-    /// The method hasn't been implemented yet.
-    #[error("not implemented")]
-    NotImplemented,
-
     /// A catch all error for anything else that might happen.
     #[error("unknown error: {0}")]
     Unknown(String),
