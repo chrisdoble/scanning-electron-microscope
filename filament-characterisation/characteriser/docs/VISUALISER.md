@@ -38,9 +38,9 @@ The file doesn't have to exist yet. You can start the visualiser with the path t
 filament-characterisation/visualiser/
   package.json          // scripts: visualise, generate, test, typecheck
   tsconfig.json
-  vite.config.ts
   index.html
   server.ts             // the local server: Vite in middleware mode, plus the data endpoint
+  api.ts                // the data endpoint, separate so its tests needn't start the server
   src/
     main.ts             // polling loop, validation, dispatch to the sections
     data.ts             // fetching with ETags, and the page's load states
@@ -154,8 +154,8 @@ The work splits into five commits. Each leaves something that builds, passes its
    - Add the `results_schema_is_up_to_date` snapshot test, and commit the generated `schemas/characterisation.schema.json`.
    - Done when the characteriser's tests, clippy and fmt pass. Nothing changes at run time.
 2. **Serve the file.**
-   - Create the package: `package.json`, `tsconfig.json`, `vite.config.ts`, and `index.html` showing the path.
-   - Add `server.ts`: Vite in middleware mode, and `/api/characterisation` with its ETag, 304, 404 and 500 handling.
+   - Create the package: `package.json`, `tsconfig.json`, and `index.html` showing the path.
+   - Add `server.ts` (Vite in middleware mode) and `api.ts` (`/api/characterisation` with its ETag, 304, 404 and 500 handling).
    - Add the server's tests.
    - Add the `visualiser` CI job, running `pnpm install`, `pnpm typecheck` and `pnpm test`.
    - Check: `pnpm visualise <path>` against a `--mock` run serves the page, and `/api/characterisation` returns the file as it changes.

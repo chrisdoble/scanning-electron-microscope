@@ -120,3 +120,30 @@ jobs:
 
       - name: Test
         run: python -m unittest -v
+
+  visualiser:
+    name: Visualiser
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: filament-characterisation/visualiser
+    steps:
+      - uses: actions/checkout@v7
+
+      # Any Node from 23.6 runs the server's TypeScript directly.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # pnpm, at the version in package.json's `packageManager`.
+      - name: Install pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test

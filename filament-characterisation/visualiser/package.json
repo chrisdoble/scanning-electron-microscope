@@ -1,0 +1,22 @@
+{
+  "name": "visualiser",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "scripts": {
+    "visualise": "node --disable-warning=ExperimentalWarning server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "vite": "8.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  }
+}
