@@ -189,7 +189,7 @@ pub struct ColdResistanceAnalysis {
 /// Created once both temperatures are known and saved at every step after, so
 /// the `Option` fields are exactly the ones not yet known at those saves, and
 /// an aborted run still leaves everything measured up to that point on disk.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 pub struct ColdResistance {
     /// The fit and uncertainty budget, once every setpoint has been measured.
     pub analysis: Option<ColdResistanceAnalysis>,
@@ -224,7 +224,7 @@ pub struct ColdResistance {
 /// The measurements at one setpoint, filed by the sign of the voltage rather
 /// than by relay state, so nothing downstream needs to know which relay state
 /// is which.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 pub struct ColdResistancePoint {
     /// The output of `cold_resistance_point.py`, once it's run.
     pub analysis: Option<ColdResistancePointAnalysis>,
@@ -269,7 +269,7 @@ pub struct ColdResistancePoint {
 /// Every measured field is an `Option`, `None` until it's measured, because the
 /// file is saved before anything is — and a run that's quit part-way leaves the
 /// rest as `null`.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 pub struct Characterisation {
     /// Everything recorded while measuring the cold resistance, once its
     /// setup has finished.
@@ -388,6 +388,32 @@ mod tests {
     impl Drop for Scratch {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// Checks that the schema committed in `schemas/` matches
+    /// `Characterisation`, so the visualiser, which validates results files
+    /// against it and generates its types from it, can't silently diverge.
+    ///
+    /// Run with `UPDATE_SCHEMAS=1` to write it instead.
+    #[test]
+    fn results_schema_is_up_to_date() {
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("schemas/characterisation.schema.json");
+        let expected =
+            serde_json::to_string_pretty(&schemars::schema_for!(Characterisation)).unwrap() + "\n";
+
+        if std::env::var_os("UPDATE_SCHEMAS").is_some() {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, expected).unwrap();
+        } else {
+            let actual = fs::read_to_string(&path).unwrap_or_default();
+            assert_eq!(
+                actual,
+                expected,
+                "{} is out of date; run the test with UPDATE_SCHEMAS=1",
+                path.display()
+            );
         }
     }
 
