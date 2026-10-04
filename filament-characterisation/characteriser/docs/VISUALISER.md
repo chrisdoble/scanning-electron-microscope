@@ -124,11 +124,11 @@ R against $I^2$:
 - **The $x$ axis is fixed at 0–0.095 A².** That's just over 0.09 A², the largest setpoint squared (300 mA). It never rescales, so points appear in place as they're measured.
 - **The $y$ axis:**
   - **With no points,** it's fixed at 0–2 Ω. That covers the 0.1 Ω filaments and the 1 Ω bench-test resistor.
-  - **Once there are points,** it rescales to them, from 10% below the bottom of the lowest error bar to 10% above the top of the highest. On a fixed 0–2 Ω axis, a 0.1 Ω filament's points would sit in the bottom 5% of the graph, and its error bars would be far too small to see.
+  - **Once there are points,** it rescales to them, from 1% below the bottom of the lowest error bar to 1% above the top of the highest. Once there's a fit, the intercept's error bar and the line's end count too, so they're always in view: with a positive slope the intercept sits below every point. On a fixed 0–2 Ω axis, a 0.1 Ω filament's points would sit in the bottom 5% of the graph, and its error bars would be far too small to see.
 - **When `cold_resistance` is `null`, or the file doesn't exist yet:** the empty axes, with no message.
 - **Points:** every point whose `analysis` is present, at $x$ = `current_squared_amps_squared` and $y$ = `resistance_ohms`.
   - A point without an `analysis` isn't plotted, since its resistance was never calculated. That only happens briefly, between a point being saved and its analysis finishing.
-- **Error bars:** each point has both, at ±1 standard uncertainty (k = 1), which a caption under the graph says. The $x$ bars are usually too small to see, but they're drawn, because they're recorded. Points with warnings are drawn like any other.
+- **Error bars:** each point has both, at ±1 standard uncertainty (k = 1), which a caption under the graph says, along with that the intercept's is its combined standard uncertainty. The $x$ bars are usually too small to see, but they're drawn, because they're recorded. Points with warnings are drawn like any other.
 - **Tooltips:** each point shows its setpoint, $R \pm u$ and $I^2 \pm u$.
 - **The fit**, once `analysis` is present:
   - the line $R_0 + b\,x$ (`resistance_ohms` and `slope_ohms_per_amp_squared` values), drawn from $x = 0$ to the largest point;

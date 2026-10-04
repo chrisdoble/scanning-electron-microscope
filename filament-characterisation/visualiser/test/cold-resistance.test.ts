@@ -5,7 +5,14 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from '../src/data.ts';
 import type { Characterisation } from '../src/generated/characterisation.ts';
-import { plottedPoints, render, withUncertainty, yDomain } from '../src/sections/cold-resistance.ts';
+import {
+  plottedFit,
+  plottedPoints,
+  render,
+  withUncertainty,
+  yDomain,
+  type PlottedPoint,
+} from '../src/sections/cold-resistance.ts';
 
 /**
  * A fixture from a `--mock` run, loaded as the page would.
@@ -54,6 +61,49 @@ describe('the cold resistance graph', () => {
     expect(dots(container)).toBe(9);
   });
 
+  it.each([
+    ['before', false],
+    ['no-points', false],
+    ['partial', false],
+    ['complete', true],
+  ])('draws the fit in %s only once it has run: %s', (name, fitted) => {
+    const container = document.createElement('div');
+    render(container, fixture(name));
+    expect(container.querySelector('.fit') !== null).toBe(fitted);
+    expect(container.querySelector('.intercept') !== null).toBe(fitted);
+  });
+
+  // Plot reads a string channel as a field name, so a tooltip given as a
+  // literal string looks up a field that doesn't exist and shows nothing.
+  it("shows the fit's tooltip when the pointer is over the intercept", async () => {
+    // Plot measures the tooltip's text to size its box, which jsdom can't do.
+    SVGGraphicsElement.prototype.getBBox ??= () => ({ x: 0, y: 0, width: 100, height: 20 }) as DOMRect;
+
+    const container = document.body.appendChild(document.createElement('div'));
+    render(container, fixture('complete'));
+
+    // The intercept's marker is drawn translated to its position.
+    const marker = container.querySelector('g.intercept path[transform]')!;
+    const [x, y] = marker
+      .getAttribute('transform')!
+      .match(/translate\(([^,]+),([^)]+)\)/)!
+      .slice(1)
+      .map(Number);
+    container
+      .querySelector('svg')!
+      .dispatchEvent(new MouseEvent('pointermove', { clientX: x, clientY: y, bubbles: true }));
+
+    // Plot draws the tooltip after the event, and each mark with tooltips has
+    // its own group.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const tip = [...container.querySelectorAll('g[aria-label="tip"]')]
+      .map((group) => group.textContent)
+      .join('');
+    expect(tip).toContain('R₀ = ');
+    expect(tip).toContain('b = ');
+    container.remove();
+  });
+
   it("doesn't plot a point whose analysis hasn't run", () => {
     const characterisation = fixture('partial');
     characterisation.cold_resistance!.points[0].analysis = null;
@@ -61,17 +111,56 @@ describe('the cold resistance graph', () => {
   });
 });
 
-describe('yDomain', () => {
-  it('is fixed at 0–2 Ω with no points', () => {
-    expect(yDomain([])).toEqual([0, 2]);
+describe('plottedFit', () => {
+  it("is null before the fit has run", () => {
+    const characterisation = fixture('partial');
+    expect(plottedFit(characterisation, plottedPoints(characterisation))).toBeNull();
   });
 
-  it('runs from 10% below the lowest error bar to 10% above the highest', () => {
+  it('is the fitted line, ending at the largest point', () => {
+    const characterisation = fixture('complete');
+    const points = plottedPoints(characterisation);
+    const analysis = characterisation.cold_resistance!.analysis!;
+
+    expect(plottedFit(characterisation, points)).toEqual({
+      intercept: analysis.resistance_ohms.value,
+      interceptUncertainty: analysis.resistance_ohms.uncertainty,
+      slope: analysis.slope_ohms_per_amp_squared.value,
+      slopeUncertainty: analysis.slope_ohms_per_amp_squared.uncertainty,
+      end: Math.max(...points.map((point) => point.x)),
+    });
+  });
+});
+
+describe('yDomain', () => {
+  it('is fixed at 0–2 Ω with no points', () => {
+    expect(yDomain([], null)).toEqual([0, 2]);
+  });
+
+  it('runs from 1% below the lowest error bar to 1% above the highest', () => {
     const points = plottedPoints(fixture('complete'));
     const lowest = Math.min(...points.map((point) => point.y - point.yUncertainty));
     const highest = Math.max(...points.map((point) => point.y + point.yUncertainty));
 
-    expect(yDomain(points)).toEqual([lowest * 0.9, highest * 1.1]);
+    expect(yDomain(points, null)).toEqual([lowest * 0.99, highest * 1.01]);
+  });
+
+  it("includes the fit's intercept and its error bar", () => {
+    // A self-heating filament: the line rises, so the intercept sits below
+    // every point, and its combined uncertainty is wider than theirs.
+    const points: PlottedPoint[] = [
+      { setpoint: 0.1, x: 0.01, xUncertainty: 0, y: 0.1, yUncertainty: 0.0001 },
+      { setpoint: 0.3, x: 0.09, xUncertainty: 0, y: 0.102, yUncertainty: 0.0001 },
+    ];
+    const fit = {
+      intercept: 0.09975,
+      interceptUncertainty: 0.0025,
+      slope: 0.025,
+      slopeUncertainty: 0.001,
+      end: 0.09,
+    };
+
+    expect(yDomain(points, fit)).toEqual([(0.09975 - 0.0025) * 0.99, (0.09975 + 0.0025) * 1.01]);
   });
 });
 
