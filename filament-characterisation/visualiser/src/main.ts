@@ -2,6 +2,7 @@
 
 import type { Characterisation } from './generated/characterisation.ts';
 import { poll, type PageState } from './data.ts';
+import * as coldResistance from './sections/cold-resistance.ts';
 
 /**
  * Renders one part of the page from the results, or from `null` while there
@@ -10,7 +11,7 @@ import { poll, type PageState } from './data.ts';
 type Section = (container: HTMLElement, characterisation: Characterisation | null) => void;
 
 /** The page's sections, in order. */
-const SECTIONS: Section[] = [];
+const SECTIONS: Section[] = [coldResistance.render];
 
 const status = requireElement('#status');
 const main = requireElement('#sections');
