@@ -1,0 +1,552 @@
+{
+  "cold_resistance": {
+    "analysis": null,
+    "chamber_end_temperature_celsius": null,
+    "chamber_start_temperature_celsius": 22.0,
+    "fit_parameters": null,
+    "points": [
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 0.000020412414523193152,
+            "value": 0.225
+          },
+          "current_squared_amps_squared": {
+            "uncertainty": 9.18558653543692e-6,
+            "value": 0.050625
+          },
+          "offset_voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0
+          },
+          "resistance_ohms": {
+            "uncertainty": 8.709296863229077e-6,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0216
+          },
+          "warnings": []
+        },
+        "first_polarity": "Reverse",
+        "negative_current_amps": {
+          "samples": [
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225
+          ],
+          "uncertainty": 0.0,
+          "value": 0.225
+        },
+        "negative_settle_seconds": 4.044025458,
+        "negative_voltage_volts": {
+          "samples": [
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216
+          ],
+          "uncertainty": 0.0,
+          "value": -0.0216
+        },
+        "positive_current_amps": {
+          "samples": [
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225
+          ],
+          "uncertainty": 0.0,
+          "value": 0.225
+        },
+        "positive_settle_seconds": 4.051287458,
+        "positive_voltage_volts": {
+          "samples": [
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0216
+        },
+        "setpoint_amps": 0.225,
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 0.000020412414523193152,
+            "value": 0.3
+          },
+          "current_squared_amps_squared": {
+            "uncertainty": 0.00001224744871391589,
+            "value": 0.09
+          },
+          "offset_voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0
+          },
+          "resistance_ohms": {
+            "uncertainty": 6.531972647421809e-6,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0288
+          },
+          "warnings": []
+        },
+        "first_polarity": "Forward",
+        "negative_current_amps": {
+          "samples": [
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ],
+          "uncertainty": 0.0,
+          "value": 0.3
+        },
+        "negative_settle_seconds": 4.042676791,
+        "negative_voltage_volts": {
+          "samples": [
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288,
+            -0.0288
+          ],
+          "uncertainty": 0.0,
+          "value": -0.0288
+        },
+        "positive_current_amps": {
+          "samples": [
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ],
+          "uncertainty": 0.0,
+          "value": 0.3
+        },
+        "positive_settle_seconds": 4.03962675,
+        "positive_voltage_volts": {
+          "samples": [
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288,
+            0.0288
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0288
+        },
+        "setpoint_amps": 0.3,
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 0.000020412414523193152,
+            "value": 0.25
+          },
+          "current_squared_amps_squared": {
+            "uncertainty": 0.000010206207261596576,
+            "value": 0.0625
+          },
+          "offset_voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0
+          },
+          "resistance_ohms": {
+            "uncertainty": 7.83836717690617e-6,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.024
+          },
+          "warnings": []
+        },
+        "first_polarity": "Reverse",
+        "negative_current_amps": {
+          "samples": [
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25
+          ],
+          "uncertainty": 0.0,
+          "value": 0.25
+        },
+        "negative_settle_seconds": 4.008815625,
+        "negative_voltage_volts": {
+          "samples": [
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024
+          ],
+          "uncertainty": 0.0,
+          "value": -0.024
+        },
+        "positive_current_amps": {
+          "samples": [
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25
+          ],
+          "uncertainty": 0.0,
+          "value": 0.25
+        },
+        "positive_settle_seconds": 4.050182875,
+        "positive_voltage_volts": {
+          "samples": [
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024
+          ],
+          "uncertainty": 0.0,
+          "value": 0.024
+        },
+        "setpoint_amps": 0.25,
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 0.000020412414523193152,
+            "value": 0.175
+          },
+          "current_squared_amps_squared": {
+            "uncertainty": 7.144345083117603e-6,
+            "value": 0.030624999999999996
+          },
+          "offset_voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0
+          },
+          "resistance_ohms": {
+            "uncertainty": 0.000011197667395580242,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0168
+          },
+          "warnings": []
+        },
+        "first_polarity": "Forward",
+        "negative_current_amps": {
+          "samples": [
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175
+          ],
+          "uncertainty": 0.0,
+          "value": 0.175
+        },
+        "negative_settle_seconds": 4.01623825,
+        "negative_voltage_volts": {
+          "samples": [
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168
+          ],
+          "uncertainty": 0.0,
+          "value": -0.0168
+        },
+        "positive_current_amps": {
+          "samples": [
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175
+          ],
+          "uncertainty": 0.0,
+          "value": 0.175
+        },
+        "positive_settle_seconds": 4.041138208,
+        "positive_voltage_volts": {
+          "samples": [
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0168
+        },
+        "setpoint_amps": 0.175,
+        "warnings": []
+      }
+    ],
+    "positive_polarity": "Forward",
+    "room_temperature_celsius": 21.0,
+    "vertical_scale_volts_per_division": 0.01
+  },
+  "filament_id": "fixture",
+  "in_vacuum": true,
+  "started_at": 1791001574
+}

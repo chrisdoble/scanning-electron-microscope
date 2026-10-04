@@ -7,6 +7,7 @@
     "types": ["node"],
     "strict": true,
     "noEmit": true,
+    "resolveJsonModule": true,
 
     // Node runs the server's TypeScript directly by stripping the types, so
     // imports name `.ts` files and only syntax that can be stripped is allowed.

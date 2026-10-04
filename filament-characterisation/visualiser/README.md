@@ -15,6 +15,7 @@ See [`../characteriser/docs/VISUALISER.md`](../characteriser/docs/VISUALISER.md)
 
 # Developing
 
+- `pnpm generate` regenerates `src/generated/` after the characteriser's results schema changes. CI checks it's up to date.
 - `pnpm typecheck` checks the types.
 - `pnpm test` runs the tests.
 

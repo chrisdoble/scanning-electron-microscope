@@ -142,6 +142,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The characteriser's results schema is the source of truth, so the
+      # generated schema copy and types must match it.
+      - name: Check the generated types are up to date
+        run: |
+          pnpm generate
+          git status --porcelain -- src/generated
+          test -z "$(git status --porcelain -- src/generated)"
+
       - name: Typecheck
         run: pnpm typecheck
 

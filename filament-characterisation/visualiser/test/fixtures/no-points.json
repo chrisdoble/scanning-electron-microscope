@@ -1,0 +1,15 @@
+{
+  "cold_resistance": {
+    "analysis": null,
+    "chamber_end_temperature_celsius": null,
+    "chamber_start_temperature_celsius": 22.0,
+    "fit_parameters": null,
+    "points": [],
+    "positive_polarity": "Forward",
+    "room_temperature_celsius": 21.0,
+    "vertical_scale_volts_per_division": 0.01
+  },
+  "filament_id": "fixture",
+  "in_vacuum": true,
+  "started_at": 1791001541
+}

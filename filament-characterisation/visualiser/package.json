@@ -8,14 +8,17 @@
   },
   "scripts": {
     "visualise": "node --disable-warning=ExperimentalWarning server.ts",
+    "generate": "node --disable-warning=ExperimentalWarning generate.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "ajv": "8.20.0",
     "vite": "8.3.2"
   },
   "devDependencies": {
     "@types/node": "24.19.1",
+    "json-schema-to-typescript": "16.0.0",
     "typescript": "6.0.3",
     "vitest": "5.0.3"
   }

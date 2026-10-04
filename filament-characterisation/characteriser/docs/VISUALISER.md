@@ -41,13 +41,15 @@ filament-characterisation/visualiser/
   index.html
   server.ts             // the local server: Vite in middleware mode, plus the data endpoint
   api.ts                // the data endpoint, separate so its tests needn't start the server
+  generate.ts           // `pnpm generate`: the schema copy and types in src/generated/
   src/
     main.ts             // polling loop, validation, dispatch to the sections
     data.ts             // fetching with ETags, and the page's load states
     sections/
       cold-resistance.ts// the R vs I² graph
     generated/
-      characterisation.ts  // TypeScript types generated from the schema (committed)
+      characterisation.schema.json  // a copy of the characteriser's schema (committed)
+      characterisation.ts           // TypeScript types generated from it (committed)
     style.css
   test/                 // vitest: fixtures and rendering tests
   README.md
@@ -75,7 +77,7 @@ A single Node process. Node 23.6+ runs TypeScript directly by stripping types, s
 | --- | --- |
 | Waiting | No status line; the sections render as if every field were empty |
 | Loaded | No status line |
-| Invalid | "<path> isn't a results file this version understands", with Ajv's first error |
+| Invalid | "This isn't a results file this version understands", with the parse error or Ajv's first error |
 | Unreadable | The server's error |
 | Disconnected | "Lost the connection to the visualiser server", keeping the last good render on screen |
 
@@ -107,8 +109,10 @@ The characteriser's Rust types are the source of truth, as they are for the Pyth
 
 - **Schema derives:** `Characterisation`, `ColdResistance` and `ColdResistancePoint` gain `JsonSchema` derives. The types they contain already have them.
 - **The committed schema:** a new snapshot test in `results.rs`, `results_schema_is_up_to_date`, generates `schema_for!(Characterisation)`. It compares that with the committed `filament-characterisation/characteriser/schemas/characterisation.schema.json`, and rewrites it when run with `UPDATE_SCHEMAS=1`, like the Python schemas test.
-- **Generated types:** `pnpm generate` runs `json-schema-to-typescript` on that schema to produce `src/generated/characterisation.ts`, which is committed.
-- **Drift:** CI regenerates the types and fails if the result differs from what's committed.
+- **Generated types:** `pnpm generate` copies that schema to `src/generated/`, where the page imports it for validation, and runs `json-schema-to-typescript` on it to produce `src/generated/characterisation.ts`. Both are committed.
+  - Before generating, it removes the descriptions schemars puts beside each `$ref`. Otherwise json-schema-to-typescript generates a separate copy of a shared type, such as `Derived1`, `Derived2` and so on, for every field that refers to it.
+- **Drift:** CI regenerates both and fails if the result differs from what's committed.
+- **Formats:** Ajv runs with `validateFormats: false`. The formats schemars records, such as `double` and `uint64`, describe Rust's types rather than constrain the JSON, and Ajv doesn't know them.
 
 `Option` fields become `T | null`, which is exactly what makes partial files type-check: every field the characteriser may not have reached yet has to be handled.
 

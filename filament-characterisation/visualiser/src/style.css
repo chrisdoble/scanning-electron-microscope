@@ -1,0 +1,14 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 1.5rem;
+}
+
+#path {
+  font-size: 1rem;
+  font-weight: normal;
+  font-family: ui-monospace, monospace;
+}
+
+#status {
+  color: #b00020;
+}
