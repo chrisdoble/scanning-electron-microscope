@@ -102,6 +102,11 @@ impl Oscilloscope {
         const ACQUISITION_TIMEOUT: Duration = Duration::from_secs(2);
         const STATUS_INTERVAL: Duration = Duration::from_millis(50);
 
+        // How long the scope may stay stopped after `:SINGle` before it's sent
+        // again. A normal arm reports `WAIT` within about 25–110 ms, and the
+        // slowest seen within about 150 ms.
+        const REARM_INTERVAL: Duration = Duration::from_millis(300);
+
         let state = self.state.lock().await;
 
         // See `set_vertical_scale` for why this is a clone of the handle.
@@ -110,13 +115,45 @@ impl Oscilloscope {
         device.write_str(":SINGle").await?;
 
         let start = Instant::now();
+        let mut last_single = start;
+        let mut armed = false;
         let mut forced = false;
         loop {
-            match device.query_str(":TRIGger:STATus?").await?.trim() {
+            let status = device.query_str(":TRIGger:STATus?").await?;
+            let status = status.trim();
+
+            // `STOP` only means this acquisition is complete once the scope has
+            // reported something else first, showing it has armed for it. The
+            // scope is still stopped from the previous acquisition when
+            // `:SINGle` is sent. It sometimes answers the first status query,
+            // about 30 ms later, before it has processed `:SINGle`, and it
+            // occasionally (about 3% of the time on the rig) ignores `:SINGle`
+            // altogether. Either way, that `STOP` is the previous acquisition's.
+            // Taking it as this one's would read the previous acquisition's
+            // measurements again, silently duplicating a sample, or, once the
+            // scope has cleared its screen to arm, invalid values, as if the
+            // signal had clipped. And because the loop would never see `WAIT`,
+            // the force would never be sent.
+            if status != "STOP" {
+                armed = true;
+            }
+
+            match status {
                 // The acquisition is complete. Noise crossing the trigger level
                 // can trigger it before it's forced, which is fine: it's still
                 // an acquisition that began after the arm.
-                "STOP" => break,
+                "STOP" if armed => break,
+
+                // Still stopped well after `:SINGle`, so it was ignored: send it
+                // again. The scope reports no error when it does this, so there's
+                // no telling why. If the first `:SINGle` was only slow after all,
+                // the second restarts an acquisition that hasn't completed, which
+                // is harmless: this still waits for the arm, forces, and waits
+                // for the new acquisition to complete.
+                "STOP" if last_single.elapsed() >= REARM_INTERVAL => {
+                    device.write_str(":SINGle").await?;
+                    last_single = Instant::now();
+                }
 
                 // Armed and waiting. A DC signal may never cross the trigger
                 // level, so force it. Waiting for this rather than forcing
