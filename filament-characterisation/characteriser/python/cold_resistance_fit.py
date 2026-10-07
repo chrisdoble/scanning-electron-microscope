@@ -1,8 +1,8 @@
 """Fits the cold-resistance setpoints and works out the uncertainty budget.
 
 Reads a `ColdResistanceFitInput` on stdin and prints a `ColdResistanceAnalysis`
-on stdout (see `schemas/`). See section 3.4 of docs/COLD_RESISTANCE.md for the
-method.
+on stdout (see `schemas/`). See section 3.4 of
+`filament-characterisation/docs/2_COLD_RESISTANCE.md` for the method.
 """
 
 import math

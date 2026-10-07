@@ -152,8 +152,8 @@ impl PowerSupply {
     pub async fn get_current(&self) -> Result<f64, PowerSupplyError> {
         /// The minimum time between one measurement's reply and the next
         /// query. 200 ms is what was tested and shown to work (see "Appendix:
-        /// the supply's current readback" in the characteriser's
-        /// COLD_RESISTANCE.md).
+        /// the supply's current readback" in
+        /// `filament-characterisation/docs/2_COLD_RESISTANCE.md`).
         const MEASUREMENT_PAUSE: Duration = Duration::from_millis(200);
 
         let mut state = self.state.lock().await;

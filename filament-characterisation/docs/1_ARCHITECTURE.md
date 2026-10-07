@@ -59,7 +59,7 @@ differently.
 | A4 | The vacuum hardware is reached exactly as the existing binary does: one `Controller` over serial, shared by `Adc` and `Tmp` via `Arc`. The same `Controller` is shared with `PowerSupply`. |
 | A5 | Shared dependency versions are hoisted from `host` into `[workspace.dependencies]` and pinned there (§4.1). Take the versions `host` currently declares; do not upgrade anything as part of the move. |
 | A6 | Keep `#[tokio::main(flavor = "current_thread")]` as in the existing binary. All blocking serial I/O already happens inside `spawn_blocking` within `Controller`. |
-| A7 | `host` depends on `serde` only to derive `Serialize`/`Deserialize` on plain data types that the results store directly, such as `Polarity` (§7.2). This supersedes the original "`host` stays free of `serde`"; see COLD_RESISTANCE.md. |
+| A7 | `host` depends on `serde` only to derive `Serialize`/`Deserialize` on plain data types that the results store directly, such as `Polarity` (§7.2). This supersedes the original "`host` stays free of `serde`"; see `2_COLD_RESISTANCE.md`. |
 | A8 | The Python virtual environment lives at `characteriser/python/.venv` and is created by the operator, not by the application (§12). |
 | A9 | Development and operation are on macOS/Linux. Paths like `python/.venv/bin/python` are used directly, without a Windows branch. |
 
@@ -1505,7 +1505,7 @@ prints `{"value": <mean>, "uncertainty": <standard error>}`. It imports
 `uncertainties` even though the mean and standard error don't strictly need it,
 so the venv is exercised on the same path as the real propagation. Resistance
 and its propagated uncertainty are calculated by `cold_resistance_point.py` and
-`cold_resistance_fit.py` beside it (COLD_RESISTANCE.md 3.3 and 3.4).
+`cold_resistance_fit.py` beside it (`2_COLD_RESISTANCE.md` 3.3 and 3.4).
 
 ---
 

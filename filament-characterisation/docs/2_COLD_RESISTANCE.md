@@ -1,6 +1,6 @@
 # Cold resistance calculation steps
 
-This document specifies the real body of `measure_cold_resistance` in `filament-characterisation/characteriser`, plus the changes it needs elsewhere in the crate and in `host`. It builds on `docs/ARCHITECTURE.md`. Everything there still applies unless this document says otherwise: code style (§18), doc comments, saving after every measurement (§10.3), safe shutdown (§16), and "no statistics in Rust" (§2).
+This document specifies the real body of `measure_cold_resistance` in `filament-characterisation/characteriser`, plus the changes it needs elsewhere in the crate and in `host`. It builds on `1_ARCHITECTURE.md`. Everything there still applies unless this document says otherwise: code style (§18), doc comments, saving after every measurement (§10.3), safe shutdown (§16), and "no statistics in Rust" (§2).
 
 The filament is measured four-terminal, with current reversal, at a set of currents. The resistance at each current is plotted against $I^2$, and a weighted straight-line fit is extrapolated to $I = 0$ to give the cold resistance $R_0$ and its full uncertainty budget.
 
@@ -67,7 +67,7 @@ The defaults are tuned for filaments with $R_0 \approx 0.1\ \Omega$ (10–30 mV 
 
 # Implementation order
 
-The changes split into ten commits. Each one must build, pass `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`, and run end to end with `--mock` (ARCHITECTURE.md §19).
+The changes split into ten commits. Each one must build, pass `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`, and run end to end with `--mock` (`1_ARCHITECTURE.md` §19).
 
 If clippy flags something as unused before the commit that uses it, mark it `#[expect(dead_code)]` with a comment naming that commit, and remove the attribute there. `expect` rather than `allow`, so the attribute fails the build if it's forgotten.
 
@@ -75,7 +75,7 @@ Commits 5 and 6 don't depend on 2–4, and can be done before them.
 
 1. **Make `Polarity` serialisable.**
    - Hoist `serde` to `[workspace.dependencies]`, add it to `host`, and derive `Serialize`/`Deserialize` on `Polarity`.
-   - Update A7 and §7.2 in ARCHITECTURE.md.
+   - Update A7 and §7.2 in `1_ARCHITECTURE.md`.
    - No behaviour change.
 2. **Add regulation mode and overcurrent protection to the supply.**
    - `RegulationMode` (serialisable), `get_regulation_mode`, `set_overcurrent_protection` and `get_overcurrent_tripped` in `host`, plus the `OFFMode` and OCP-clear additions to `reset`.
@@ -95,7 +95,7 @@ Commits 5 and 6 don't depend on 2–4, and can be done before them.
    - `run_script` writes a serialisable input to stdin.
    - The input and output types for `mean_and_standard_error.py`, the schema snapshot test, the generated `python/schemas/`, and `python/script_io.py`.
    - `mean_and_standard_error.py` reads `{"samples": [...]}`.
-   - Update ARCHITECTURE.md §4 (layout) and §12.
+   - Update `1_ARCHITECTURE.md` §4 (layout) and §12.
    - Check: the stub still records measurements, under `--mock` and on the rig.
 6. **Add the analysis scripts.**
    - `numpy` and `scipy` in `requirements.txt`, and the extended `check_environment`.
@@ -160,7 +160,7 @@ Make **`get_current`** pause between measurements. Each `:MEASure:CURRent?` take
 - Enforcing the pause in `host` means it covers every caller: the procedure's samples and the snapshot poll, which would otherwise interleave their measurements.
 - Setpoint writes are unaffected, apart from waiting for the lock. In the tests, with this pause, a setpoint written just before a measurement always showed in the measurement after it, about 0.6 s later.
 
-Add `serde` (with `derive`) to `host`, hoisted to `[workspace.dependencies]` as in ARCHITECTURE.md §4.1, and derive `Serialize` and `Deserialize` on `Polarity` and `RegulationMode` so `results.rs` can store them directly. This supersedes assumption A7; update A7 and §7.2 in ARCHITECTURE.md to say so.
+Add `serde` (with `derive`) to `host`, hoisted to `[workspace.dependencies]` as in `1_ARCHITECTURE.md` §4.1, and derive `Serialize` and `Deserialize` on `Polarity` and `RegulationMode` so `results.rs` can store them directly. This supersedes assumption A7; update A7 and §7.2 in `1_ARCHITECTURE.md` to say so.
 
 ## `host::oscilloscope::Oscilloscope`
 
@@ -707,7 +707,7 @@ Record the analysis and save. Show:
 
 ## 4. Spinning down and finishing
 
-Unchanged. Abort handling is already covered by ARCHITECTURE.md §16: every `Err`, including the new `ProcedureError::Check`, ends the run and `enter_safe_state` runs. Its current step to 0 A (rather than a ramp) is harmless at ≤300 mA.
+Unchanged. Abort handling is already covered by `1_ARCHITECTURE.md` §16: every `Err`, including the new `ProcedureError::Check`, ends the run and `enter_safe_state` runs. Its current step to 0 A (rather than a ramp) is harmless at ≤300 mA.
 
 # Tests
 
@@ -740,7 +740,7 @@ Tests 1–3 share a fixture. It uses the default setpoints $I_i$ = 0.100, 0.125,
 
 # Acceptance criteria
 
-These are in addition to ARCHITECTURE.md §20.
+These are in addition to `1_ARCHITECTURE.md` §20.
 
 - A clipped reading, including one where only VMAX or VMIN is out of range, during the vertical-scale search increases the scale and never ends the run as a hardware failure.
 - A clipped voltage after the scale is chosen, an OCP trip, a supply leaving constant-current mode, or a pressure above `FILAMENT_ABORT_PRESSURE_MBAR` each end the run with a `Check` error step, followed by the usual cleanup.

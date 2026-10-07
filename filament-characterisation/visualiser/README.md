@@ -1,6 +1,6 @@
 A local web page that plots a results file written by the characteriser, updating as the file changes, so it can run beside the characteriser during a run.
 
-See [`../characteriser/docs/VISUALISER.md`](../characteriser/docs/VISUALISER.md) for the design.
+See [`../docs/3_VISUALISER.md`](../docs/3_VISUALISER.md) for the design.
 
 # Requirements
 

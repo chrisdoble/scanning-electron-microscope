@@ -93,7 +93,8 @@ const RELAY_SETTLE_TIME: Duration = Duration::from_millis(50);
 /// before a single reading is taken as being at the new current.
 ///
 /// The supply has been seen to take about 0.6 s to apply a setpoint change
-/// (see "Appendix: the supply's current readback" in COLD_RESISTANCE.md).
+/// (see "Appendix: the supply's current readback" in
+/// `filament-characterisation/docs/2_COLD_RESISTANCE.md`).
 /// `wait_for_settle` doesn't need this, because it compares seconds of
 /// readings.
 const SETPOINT_APPLY_TIME: Duration = Duration::from_secs(1);
@@ -149,7 +150,7 @@ const VERTICAL_SCALES_VOLTS_PER_DIVISION: [f64; 10] =
 /// difference between a reading at the top of the screen and one at the
 /// bottom. The second matches the measurement here, which takes half the
 /// difference between two polarities, but the first is what the data sheet
-/// literally guarantees (COLD_RESISTANCE.md, 3.4.3).
+/// literally guarantees (`2_COLD_RESISTANCE.md`, 3.4.3).
 const VOLTAGE_GAIN_BOUND: f64 = 0.02;
 
 /// The measurements in one polarity at one setpoint.
@@ -501,7 +502,7 @@ async fn fit_setpoints(
     }
 
     // The data sheet bounds the scope's error without saying it's a pure gain
-    // (COLD_RESISTANCE.md, 3.4.3), so the result rests on that assumption
+    // (`2_COLD_RESISTANCE.md`, 3.4.3), so the result rests on that assumption
     // until the scope's response is measured.
     ctx.text(
         "Note: the oscilloscope's gain uncertainty assumes its error is a pure gain, which its data sheet doesn't guarantee",

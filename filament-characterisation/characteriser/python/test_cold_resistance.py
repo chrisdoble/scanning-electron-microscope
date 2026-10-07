@@ -1,7 +1,7 @@
 """Tests for the cold-resistance analysis scripts.
 
 Run from this directory with `python -m unittest`. The cases are the ones in
-the "Tests" section of docs/COLD_RESISTANCE.md.
+the "Tests" section of `filament-characterisation/docs/2_COLD_RESISTANCE.md`.
 """
 
 import json

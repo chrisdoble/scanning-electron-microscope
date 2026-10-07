@@ -2,7 +2,7 @@
 
 Reads a `ColdResistancePointInput` on stdin and prints a
 `ColdResistancePointAnalysis` on stdout (see `schemas/`). See section 3.3 of
-docs/COLD_RESISTANCE.md for the method.
+`filament-characterisation/docs/2_COLD_RESISTANCE.md` for the method.
 """
 
 import math

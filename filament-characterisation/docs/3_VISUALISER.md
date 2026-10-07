@@ -14,7 +14,7 @@ It lives at `filament-characterisation/visualiser/`, a sibling of the characteri
 ## Non-goals
 
 - **No tables or summaries.** The page is the graph and the path of the file it's showing. The fit's numbers, the uncertainty budget and the per-setpoint details are in the characteriser's display and the results file.
-- **No calculation.** The visualiser plots what the characteriser and its Python scripts recorded. It doesn't fit, average or propagate uncertainties itself, following ARCHITECTURE.md's rule that statistics happen in Python. The one exception is drawing the fitted line, $R_0 + b\,x$, from the stored $R_0$ and $b$.
+- **No calculation.** The visualiser plots what the characteriser and its Python scripts recorded. It doesn't fit, average or propagate uncertainties itself, following `1_ARCHITECTURE.md`'s rule that statistics happen in Python. The one exception is drawing the fitted line, $R_0 + b\,x$, from the stored $R_0$ and $b$.
 - **No editing, and no control of the characteriser.** It only reads.
 - **Only the current results format.** Files from older versions of the characteriser, such as the stub's four `cold_*` fields, fail validation and are reported as such, not plotted.
 - **Local use only.** The server listens on `127.0.0.1:5180`.
