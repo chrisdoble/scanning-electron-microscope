@@ -16,5 +16,5 @@ schemars = { workspace = true }
 serde = { workspace = true }
 serialport = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { features = ["signal"], workspace = true }
 usb-tmc = { path = "../usb-tmc" }
