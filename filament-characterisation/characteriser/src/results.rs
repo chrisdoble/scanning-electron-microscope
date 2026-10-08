@@ -241,6 +241,12 @@ pub struct ColdResistancePoint {
     /// negative voltage, in seconds.
     pub negative_settle_seconds: f64,
 
+    /// The midpoint of the sampling window in the polarity that gives a
+    /// negative voltage, in seconds since the cold-resistance measurement
+    /// started. `None` in results from before it was recorded.
+    #[serde(default)]
+    pub negative_time_seconds: Option<f64>,
+
     /// The voltage in the polarity that gives a negative voltage.
     pub negative_voltage_volts: Measurement,
 
@@ -250,6 +256,12 @@ pub struct ColdResistancePoint {
     /// How long the filament took to settle in the polarity that gives a
     /// positive voltage, in seconds.
     pub positive_settle_seconds: f64,
+
+    /// The midpoint of the sampling window in the polarity that gives a
+    /// positive voltage, in seconds since the cold-resistance measurement
+    /// started. `None` in results from before it was recorded.
+    #[serde(default)]
+    pub positive_time_seconds: Option<f64>,
 
     /// The voltage in the polarity that gives a positive voltage.
     pub positive_voltage_volts: Measurement,
@@ -419,6 +431,27 @@ mod tests {
 
     fn load(path: &Path) -> Characterisation {
         serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn a_point_saved_before_times_were_recorded_still_loads() {
+        let point: ColdResistancePoint = serde_json::from_str(
+            r#"{
+                "analysis": null,
+                "first_polarity": "Forward",
+                "negative_current_amps": {"samples": [0.1], "uncertainty": 0.0, "value": 0.1},
+                "negative_settle_seconds": 3.0,
+                "negative_voltage_volts": {"samples": [-0.0096], "uncertainty": 0.0, "value": -0.0096},
+                "positive_current_amps": {"samples": [0.1], "uncertainty": 0.0, "value": 0.1},
+                "positive_settle_seconds": 3.0,
+                "positive_voltage_volts": {"samples": [0.0096], "uncertainty": 0.0, "value": 0.0096},
+                "setpoint_amps": 0.1,
+                "warnings": []
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(point.negative_time_seconds, None);
+        assert_eq!(point.positive_time_seconds, None);
     }
 
     #[test]

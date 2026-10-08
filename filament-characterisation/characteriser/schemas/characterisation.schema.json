@@ -291,6 +291,15 @@
           "type": "number",
           "format": "double"
         },
+        "negative_time_seconds": {
+          "description": "The midpoint of the sampling window in the polarity that gives a\nnegative voltage, in seconds since the cold-resistance measurement\nstarted. `None` in results from before it was recorded.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
         "negative_voltage_volts": {
           "description": "The voltage in the polarity that gives a negative voltage.",
           "$ref": "#/$defs/Measurement"
@@ -303,6 +312,15 @@
           "description": "How long the filament took to settle in the polarity that gives a\npositive voltage, in seconds.",
           "type": "number",
           "format": "double"
+        },
+        "positive_time_seconds": {
+          "description": "The midpoint of the sampling window in the polarity that gives a\npositive voltage, in seconds since the cold-resistance measurement\nstarted. `None` in results from before it was recorded.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
         },
         "positive_voltage_volts": {
           "description": "The voltage in the polarity that gives a positive voltage.",

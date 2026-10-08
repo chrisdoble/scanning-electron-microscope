@@ -157,6 +157,11 @@ const VOLTAGE_GAIN_BOUND: f64 = 0.02;
 struct PolarityMeasurement {
     current: Measurement,
     settle_seconds: f64,
+
+    /// The midpoint of the sampling window, in seconds since the
+    /// cold-resistance measurement started.
+    time_seconds: f64,
+
     voltage: Measurement,
 
     /// Set if the filament didn't settle in time.
@@ -272,6 +277,9 @@ async fn pump_down(ctx: Context, hardware: Hardware) -> Result<(), ProcedureErro
 async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(), ProcedureError> {
     let filament = &hardware.filament;
 
+    // Every measurement's time is relative to this.
+    let start = Instant::now();
+
     // Setup. Don't assume the output is off: it's however the supply was left.
     let overcurrent_protection = largest_setpoint() + OVERCURRENT_PROTECTION_MARGIN_AMPS;
     filament.set_output_enabled(false).await?;
@@ -363,6 +371,7 @@ async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(),
                     polarity,
                     positive_polarity,
                     scale,
+                    start,
                 )
             })
             .await?;
@@ -594,7 +603,8 @@ async fn choose_vertical_scale(
 }
 
 /// Measures one setpoint in both polarities, starting in `first`, and analyses
-/// it. Returns the polarity it leaves the relays in, the other one.
+/// it. Returns the polarity it leaves the relays in, the other one. Times are
+/// recorded relative to `start`.
 ///
 /// The measurements are filed by the sign of their voltage, using
 /// `positive_polarity`. That's the only place the relay-to-sign mapping is
@@ -606,6 +616,7 @@ async fn measure_setpoint(
     first: Polarity,
     positive_polarity: Polarity,
     scale: f64,
+    start: Instant,
 ) -> Result<Polarity, ProcedureError> {
     let second = if first == Polarity::Forward {
         Polarity::Reverse
@@ -614,11 +625,11 @@ async fn measure_setpoint(
     };
 
     ramp_to(&ctx, &hardware, setpoint).await?;
-    let first_measurement = measure_polarity(&ctx, &hardware, scale).await?;
+    let first_measurement = measure_polarity(&ctx, &hardware, scale, start).await?;
 
     change_polarity(&hardware, second).await?;
     ctx.text(format!("Changed the polarity to {}", second));
-    let second_measurement = measure_polarity(&ctx, &hardware, scale).await?;
+    let second_measurement = measure_polarity(&ctx, &hardware, scale, start).await?;
 
     let (positive, negative) = if first == positive_polarity {
         (first_measurement, second_measurement)
@@ -631,9 +642,11 @@ async fn measure_setpoint(
         first_polarity: first,
         negative_current_amps: negative.current,
         negative_settle_seconds: negative.settle_seconds,
+        negative_time_seconds: Some(negative.time_seconds),
         negative_voltage_volts: negative.voltage,
         positive_current_amps: positive.current,
         positive_settle_seconds: positive.settle_seconds,
+        positive_time_seconds: Some(positive.time_seconds),
         positive_voltage_volts: positive.voltage,
         setpoint_amps: setpoint,
         warnings: positive
@@ -681,11 +694,12 @@ async fn measure_setpoint(
 }
 
 /// Waits for the filament to settle at the present current and polarity, then
-/// samples its voltage and current.
+/// samples its voltage and current. The time is recorded relative to `start`.
 async fn measure_polarity(
     ctx: &Context,
     hardware: &Hardware,
     scale: f64,
+    start: Instant,
 ) -> Result<PolarityMeasurement, ProcedureError> {
     let (settle_time, warning) = match wait_for_settle(ctx, hardware, scale).await? {
         Settle::Settled(time) => (time, None),
@@ -700,10 +714,12 @@ async fn measure_polarity(
         }
     };
 
-    let (voltages, currents) = take_samples(ctx, hardware, scale, SAMPLE_COUNT).await?;
+    let (voltages, currents, time_seconds) =
+        take_samples(ctx, hardware, scale, SAMPLE_COUNT, start).await?;
     Ok(PolarityMeasurement {
         current: summarise(currents).await?,
         settle_seconds: settle_time.as_secs_f64(),
+        time_seconds,
         voltage: summarise(voltages).await?,
         warning,
     })
@@ -1017,14 +1033,17 @@ async fn sample(
 }
 
 /// Takes `n` samples of the filament's voltage and current, returning them in
-/// that order.
+/// that order, followed by the midpoint of the sampling window in seconds since
+/// `start`.
 async fn take_samples(
     ctx: &Context,
     hardware: &Hardware,
     scale: f64,
     n: usize,
-) -> Result<(Vec<f64>, Vec<f64>), ProcedureError> {
+    start: Instant,
+) -> Result<(Vec<f64>, Vec<f64>, f64), ProcedureError> {
     ctx.waiting(format!("Taking {} samples", n), || async {
+        let window_start = Instant::now();
         let mut voltages = Vec::with_capacity(n);
         let mut currents = Vec::with_capacity(n);
         for _ in 0..n {
@@ -1032,7 +1051,8 @@ async fn take_samples(
             voltages.push(voltage);
             currents.push(current);
         }
-        Ok((voltages, currents))
+        let midpoint = window_start + (Instant::now() - window_start) / 2;
+        Ok((voltages, currents, (midpoint - start).as_secs_f64()))
     })
     .await
 }
@@ -1354,6 +1374,27 @@ mod tests {
                 .points
                 .iter()
                 .all(|point| point.analysis.is_some())
+        );
+
+        // Every polarity's time, in the order they were measured.
+        let positive_polarity = cold_resistance.positive_polarity.unwrap();
+        let times: Vec<f64> = cold_resistance
+            .points
+            .iter()
+            .flat_map(|point| {
+                let positive = point.positive_time_seconds.unwrap();
+                let negative = point.negative_time_seconds.unwrap();
+                if point.first_polarity == positive_polarity {
+                    [positive, negative]
+                } else {
+                    [negative, positive]
+                }
+            })
+            .collect();
+        assert!(
+            times.windows(2).all(|pair| pair[0] < pair[1]),
+            "expected increasing times, got {:?}",
+            times
         );
 
         let resistance = cold_resistance

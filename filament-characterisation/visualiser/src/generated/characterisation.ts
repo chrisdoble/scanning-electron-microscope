@@ -243,6 +243,12 @@ export interface ColdResistancePoint {
    * negative voltage, in seconds.
    */
   negative_settle_seconds: number;
+  /**
+   * The midpoint of the sampling window in the polarity that gives a
+   * negative voltage, in seconds since the cold-resistance measurement
+   * started. `None` in results from before it was recorded.
+   */
+  negative_time_seconds?: number | null;
   negative_voltage_volts: Measurement;
   positive_current_amps: Measurement;
   /**
@@ -250,6 +256,12 @@ export interface ColdResistancePoint {
    * positive voltage, in seconds.
    */
   positive_settle_seconds: number;
+  /**
+   * The midpoint of the sampling window in the polarity that gives a
+   * positive voltage, in seconds since the cold-resistance measurement
+   * started. `None` in results from before it was recorded.
+   */
+  positive_time_seconds?: number | null;
   positive_voltage_volts: Measurement;
   /**
    * The current this point was measured at in amperes.
