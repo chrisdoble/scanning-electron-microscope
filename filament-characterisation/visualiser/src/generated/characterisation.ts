@@ -93,6 +93,12 @@ export interface ColdResistance {
    */
   positive_polarity?: Polarity | null;
   /**
+   * The measurements at the reference current, interleaved with the
+   * setpoints to track the mount's warming, in the order measured. Empty in
+   * results from before references were measured.
+   */
+  references?: ColdResistancePoint[];
+  /**
    * The operator-entered room temperature near the supply in °C, for the
    * supply's accuracy band.
    */
@@ -227,9 +233,9 @@ export interface ColdResistanceFitParameters {
   voltage_gain_bound: number;
 }
 /**
- * The measurements at one setpoint, filed by the sign of the voltage rather
- * than by relay state, so nothing downstream needs to know which relay state
- * is which.
+ * The measurements at one setpoint or reference, filed by the sign of the
+ * voltage rather than by relay state, so nothing downstream needs to know
+ * which relay state is which.
  */
 export interface ColdResistancePoint {
   /**

@@ -95,6 +95,14 @@
             }
           ]
         },
+        "references": {
+          "description": "The measurements at the reference current, interleaved with the\nsetpoints to track the mount's warming, in the order measured. Empty in\nresults from before references were measured.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ColdResistancePoint"
+          }
+        },
         "room_temperature_celsius": {
           "description": "The operator-entered room temperature near the supply in °C, for the\nsupply's accuracy band.",
           "type": "number",
@@ -264,7 +272,7 @@
       ]
     },
     "ColdResistancePoint": {
-      "description": "The measurements at one setpoint, filed by the sign of the voltage rather\nthan by relay state, so nothing downstream needs to know which relay state\nis which.",
+      "description": "The measurements at one setpoint or reference, filed by the sign of the\nvoltage rather than by relay state, so nothing downstream needs to know\nwhich relay state is which.",
       "type": "object",
       "properties": {
         "analysis": {

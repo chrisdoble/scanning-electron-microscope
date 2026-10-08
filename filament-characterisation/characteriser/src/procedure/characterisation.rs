@@ -99,6 +99,21 @@ const RELAY_SETTLE_TIME: Duration = Duration::from_millis(50);
 /// readings.
 const SETPOINT_APPLY_TIME: Duration = Duration::from_secs(1);
 
+/// The current the references are measured at in amperes.
+///
+/// Mid-range: a good voltage without adding as much heat to every reference as
+/// the largest setpoint would. It's also measured as an ordinary setpoint.
+const REFERENCE_CURRENT_AMPS: f64 = 0.2;
+
+/// How many setpoints are measured between references, after the reference
+/// that follows the first setpoint.
+///
+/// The mount warms with a time constant of roughly 2.5 minutes, so it drifts
+/// fastest at the start: the extra early reference follows that, and this sets
+/// the spacing after it. Shorten it if the interpolation uncertainty dominates
+/// the points' uncertainties; lengthen it if it's negligible.
+const REFERENCE_INTERVAL: usize = 2;
+
 /// The temperature the cold resistance is corrected to in °C.
 const REFERENCE_TEMPERATURE_CELSIUS: f64 = 20.0;
 
@@ -168,6 +183,34 @@ struct PolarityMeasurement {
     warning: Option<String>,
 }
 
+/// A type of measurement in the cold-resistance run. `measurement_plan` lists
+/// them in the order they're measured.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum MeasurementType {
+    /// A measurement at `REFERENCE_CURRENT_AMPS`, to track the mount's
+    /// warming.
+    Reference,
+
+    /// A measurement at this setpoint in amperes, for the fit.
+    Setpoint(f64),
+}
+
+/// Where `measure_setpoint` records what it measures.
+#[derive(Clone, Copy)]
+enum MeasurementSlot {
+    Points,
+    References,
+}
+
+impl MeasurementSlot {
+    fn of(self, cold_resistance: &mut ColdResistance) -> &mut Vec<ColdResistancePoint> {
+        match self {
+            MeasurementSlot::Points => &mut cold_resistance.points,
+            MeasurementSlot::References => &mut cold_resistance.references,
+        }
+    }
+}
+
 /// How `wait_for_settle` finished, and after how long.
 enum Settle {
     Settled(Duration),
@@ -225,6 +268,13 @@ async fn prepare(ctx: Context, _hardware: Hardware) -> Result<(), ProcedureError
         "Confirm that a 1× probe is connected to the oscilloscope's channel 1 and that its switch is set to 1×",
     )
     .await?;
+
+    // The cold resistance is relative to the mount's temperature at the first
+    // reference, which should be the flange's. The mount takes about 15
+    // minutes to cool after the filament's been powered, e.g. by an earlier
+    // run.
+    ctx.confirm("Confirm that the filament hasn't been powered for at least 15 minutes")
+        .await?;
 
     // The supply's accuracy figures assume a 1-hour warm-up, and the
     // pump-down usually covers it.
@@ -324,6 +374,7 @@ async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(),
             fit_parameters: None,
             points: Vec::new(),
             positive_polarity: None,
+            references: Vec::new(),
             room_temperature_celsius: room_temperature,
             vertical_scale_volts_per_division: None,
         })
@@ -353,28 +404,83 @@ async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(),
     // that doesn't reverse biases a point by half the drift between its two
     // measurements, with a sign set by which came first: alternating makes
     // that cancel on average rather than bias every point the same way. The
-    // scale search leaves the relays reversed.
+    // scale search leaves the relays reversed. The references alternate along
+    // with the setpoints.
+    //
+    // The filament's own power warms its mount, raising every reading over
+    // the run. The references, at a fixed current, track that so the fit can
+    // remove it.
+    let plan = measurement_plan(&setpoints);
+    let reference_count = plan
+        .iter()
+        .filter(|measure| **measure == MeasurementType::Reference)
+        .count();
+    let mut setpoint_number = 0;
+    let mut reference_number = 0;
+    let mut first_reference = None;
     let mut polarity = Polarity::Reverse;
-    for (index, setpoint) in setpoints.iter().copied().enumerate() {
-        let title = format!(
-            "Measuring at {:.0} mA ({}/{})",
-            setpoint * 1000.0,
-            index + 1,
-            setpoints.len()
-        );
-        polarity = ctx
-            .section(title, |ctx| {
-                measure_setpoint(
-                    ctx,
-                    hardware.clone(),
-                    setpoint,
-                    polarity,
-                    positive_polarity,
-                    scale,
-                    start,
-                )
-            })
-            .await?;
+    for measure in plan {
+        match measure {
+            MeasurementType::Setpoint(setpoint) => {
+                setpoint_number += 1;
+                let title = format!(
+                    "Measuring at {:.0} mA ({}/{})",
+                    setpoint * 1000.0,
+                    setpoint_number,
+                    setpoints.len()
+                );
+                (polarity, _) = ctx
+                    .section(title, |ctx| {
+                        measure_setpoint(
+                            ctx,
+                            hardware.clone(),
+                            setpoint,
+                            polarity,
+                            positive_polarity,
+                            scale,
+                            start,
+                            MeasurementSlot::Points,
+                        )
+                    })
+                    .await?;
+            }
+            MeasurementType::Reference => {
+                reference_number += 1;
+                let title = format!(
+                    "Measuring the reference at {:.0} mA ({}/{})",
+                    REFERENCE_CURRENT_AMPS * 1000.0,
+                    reference_number,
+                    reference_count
+                );
+                let resistance;
+                (polarity, resistance) = ctx
+                    .section(title, |ctx| {
+                        let hardware = hardware.clone();
+                        async move {
+                            let (next, resistance) = measure_setpoint(
+                                ctx.clone(),
+                                hardware,
+                                REFERENCE_CURRENT_AMPS,
+                                polarity,
+                                positive_polarity,
+                                scale,
+                                start,
+                                MeasurementSlot::References,
+                            )
+                            .await?;
+                            if let Some(first) = first_reference {
+                                ctx.measurement(
+                                    "Drift since the first reference",
+                                    format!("{:+.2} mΩ", (resistance - first) * 1000.0),
+                                );
+                            }
+                            Ok((next, resistance))
+                        }
+                    })
+                    .await?;
+                first_reference.get_or_insert(resistance);
+            }
+        }
     }
 
     ramp_to(&ctx, &hardware, 0.0).await?;
@@ -602,13 +708,15 @@ async fn choose_vertical_scale(
     Ok((scale, positive_polarity))
 }
 
-/// Measures one setpoint in both polarities, starting in `first`, and analyses
-/// it. Returns the polarity it leaves the relays in, the other one. Times are
+/// Measures one setpoint in both polarities, starting in `first`, analyses it,
+/// and records it in `slot`. Returns the polarity it leaves the relays in,
+/// which is the opposite of `first`, and its resistance in ohms. Times are
 /// recorded relative to `start`.
 ///
 /// The measurements are filed by the sign of their voltage, using
 /// `positive_polarity`. That's the only place the relay-to-sign mapping is
 /// used.
+#[expect(clippy::too_many_arguments)]
 async fn measure_setpoint(
     ctx: Context,
     hardware: Hardware,
@@ -617,7 +725,8 @@ async fn measure_setpoint(
     positive_polarity: Polarity,
     scale: f64,
     start: Instant,
-) -> Result<Polarity, ProcedureError> {
+    slot: MeasurementSlot,
+) -> Result<(Polarity, f64), ProcedureError> {
     let second = if first == Polarity::Forward {
         Polarity::Reverse
     } else {
@@ -666,10 +775,11 @@ async fn measure_setpoint(
 
     // Saved before it's analysed, so the measurements survive an analysis
     // that fails.
-    record_cold_resistance(&ctx, |cold_resistance| cold_resistance.points.push(point));
+    record_cold_resistance(&ctx, |cold_resistance| slot.of(cold_resistance).push(point));
     ctx.save();
 
     let analysis = python::cold_resistance_point(&input).await?;
+    let resistance = analysis.resistance_ohms.value;
     ctx.measurement(
         "Resistance",
         format!(
@@ -684,13 +794,13 @@ async fn measure_setpoint(
     }
 
     record_cold_resistance(&ctx, |cold_resistance| {
-        if let Some(point) = cold_resistance.points.last_mut() {
+        if let Some(point) = slot.of(cold_resistance).last_mut() {
             point.analysis = Some(analysis);
         }
     });
     ctx.save();
 
-    Ok(second)
+    Ok((second, resistance))
 }
 
 /// Waits for the filament to settle at the present current and polarity, then
@@ -879,6 +989,20 @@ fn mean_and_standard_error(values: &[f64]) -> Option<(f64, f64)> {
     let mean = values.iter().sum::<f64>() / n;
     let variance = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n - 1.0);
     Some((mean, (variance / n).sqrt()))
+}
+
+/// The order to measure `setpoints` and the references in: a reference first,
+/// after the first setpoint, after every `REFERENCE_INTERVAL` setpoints after
+/// that, and last, so every setpoint has a reference before and after it.
+fn measurement_plan(setpoints: &[f64]) -> Vec<MeasurementType> {
+    let mut plan = vec![MeasurementType::Reference];
+    for (index, &setpoint) in setpoints.iter().enumerate() {
+        plan.push(MeasurementType::Setpoint(setpoint));
+        if index % REFERENCE_INTERVAL == 0 || index == setpoints.len() - 1 {
+            plan.push(MeasurementType::Reference);
+        }
+    }
+    plan
 }
 
 /// The largest plausible voltage that doesn't reverse with the current, on
@@ -1242,6 +1366,69 @@ mod tests {
     }
 
     #[test]
+    fn measurement_plan_interleaves_references_with_nine_setpoints() {
+        use MeasurementType::{Reference as R, Setpoint as S};
+        let setpoints = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+        assert_eq!(
+            measurement_plan(&setpoints),
+            [
+                R,
+                S(1.0),
+                R,
+                S(2.0),
+                S(3.0),
+                R,
+                S(4.0),
+                S(5.0),
+                R,
+                S(6.0),
+                S(7.0),
+                R,
+                S(8.0),
+                S(9.0),
+                R
+            ]
+        );
+    }
+
+    #[test]
+    fn measurement_plan_brackets_every_setpoint_without_doubling_a_reference() {
+        for n in 1..=12 {
+            let setpoints: Vec<f64> = (1..=n).map(f64::from).collect();
+            let plan = measurement_plan(&setpoints);
+
+            assert_eq!(
+                plan.first(),
+                Some(&MeasurementType::Reference),
+                "{} setpoints",
+                n
+            );
+            assert_eq!(
+                plan.last(),
+                Some(&MeasurementType::Reference),
+                "{} setpoints",
+                n
+            );
+            assert!(
+                plan.windows(2)
+                    .all(|pair| pair != [MeasurementType::Reference, MeasurementType::Reference]),
+                "{} setpoints: {:?}",
+                n,
+                plan
+            );
+
+            let measured: Vec<f64> = plan
+                .iter()
+                .filter_map(|measure| match measure {
+                    MeasurementType::Setpoint(setpoint) => Some(*setpoint),
+                    MeasurementType::Reference => None,
+                })
+                .collect();
+            assert_eq!(measured, setpoints);
+        }
+    }
+
+    #[test]
     fn ramp_steps_end_exactly_on_the_target() {
         let up = ramp_steps(0.0, 0.1);
         assert_eq!(up.len(), 20);
@@ -1363,39 +1550,56 @@ mod tests {
         (ctx, root)
     }
 
-    /// Checks the run measured every setpoint and found the mock filament's
-    /// 0.096 Ω, which has no self-heating.
+    /// Checks the run measured every setpoint and reference and found the mock
+    /// filament's 0.096 Ω, which has no self-heating.
     fn assert_measured_the_mock_filament(ctx: &Context) {
         let characterisation = ctx.characterisation.lock().unwrap();
         let cold_resistance = characterisation.cold_resistance.as_ref().unwrap();
         assert_eq!(cold_resistance.points.len(), 9);
+        assert_eq!(cold_resistance.references.len(), 6);
         assert!(
             cold_resistance
                 .points
                 .iter()
+                .chain(&cold_resistance.references)
                 .all(|point| point.analysis.is_some())
+        );
+        assert!(
+            cold_resistance
+                .references
+                .iter()
+                .all(|reference| reference.setpoint_amps == REFERENCE_CURRENT_AMPS)
         );
 
         // Every polarity's time, in the order they were measured.
         let positive_polarity = cold_resistance.positive_polarity.unwrap();
-        let times: Vec<f64> = cold_resistance
-            .points
-            .iter()
-            .flat_map(|point| {
-                let positive = point.positive_time_seconds.unwrap();
-                let negative = point.negative_time_seconds.unwrap();
-                if point.first_polarity == positive_polarity {
-                    [positive, negative]
-                } else {
-                    [negative, positive]
-                }
-            })
-            .collect();
-        assert!(
-            times.windows(2).all(|pair| pair[0] < pair[1]),
-            "expected increasing times, got {:?}",
-            times
-        );
+        let times = |points: &[ColdResistancePoint]| -> Vec<f64> {
+            points
+                .iter()
+                .flat_map(|point| {
+                    let positive = point.positive_time_seconds.unwrap();
+                    let negative = point.negative_time_seconds.unwrap();
+                    if point.first_polarity == positive_polarity {
+                        [positive, negative]
+                    } else {
+                        [negative, positive]
+                    }
+                })
+                .collect()
+        };
+        let point_times = times(&cold_resistance.points);
+        let reference_times = times(&cold_resistance.references);
+        for times in [&point_times, &reference_times] {
+            assert!(
+                times.windows(2).all(|pair| pair[0] < pair[1]),
+                "expected increasing times, got {:?}",
+                times
+            );
+        }
+
+        // Every point is bracketed by references.
+        assert!(reference_times.first() < point_times.first());
+        assert!(reference_times.last() > point_times.last());
 
         let resistance = cold_resistance
             .analysis

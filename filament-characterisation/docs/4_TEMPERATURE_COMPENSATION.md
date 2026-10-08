@@ -151,7 +151,7 @@ ref, p1, ref, p2, p3, ref, p4, p5, ref, p6, p7, ref, p8, p9, ref
 
 That's six references and fifteen measurements, about 10 minutes instead of about 6.
 
-The schedule comes from a pure function, `measurement_plan(setpoints) -> Vec<Measure>` with `Measure::{Reference, Setpoint(f64)}`, so it can be unit tested. Its two parameters are constants: `REFERENCE_CURRENT_AMPS`, and `REFERENCE_INTERVAL` (2 setpoints).
+The schedule comes from a pure function, `measurement_plan(setpoints) -> Vec<MeasurementType>` with `MeasurementType::{Reference, Setpoint(f64)}`, so it can be unit tested. Its two parameters are constants: `REFERENCE_CURRENT_AMPS`, and `REFERENCE_INTERVAL` (2 setpoints).
 
 **Polarity alternation (3.2.2.1) carries on through the references.** Each reference starts in whichever polarity the relays are in and ends in the other, as a setpoint does.
 
@@ -172,7 +172,7 @@ R₀ refers to the mount's temperature at the first reference. For that to be th
   - `measure_polarity` passes it on, in a new `PolarityMeasurement::time_seconds`.
   - It's tokio's `Instant`, so the paused-clock end-to-end test gets consistent times.
 - **The setpoint loop** (3.2) follows `measurement_plan`.
-  - A reference is measured exactly like a setpoint, by `measure_setpoint`, including its per-point analysis. It's recorded in `ColdResistance::references` rather than `points`, through a `Slot` argument: `Points` or `References`.
+  - A reference is measured exactly like a setpoint, by `measure_setpoint`, including its per-point analysis. It's recorded in `ColdResistance::references` rather than `points`, through a `MeasurementSlot` argument: `Points` or `References`.
   - Each reference shows its resistance and its drift since the first reference as measurement steps, e.g. "Reference: 98.33 mΩ (+0.12 mΩ since the start)". The drift display is only a difference, so it's fine in Rust.
 - **The fit** (`fit_setpoints`) passes the references, and every point's and reference's time, to `cold_resistance_fit.py`.
 - **The results display** (3.5) adds the drift over the run, from the fit's output.
@@ -290,7 +290,7 @@ Each commit builds, passes `cargo clippy --all-targets -- -D warnings`, `cargo f
    - No behaviour change.
 2. **Measure references.**
    - `measurement_plan`, its tests, `REFERENCE_CURRENT_AMPS` and `REFERENCE_INTERVAL`.
-   - `Slot` and `ColdResistance::references`, and the per-reference display.
+   - `MeasurementSlot` and `ColdResistance::references`, and the per-reference display.
    - The "Starting cold" confirmation.
    - The end-to-end tests check the references.
    - The fit is still uncorrected.

@@ -212,6 +212,12 @@ pub struct ColdResistance {
     /// has been chosen. Never `Nil`.
     pub positive_polarity: Option<Polarity>,
 
+    /// The measurements at the reference current, interleaved with the
+    /// setpoints to track the mount's warming, in the order measured. Empty in
+    /// results from before references were measured.
+    #[serde(default)]
+    pub references: Vec<ColdResistancePoint>,
+
     /// The operator-entered room temperature near the supply in °C, for the
     /// supply's accuracy band.
     pub room_temperature_celsius: f64,
@@ -221,9 +227,9 @@ pub struct ColdResistance {
     pub vertical_scale_volts_per_division: Option<f64>,
 }
 
-/// The measurements at one setpoint, filed by the sign of the voltage rather
-/// than by relay state, so nothing downstream needs to know which relay state
-/// is which.
+/// The measurements at one setpoint or reference, filed by the sign of the
+/// voltage rather than by relay state, so nothing downstream needs to know
+/// which relay state is which.
 #[derive(Debug, Deserialize, JsonSchema, Serialize)]
 pub struct ColdResistancePoint {
     /// The output of `cold_resistance_point.py`, once it's run.
@@ -452,6 +458,24 @@ mod tests {
         .unwrap();
         assert_eq!(point.negative_time_seconds, None);
         assert_eq!(point.positive_time_seconds, None);
+    }
+
+    #[test]
+    fn a_cold_resistance_saved_before_references_were_measured_still_loads() {
+        let cold_resistance: ColdResistance = serde_json::from_str(
+            r#"{
+                "analysis": null,
+                "chamber_end_temperature_celsius": null,
+                "chamber_start_temperature_celsius": 22.0,
+                "fit_parameters": null,
+                "points": [],
+                "positive_polarity": null,
+                "room_temperature_celsius": 21.0,
+                "vertical_scale_volts_per_division": null
+            }"#,
+        )
+        .unwrap();
+        assert!(cold_resistance.references.is_empty());
     }
 
     #[test]
