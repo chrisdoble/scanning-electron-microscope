@@ -1,5 +1,7 @@
 // The cold resistance: each setpoint's resistance against the square of its
-// current, with error bars, and the fitted line once the fit has run.
+// current, with error bars, and the fitted line once the fit has run. Once it
+// has, the points are the resistances corrected for the mount's warming, with
+// hollow markers showing them as measured.
 
 import * as Plot from '@observablehq/plot';
 import type { Characterisation } from '../generated/characterisation.ts';
@@ -13,9 +15,19 @@ export interface PlottedPoint {
   x: number;
   xUncertainty: number;
 
-  /** The resistance in ohms, and its standard uncertainty. */
+  /**
+   * The resistance in ohms, and its standard uncertainty: corrected for the
+   * mount's warming once the fit has run, and as measured before.
+   */
   y: number;
   yUncertainty: number;
+
+  /** The resistance as measured in ohms, and its standard uncertainty. */
+  measured: number;
+  measuredUncertainty: number;
+
+  /** Whether `y` is corrected for the mount's warming. */
+  corrected: boolean;
 }
 
 /** The fitted line, $R = R_0 + b\,I^2$, as plotted. */
@@ -51,6 +63,9 @@ const CAP_WIDTH = 0.0008;
 /** The colour of the fitted line and its intercept. */
 const FIT_COLOUR = '#d62728';
 
+/** The opacity of the hollow markers showing the points as measured. */
+const MEASURED_OPACITY = 0.35;
+
 /** Renders the graph into `container`. */
 export function render(container: HTMLElement, characterisation: Characterisation | null): void {
   const points = plottedPoints(characterisation);
@@ -63,10 +78,23 @@ export function render(container: HTMLElement, characterisation: Characterisatio
     marginLeft: 70,
     grid: true,
     caption:
-      "Error bars are ±1 standard uncertainty (k = 1). The intercept's is its combined standard uncertainty.",
+      "Error bars are ±1 standard uncertainty (k = 1). The intercept's is its combined standard uncertainty. Once fitted, the points are corrected for the mount's warming, and the hollow markers show them as measured.",
     x: { domain: X_DOMAIN, label: 'I² (A²)' },
     y: { domain: yDomain(points, fit), label: 'R (Ω)' },
     marks: [
+      // Behind the points, so a correction too small to see doesn't hide them.
+      Plot.dot(
+        points.filter((point) => point.corrected),
+        {
+          x: 'x',
+          y: 'measured',
+          r: 3.5,
+          stroke: 'currentColor',
+          strokeOpacity: MEASURED_OPACITY,
+          className: 'measured',
+        },
+      ),
+
       // Vertical error bars, with caps.
       Plot.ruleX(points, {
         x: 'x',
@@ -93,6 +121,7 @@ export function render(container: HTMLElement, characterisation: Characterisatio
         y: 'y',
         r: 3.5,
         fill: 'currentColor',
+        className: 'point',
         title: tooltip,
         tip: true,
       }),
@@ -106,7 +135,8 @@ export function render(container: HTMLElement, characterisation: Characterisatio
 
 /**
  * The fitted line from $x = 0$ to its end, and its intercept with the intercept's
- * error bar.
+ * error bar. Only the intercept has a tooltip: the line's would also appear
+ * over the points it passes through.
  */
 function fitMarks(fit: PlottedFit): Plot.Markish[] {
   const ends = [0, fit.end].map((x) => ({ x, y: fit.intercept + fit.slope * x }));
@@ -118,7 +148,7 @@ function fitMarks(fit: PlottedFit): Plot.Markish[] {
   const title = () => fitTooltip(fit);
 
   return [
-    Plot.line(ends, { x: 'x', y: 'y', stroke: FIT_COLOUR, className: 'fit', title, tip: true }),
+    Plot.line(ends, { x: 'x', y: 'y', stroke: FIT_COLOUR, className: 'fit' }),
 
     Plot.ruleX(intercept, { x: 0, y1: lower, y2: upper, stroke: FIT_COLOUR, className: 'intercept' }),
     ...[lower, upper].map((y) =>
@@ -171,27 +201,39 @@ export function plottedFit(
  * The points to plot: every setpoint whose analysis has run. A setpoint
  * without one has no resistance yet. That's brief, between the point being
  * saved and its analysis finishing.
+ *
+ * Once the fit has run, every point has been analysed, and each is plotted at
+ * its corrected resistance, which the fit lists in the order of the points.
  */
 export function plottedPoints(characterisation: Characterisation | null): PlottedPoint[] {
-  return (characterisation?.cold_resistance?.points ?? []).flatMap((point) =>
-    point.analysis == null
-      ? []
-      : [
-          {
-            setpoint: point.setpoint_amps,
-            x: point.analysis.current_squared_amps_squared.value,
-            xUncertainty: point.analysis.current_squared_amps_squared.uncertainty,
-            y: point.analysis.resistance_ohms.value,
-            yUncertainty: point.analysis.resistance_ohms.uncertainty,
-          },
-        ],
-  );
+  const coldResistance = characterisation?.cold_resistance;
+  const corrected = coldResistance?.analysis?.corrected_resistances_ohms;
+  return (coldResistance?.points ?? []).flatMap((point, index) => {
+    if (point.analysis == null) {
+      return [];
+    }
+    const measured = point.analysis.resistance_ohms;
+    const resistance = corrected?.[index] ?? measured;
+    return [
+      {
+        setpoint: point.setpoint_amps,
+        x: point.analysis.current_squared_amps_squared.value,
+        xUncertainty: point.analysis.current_squared_amps_squared.uncertainty,
+        y: resistance.value,
+        yUncertainty: resistance.uncertainty,
+        measured: measured.value,
+        measuredUncertainty: measured.uncertainty,
+        corrected: corrected != null,
+      },
+    ];
+  });
 }
 
 /**
  * The $y$ axis's range in ohms: from 1% below the bottom of the lowest error
  * bar to 1% above the top of the highest. Fixed at `EMPTY_Y_DOMAIN` while
- * there are no points.
+ * there are no points. The hollow markers showing corrected points as
+ * measured count too.
  *
  * Once there's a fit, its intercept's error bar and the line's end count too,
  * so they're always in view. With a positive slope the intercept sits below
@@ -208,6 +250,10 @@ export function yDomain(points: PlottedPoint[], fit: PlottedFit | null): [number
 
   const bottoms = points.map((point) => point.y - point.yUncertainty);
   const tops = points.map((point) => point.y + point.yUncertainty);
+  for (const point of points.filter((point) => point.corrected)) {
+    bottoms.push(point.measured);
+    tops.push(point.measured);
+  }
   if (fit !== null) {
     const end = fit.intercept + fit.slope * fit.end;
     bottoms.push(fit.intercept - fit.interceptUncertainty, end);
@@ -219,7 +265,7 @@ export function yDomain(points: PlottedPoint[], fit: PlottedFit | null): [number
   return [lowest * 0.99, highest * 1.01];
 }
 
-/** The fit's tooltip, on the line and the intercept. */
+/** The fit's tooltip, on the intercept. */
 function fitTooltip(fit: PlottedFit): string {
   return [
     'Fit: R = R₀ + b I²',
@@ -230,9 +276,15 @@ function fitTooltip(fit: PlottedFit): string {
 
 /** A point's tooltip. */
 function tooltip(point: PlottedPoint): string {
+  const resistance = point.corrected
+    ? [
+        `R = ${withUncertainty(point.y, point.yUncertainty)} Ω (corrected)`,
+        `R = ${withUncertainty(point.measured, point.measuredUncertainty)} Ω (measured)`,
+      ]
+    : [`R = ${withUncertainty(point.y, point.yUncertainty)} Ω`];
   return [
     `Setpoint: ${(point.setpoint * 1000).toFixed(0)} mA`,
-    `R = ${withUncertainty(point.y, point.yUncertainty)} Ω`,
+    ...resistance,
     `I² = ${withUncertainty(point.x, point.xUncertainty)} A²`,
   ].join('\n');
 }

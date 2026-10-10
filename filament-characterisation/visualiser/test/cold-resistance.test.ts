@@ -30,7 +30,26 @@ function fixture(name: string): Characterisation {
 
 /** The number of points drawn in `container`'s graph. */
 function dots(container: HTMLElement): number {
-  return container.querySelectorAll('circle').length;
+  return container.querySelectorAll('g.point circle').length;
+}
+
+/** The number of hollow markers showing corrected points as measured. */
+function measuredMarkers(container: HTMLElement): number {
+  return container.querySelectorAll('g.measured circle').length;
+}
+
+/** A plotted point, as measured, at `y` ± `yUncertainty` Ω and `x` A². */
+function point(x: number, y: number, yUncertainty: number): PlottedPoint {
+  return {
+    setpoint: Math.sqrt(x),
+    x,
+    xUncertainty: 0,
+    y,
+    yUncertainty,
+    measured: y,
+    measuredUncertainty: yUncertainty,
+    corrected: false,
+  };
 }
 
 describe('the cold resistance graph', () => {
@@ -44,6 +63,17 @@ describe('the cold resistance graph', () => {
     render(container, fixture(name));
     expect(container.querySelector('svg')).not.toBeNull();
     expect(dots(container)).toBe(count);
+  });
+
+  it.each([
+    ['before', 0],
+    ['no-points', 0],
+    ['partial', 0],
+    ['complete', 9],
+  ])('shows the points as measured in %s only once they are corrected', (name, count) => {
+    const container = document.createElement('div');
+    render(container, fixture(name));
+    expect(measuredMarkers(container)).toBe(count);
   });
 
   it('draws empty axes before the file exists', () => {
@@ -111,6 +141,46 @@ describe('the cold resistance graph', () => {
   });
 });
 
+describe('plottedPoints', () => {
+  it('plots the points as measured before the fit has run', () => {
+    const characterisation = fixture('partial');
+    const points = plottedPoints(characterisation);
+
+    expect(points).toHaveLength(4);
+    points.forEach((point, index) => {
+      const measured = characterisation.cold_resistance!.points[index].analysis!.resistance_ohms;
+      expect(point.corrected).toBe(false);
+      expect([point.y, point.yUncertainty]).toEqual([measured.value, measured.uncertainty]);
+      expect([point.measured, point.measuredUncertainty]).toEqual([
+        measured.value,
+        measured.uncertainty,
+      ]);
+    });
+  });
+
+  it('plots the corrected resistances once the fit has run, keeping the measured ones', () => {
+    // The mock doesn't drift, so its corrections are 0: make one that isn't.
+    const characterisation = fixture('complete');
+    const coldResistance = characterisation.cold_resistance!;
+    coldResistance.analysis!.corrected_resistances_ohms[2] = { value: 0.0955, uncertainty: 3e-5 };
+
+    const points = plottedPoints(characterisation);
+    const measured = coldResistance.points[2].analysis!.resistance_ohms;
+    expect(points[2]).toMatchObject({
+      y: 0.0955,
+      yUncertainty: 3e-5,
+      measured: measured.value,
+      measuredUncertainty: measured.uncertainty,
+      corrected: true,
+    });
+    points.forEach((point, index) => {
+      const corrected = coldResistance.analysis!.corrected_resistances_ohms[index];
+      expect(point.corrected).toBe(true);
+      expect([point.y, point.yUncertainty]).toEqual([corrected.value, corrected.uncertainty]);
+    });
+  });
+});
+
 describe('plottedFit', () => {
   it("is null before the fit has run", () => {
     const characterisation = fixture('partial');
@@ -148,10 +218,7 @@ describe('yDomain', () => {
   it("includes the fit's intercept and its error bar", () => {
     // A self-heating filament: the line rises, so the intercept sits below
     // every point, and its combined uncertainty is wider than theirs.
-    const points: PlottedPoint[] = [
-      { setpoint: 0.1, x: 0.01, xUncertainty: 0, y: 0.1, yUncertainty: 0.0001 },
-      { setpoint: 0.3, x: 0.09, xUncertainty: 0, y: 0.102, yUncertainty: 0.0001 },
-    ];
+    const points = [point(0.01, 0.1, 0.0001), point(0.09, 0.102, 0.0001)];
     const fit = {
       intercept: 0.09975,
       interceptUncertainty: 0.0025,
@@ -161,6 +228,12 @@ describe('yDomain', () => {
     };
 
     expect(yDomain(points, fit)).toEqual([(0.09975 - 0.0025) * 0.99, (0.09975 + 0.0025) * 1.01]);
+  });
+
+  it('includes the measured resistances of corrected points', () => {
+    // Corrected downwards by more than its error bar.
+    const corrected = { ...point(0.04, 0.1, 0.0001), measured: 0.1005, corrected: true };
+    expect(yDomain([corrected], null)).toEqual([(0.1 - 0.0001) * 0.99, 0.1005 * 1.01]);
   });
 });
 
