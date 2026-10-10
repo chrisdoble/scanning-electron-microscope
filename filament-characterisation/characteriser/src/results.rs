@@ -79,11 +79,11 @@ pub struct ColdResistanceFitParameters {
     pub current_offset_bound_amps: f64,
 
     /// The bound on the filament temperature in kelvin, $a_T$: the
-    /// thermometer's bound plus half the drift over the run.
+    /// thermometer's bound.
     pub filament_temperature_bound_kelvin: f64,
 
-    /// The filament temperature, $T_f$: the mean of the start and end chamber
-    /// temperatures.
+    /// The filament temperature, $T_f$: the chamber temperature at the start,
+    /// since the references correct for any warming during the run.
     pub filament_temperature_celsius: f64,
 
     /// The temperature the resistance is corrected to.
@@ -138,12 +138,21 @@ pub struct ColdResistanceAnalysis {
     /// the per-point uncertainties are right.
     pub chi_squared_p_value: f64,
 
+    /// Each point's resistance less the mount's drift since the first
+    /// reference, $R'_i$, with its full uncertainty, in the order of the
+    /// points. These are what's fitted.
+    pub corrected_resistances_ohms: Vec<Derived>,
+
     /// The contribution of the supply's readback gain error.
     pub current_gain_uncertainty_ohms: f64,
 
     /// The contribution of the supply's readback offset error, from the corner
     /// analysis.
     pub current_offset_uncertainty_ohms: f64,
+
+    /// The drift subtracted from each point, $\Delta R(t_i)$, with its
+    /// uncertainty, in the order of the points.
+    pub drift_corrections_ohms: Vec<Derived>,
 
     /// The statistical uncertainty of the fit's intercept, inflated by the
     /// Birge ratio when that's above 1.
@@ -155,6 +164,10 @@ pub struct ColdResistanceAnalysis {
 
     /// Chi-squared divided by its degrees of freedom.
     pub reduced_chi_squared: f64,
+
+    /// The last reference's resistance less the first's: the mount's drift
+    /// over the run.
+    pub reference_drift_ohms: Derived,
 
     /// The cold resistance corrected to the reference temperature, $R_{20}$,
     /// with its combined standard uncertainty.
@@ -213,9 +226,7 @@ pub struct ColdResistance {
     pub positive_polarity: Option<Polarity>,
 
     /// The measurements at the reference current, interleaved with the
-    /// setpoints to track the mount's warming, in the order measured. Empty in
-    /// results from before references were measured.
-    #[serde(default)]
+    /// setpoints to track the mount's warming, in the order measured.
     pub references: Vec<ColdResistancePoint>,
 
     /// The operator-entered room temperature near the supply in °C, for the
@@ -249,9 +260,8 @@ pub struct ColdResistancePoint {
 
     /// The midpoint of the sampling window in the polarity that gives a
     /// negative voltage, in seconds since the cold-resistance measurement
-    /// started. `None` in results from before it was recorded.
-    #[serde(default)]
-    pub negative_time_seconds: Option<f64>,
+    /// started.
+    pub negative_time_seconds: f64,
 
     /// The voltage in the polarity that gives a negative voltage.
     pub negative_voltage_volts: Measurement,
@@ -265,9 +275,8 @@ pub struct ColdResistancePoint {
 
     /// The midpoint of the sampling window in the polarity that gives a
     /// positive voltage, in seconds since the cold-resistance measurement
-    /// started. `None` in results from before it was recorded.
-    #[serde(default)]
-    pub positive_time_seconds: Option<f64>,
+    /// started.
+    pub positive_time_seconds: f64,
 
     /// The voltage in the polarity that gives a positive voltage.
     pub positive_voltage_volts: Measurement,
@@ -437,45 +446,6 @@ mod tests {
 
     fn load(path: &Path) -> Characterisation {
         serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
-    }
-
-    #[test]
-    fn a_point_saved_before_times_were_recorded_still_loads() {
-        let point: ColdResistancePoint = serde_json::from_str(
-            r#"{
-                "analysis": null,
-                "first_polarity": "Forward",
-                "negative_current_amps": {"samples": [0.1], "uncertainty": 0.0, "value": 0.1},
-                "negative_settle_seconds": 3.0,
-                "negative_voltage_volts": {"samples": [-0.0096], "uncertainty": 0.0, "value": -0.0096},
-                "positive_current_amps": {"samples": [0.1], "uncertainty": 0.0, "value": 0.1},
-                "positive_settle_seconds": 3.0,
-                "positive_voltage_volts": {"samples": [0.0096], "uncertainty": 0.0, "value": 0.0096},
-                "setpoint_amps": 0.1,
-                "warnings": []
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(point.negative_time_seconds, None);
-        assert_eq!(point.positive_time_seconds, None);
-    }
-
-    #[test]
-    fn a_cold_resistance_saved_before_references_were_measured_still_loads() {
-        let cold_resistance: ColdResistance = serde_json::from_str(
-            r#"{
-                "analysis": null,
-                "chamber_end_temperature_celsius": null,
-                "chamber_start_temperature_celsius": 22.0,
-                "fit_parameters": null,
-                "points": [],
-                "positive_polarity": null,
-                "room_temperature_celsius": 21.0,
-                "vertical_scale_volts_per_division": null
-            }"#,
-        )
-        .unwrap();
-        assert!(cold_resistance.references.is_empty());
     }
 
     #[test]

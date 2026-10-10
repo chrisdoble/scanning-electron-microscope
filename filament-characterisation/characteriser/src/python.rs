@@ -150,14 +150,23 @@ pub struct ColdResistanceFitInput {
 
     /// Every setpoint's reversal-corrected voltage and current.
     pub points: Vec<ColdResistanceFitPoint>,
+
+    /// Every reference's reversal-corrected voltage and current, in the order
+    /// measured, to correct the points for the mount's warming.
+    pub references: Vec<ColdResistanceFitPoint>,
 }
 
-/// One setpoint's input to the fit, from its `ColdResistancePointAnalysis`.
+/// One setpoint's or reference's input to the fit, from its
+/// `ColdResistancePointAnalysis`.
 #[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ColdResistanceFitPoint {
     /// The mean of the two polarities' currents, with the quantisation floor.
     pub current_amps: Derived,
+
+    /// The mean of the two polarities' times, in seconds since the
+    /// cold-resistance measurement started.
+    pub time_seconds: f64,
 
     /// Half the difference between the two polarities' voltages.
     pub voltage_volts: Derived,

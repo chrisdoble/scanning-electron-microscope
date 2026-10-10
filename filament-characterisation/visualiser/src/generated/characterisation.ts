@@ -94,10 +94,9 @@ export interface ColdResistance {
   positive_polarity?: Polarity | null;
   /**
    * The measurements at the reference current, interleaved with the
-   * setpoints to track the mount's warming, in the order measured. Empty in
-   * results from before references were measured.
+   * setpoints to track the mount's warming, in the order measured.
    */
-  references?: ColdResistancePoint[];
+  references: ColdResistancePoint[];
   /**
    * The operator-entered room temperature near the supply in °C, for the
    * supply's accuracy band.
@@ -123,6 +122,12 @@ export interface ColdResistanceAnalysis {
    */
   chi_squared_p_value: number;
   /**
+   * Each point's resistance less the mount's drift since the first
+   * reference, $R'_i$, with its full uncertainty, in the order of the
+   * points. These are what's fitted.
+   */
+  corrected_resistances_ohms: Derived[];
+  /**
    * The contribution of the supply's readback gain error.
    */
   current_gain_uncertainty_ohms: number;
@@ -131,6 +136,11 @@ export interface ColdResistanceAnalysis {
    * analysis.
    */
   current_offset_uncertainty_ohms: number;
+  /**
+   * The drift subtracted from each point, $\Delta R(t_i)$, with its
+   * uncertainty, in the order of the points.
+   */
+  drift_corrections_ohms: Derived[];
   /**
    * The statistical uncertainty of the fit's intercept, inflated by the
    * Birge ratio when that's above 1.
@@ -148,6 +158,7 @@ export interface ColdResistanceAnalysis {
    * Chi-squared divided by its degrees of freedom.
    */
   reduced_chi_squared: number;
+  reference_drift_ohms: Derived;
   reference_resistance_ohms: Derived;
   resistance_ohms: Derived;
   slope_ohms_per_amp_squared: Derived;
@@ -206,12 +217,12 @@ export interface ColdResistanceFitParameters {
   current_offset_bound_amps: number;
   /**
    * The bound on the filament temperature in kelvin, $a_T$: the
-   * thermometer's bound plus half the drift over the run.
+   * thermometer's bound.
    */
   filament_temperature_bound_kelvin: number;
   /**
-   * The filament temperature, $T_f$: the mean of the start and end chamber
-   * temperatures.
+   * The filament temperature, $T_f$: the chamber temperature at the start,
+   * since the references correct for any warming during the run.
    */
   filament_temperature_celsius: number;
   /**
@@ -252,9 +263,9 @@ export interface ColdResistancePoint {
   /**
    * The midpoint of the sampling window in the polarity that gives a
    * negative voltage, in seconds since the cold-resistance measurement
-   * started. `None` in results from before it was recorded.
+   * started.
    */
-  negative_time_seconds?: number | null;
+  negative_time_seconds: number;
   negative_voltage_volts: Measurement;
   positive_current_amps: Measurement;
   /**
@@ -265,9 +276,9 @@ export interface ColdResistancePoint {
   /**
    * The midpoint of the sampling window in the polarity that gives a
    * positive voltage, in seconds since the cold-resistance measurement
-   * started. `None` in results from before it was recorded.
+   * started.
    */
-  positive_time_seconds?: number | null;
+  positive_time_seconds: number;
   positive_voltage_volts: Measurement;
   /**
    * The current this point was measured at in amperes.

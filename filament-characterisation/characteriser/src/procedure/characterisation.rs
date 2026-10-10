@@ -133,9 +133,8 @@ const SETTLE_TOLERANCE: f64 = 2e-4;
 /// earliest possible settle is twice this.
 const SETTLE_WINDOW: Duration = Duration::from_secs(2);
 
-/// The bound on the filament temperature in kelvin, before adding the drift
-/// over the run: the thermometer's accuracy plus how far the filament might sit
-/// from the flange's temperature.
+/// The bound on the filament temperature in kelvin: the thermometer's accuracy
+/// plus how far the filament might sit from the flange's temperature.
 ///
 /// A judgement. Tighten it if the thermometer and its placement justify it.
 const THERMOMETER_BOUND_KELVIN: f64 = 1.0;
@@ -495,56 +494,57 @@ async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(),
     });
     ctx.save();
 
-    let parameters = fit_parameters(
-        gain_bound,
-        offset_bound,
-        chamber_start_temperature,
-        chamber_end_temperature,
-    );
+    let parameters = fit_parameters(gain_bound, offset_bound, chamber_start_temperature);
     ctx.section("Fitting the setpoints", |ctx| {
         fit_setpoints(ctx, parameters)
     })
     .await
 }
 
-/// Fits every setpoint's resistance against the square of its current,
-/// extrapolating to zero current, and shows the result and its uncertainty
-/// budget.
+/// Corrects every setpoint's resistance for the mount's drift, using the
+/// references, then fits it against the square of its current, extrapolating
+/// to zero current, and shows the result and its uncertainty budget.
 async fn fit_setpoints(
     ctx: Context,
     parameters: ColdResistanceFitParameters,
 ) -> Result<(), ProcedureError> {
+    // The fit's input for a setpoint or reference, or `None` if it has no
+    // analysis.
+    fn fit_point(point: &ColdResistancePoint) -> Option<ColdResistanceFitPoint> {
+        let analysis = point.analysis.as_ref()?;
+        Some(ColdResistanceFitPoint {
+            current_amps: analysis.current_amps,
+            time_seconds: (point.positive_time_seconds + point.negative_time_seconds) / 2.0,
+            voltage_volts: analysis.voltage_volts,
+        })
+    }
+
     // Recorded before the fit runs, so the fit can be re-run from the results
     // file alone even if it fails.
-    let mut points = None;
+    let mut input = None;
     record_cold_resistance(&ctx, |cold_resistance| {
         cold_resistance.fit_parameters = Some(parameters);
-        points = cold_resistance
-            .points
-            .iter()
-            .map(|point| {
-                point
-                    .analysis
-                    .as_ref()
-                    .map(|analysis| ColdResistanceFitPoint {
-                        current_amps: analysis.current_amps,
-                        voltage_volts: analysis.voltage_volts,
-                    })
-            })
-            .collect::<Option<Vec<_>>>();
+        let points = cold_resistance.points.iter().map(fit_point).collect();
+        let references = cold_resistance.references.iter().map(fit_point).collect();
+        if let (Some(points), Some(references)) = (points, references) {
+            input = Some(ColdResistanceFitInput {
+                parameters,
+                points,
+                references,
+            });
+        }
     });
     ctx.save();
 
-    // Can't happen: a setpoint whose analysis fails ends the run.
-    let Some(points) = points else {
-        error!("a setpoint has no analysis");
+    // Can't happen: a measurement whose analysis fails ends the run.
+    let Some(input) = input else {
+        error!("a setpoint or reference has no analysis");
         return Err(ProcedureError::Check(String::from(
-            "a setpoint has no analysis, so the setpoints can't be fitted",
+            "a setpoint or reference has no analysis, so the setpoints can't be fitted",
         )));
     };
 
-    let analysis =
-        python::cold_resistance_fit(&ColdResistanceFitInput { parameters, points }).await?;
+    let analysis = python::cold_resistance_fit(&input).await?;
 
     let r0 = analysis.resistance_ohms;
     let r20 = analysis.reference_resistance_ohms;
@@ -596,6 +596,16 @@ async fn fit_setpoints(
             ),
         );
     }
+
+    let drift = analysis.reference_drift_ohms;
+    ctx.measurement(
+        "Drift at the reference current over the run",
+        format!(
+            "{:+.3} ± {:.3} mΩ",
+            drift.value * 1000.0,
+            drift.uncertainty * 1000.0
+        ),
+    );
 
     // The slope measures how strongly the filament heats itself.
     let slope = analysis.slope_ohms_per_amp_squared;
@@ -751,11 +761,11 @@ async fn measure_setpoint(
         first_polarity: first,
         negative_current_amps: negative.current,
         negative_settle_seconds: negative.settle_seconds,
-        negative_time_seconds: Some(negative.time_seconds),
+        negative_time_seconds: negative.time_seconds,
         negative_voltage_volts: negative.voltage,
         positive_current_amps: positive.current,
         positive_settle_seconds: positive.settle_seconds,
-        positive_time_seconds: Some(positive.time_seconds),
+        positive_time_seconds: positive.time_seconds,
         positive_voltage_volts: positive.voltage,
         setpoint_amps: setpoint,
         warnings: positive
@@ -943,26 +953,22 @@ fn filament_temperature_prompt(ctx: &Context) -> &'static str {
 }
 
 /// The fit's scalar inputs, from the supply's current readback bounds (see
-/// `current_readback_bounds`) and the chamber temperatures the operator
-/// entered.
+/// `current_readback_bounds`) and the chamber temperature the operator entered
+/// before the setpoints.
 ///
-/// The filament temperature is the mean of the chamber's start and end
-/// temperatures, and its bound covers the thermometer and placement plus half
-/// the drift over the run. The linear sum is deliberately conservative.
+/// The filament temperature is the chamber's at the start: the references
+/// correct for any warming after that, whether from the filament or the
+/// chamber, so the end temperature isn't needed.
 fn fit_parameters(
     current_gain_bound: f64,
     current_offset_bound_amps: f64,
     chamber_start_temperature_celsius: f64,
-    chamber_end_temperature_celsius: f64,
 ) -> ColdResistanceFitParameters {
     ColdResistanceFitParameters {
         current_gain_bound,
         current_offset_bound_amps,
-        filament_temperature_bound_kelvin: THERMOMETER_BOUND_KELVIN
-            + (chamber_end_temperature_celsius - chamber_start_temperature_celsius).abs() / 2.0,
-        filament_temperature_celsius: (chamber_start_temperature_celsius
-            + chamber_end_temperature_celsius)
-            / 2.0,
+        filament_temperature_bound_kelvin: THERMOMETER_BOUND_KELVIN,
+        filament_temperature_celsius: chamber_start_temperature_celsius,
         reference_temperature_celsius: REFERENCE_TEMPERATURE_CELSIUS,
         temperature_coefficient_bound_per_kelvin: TUNGSTEN_TEMPERATURE_COEFFICIENT_BOUND_PER_KELVIN,
         temperature_coefficient_per_kelvin: TUNGSTEN_TEMPERATURE_COEFFICIENT_PER_KELVIN,
@@ -1349,13 +1355,12 @@ mod tests {
     }
 
     #[test]
-    fn fit_parameters_combine_the_temperatures() {
-        // The chamber warmed by 2 °C over the run.
-        let parameters = fit_parameters(0.002, 0.011, 22.0, 24.0);
-        assert_eq!(parameters.filament_temperature_celsius, 23.0);
+    fn fit_parameters_use_the_start_temperature() {
+        let parameters = fit_parameters(0.002, 0.011, 22.0);
+        assert_eq!(parameters.filament_temperature_celsius, 22.0);
         assert_eq!(
             parameters.filament_temperature_bound_kelvin,
-            THERMOMETER_BOUND_KELVIN + 1.0
+            THERMOMETER_BOUND_KELVIN
         );
         assert_eq!(parameters.current_gain_bound, 0.002);
         assert_eq!(parameters.current_offset_bound_amps, 0.011);
@@ -1577,8 +1582,8 @@ mod tests {
             points
                 .iter()
                 .flat_map(|point| {
-                    let positive = point.positive_time_seconds.unwrap();
-                    let negative = point.negative_time_seconds.unwrap();
+                    let positive = point.positive_time_seconds;
+                    let negative = point.negative_time_seconds;
                     if point.first_polarity == positive_polarity {
                         [positive, negative]
                     } else {
@@ -1601,16 +1606,22 @@ mod tests {
         assert!(reference_times.first() < point_times.first());
         assert!(reference_times.last() > point_times.last());
 
-        let resistance = cold_resistance
-            .analysis
-            .as_ref()
-            .unwrap()
-            .resistance_ohms
-            .value;
+        let analysis = cold_resistance.analysis.as_ref().unwrap();
+        let resistance = analysis.resistance_ohms.value;
         assert!(
             (resistance - 0.096).abs() < 1e-9,
             "expected 0.096 Ω, got {} Ω",
             resistance
+        );
+
+        // The mock doesn't drift, so nothing is corrected.
+        assert_eq!(analysis.reference_drift_ohms.value, 0.0);
+        assert_eq!(analysis.corrected_resistances_ohms.len(), 9);
+        assert!(
+            analysis
+                .drift_corrections_ohms
+                .iter()
+                .all(|drift| drift.value.abs() < 1e-12)
         );
     }
 

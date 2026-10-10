@@ -2,7 +2,9 @@
 
 Reads a `ColdResistanceFitInput` on stdin and prints a `ColdResistanceAnalysis`
 on stdout (see `schemas/`). See section 3.4 of
-`filament-characterisation/docs/2_COLD_RESISTANCE.md` for the method.
+`filament-characterisation/docs/2_COLD_RESISTANCE.md` for the method, and
+`filament-characterisation/docs/4_TEMPERATURE_COMPENSATION.md` for the
+correction for the mount's warming.
 """
 
 import math
@@ -13,7 +15,7 @@ from typing import Any
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.stats import chi2
-from uncertainties import ufloat
+from uncertainties import UFloat, covariance_matrix, ufloat
 
 from script_io import read_input, write_output
 
@@ -24,13 +26,26 @@ class AnalysisError(Exception):
 
 @dataclass
 class Points:
-    """The fit's data: each point's $x = I^2$ and resistance, with their
-    standard uncertainties."""
+    """The fit's data: each point's $x = I^2$ with its standard uncertainty,
+    and its resistance corrected for the mount's drift, with the corrected
+    resistances' covariance matrix."""
 
     x: np.ndarray
     u_x: np.ndarray
     r: np.ndarray
-    u_r: np.ndarray
+    covariance: np.ndarray
+
+    # The corrected resistances and the drift subtracted from each, with every
+    # correlation tracked, in the order of the points.
+    corrected: list[UFloat]
+    drift: list[UFloat]
+
+    # Each point's interpolation uncertainty, $u_{interp,i}$, which is part of
+    # `drift`.
+    u_interp: np.ndarray
+
+    # The last reference's resistance less the first's.
+    reference_drift: UFloat
 
 
 @dataclass
@@ -46,57 +61,146 @@ class Fit:
     degrees_of_freedom: int
 
 
-def to_points(points: list[dict[str, Any]], offset: float) -> Points:
-    """Each point's $x$ and $R$, propagating uncertainties as the per-point
-    analysis does.
+def measured(point: dict[str, Any], offset: float) -> tuple[UFloat, UFloat]:
+    """A point's or reference's resistance and current, with the current
+    shifted by `offset`, propagating uncertainties as the per-point analysis
+    does."""
+    v = ufloat(point["voltage_volts"]["value"], point["voltage_volts"]["uncertainty"])
+    i = ufloat(point["current_amps"]["value"] - offset, point["current_amps"]["uncertainty"])
+    return v / i, i
+
+
+def interval_curvatures(times: np.ndarray, resistances: np.ndarray) -> np.ndarray:
+    """An estimate of the drift's largest $|f''|$ in each interval between
+    consecutive references: the larger of the second divided differences
+    centred on the interval's two ends. With two references there are none,
+    so the curvature is taken as 0.
+
+    The last reference has no estimate, but the drift has levelled off by
+    then, so the last interval's single estimate is enough. The first
+    reference has none either, and that's where the drift curves most, so its
+    estimate is extrapolated back from the next two, assuming the curvature
+    shrinks geometrically, as an exponential approach's does. It's never less
+    than the next one's, and reference noise can only make it larger."""
+    centred = np.zeros(len(times))
+    for k in range(1, len(times) - 1):
+        before = (resistances[k] - resistances[k - 1]) / (times[k] - times[k - 1])
+        after = (resistances[k + 1] - resistances[k]) / (times[k + 1] - times[k])
+        centred[k] = abs(2 * (after - before) / (times[k + 1] - times[k - 1]))
+
+    if len(times) >= 4 and centred[2] > 0:
+        ratio = centred[1] / centred[2]
+        exponent = (times[1] - times[0]) / (times[2] - times[1])
+        centred[0] = max(centred[1], centred[1] * ratio**exponent)
+
+    return np.maximum(centred[:-1], centred[1:])
+
+
+def to_points(
+    points: list[dict[str, Any]], references: list[dict[str, Any]], offset: float
+) -> Points:
+    """Each point's $x$, and its $R$ less the mount's drift since the first
+    reference, interpolated linearly between the references either side of it.
 
     `offset` is a hypothetical readback offset $\\delta$, subtracted from every
-    current before $x$ and $R$ are computed. It's 0 for the nominal fit, and
-    $\\pm\\delta_{max}$ for the corner analysis in `offset_corners`.
+    point's and reference's current before anything else is computed. It's 0
+    for the nominal fit, and $\\pm\\delta_{max}$ for the corner analysis in
+    `offset_corners`.
+
+    Raises `AnalysisError` if there are fewer than two references, their times
+    don't increase, or a point isn't between the first and last.
     """
-    x, u_x, r, u_r = [], [], [], []
+    if len(references) < 2:
+        raise AnalysisError(f"expected at least 2 references, got {len(references)}")
+    times = np.array([reference["time_seconds"] for reference in references])
+    if np.any(np.diff(times) <= 0):
+        raise AnalysisError(f"the references' times must increase: {times}")
+
+    # Every input is created once, so the covariance matrix sees which
+    # references the points share.
+    reference_resistances = [measured(reference, offset)[0] for reference in references]
+    curvatures = interval_curvatures(times, np.array([r.nominal_value for r in reference_resistances]))
+
+    x, u_x, corrected, drift, u_interp = [], [], [], [], []
     for point in points:
-        v = ufloat(point["voltage_volts"]["value"], point["voltage_volts"]["uncertainty"])
-        i = ufloat(
-            point["current_amps"]["value"] - offset,
-            point["current_amps"]["uncertainty"],
+        t = point["time_seconds"]
+        if not times[0] <= t <= times[-1]:
+            raise AnalysisError(
+                f"a point at {t:.1f} s isn't between the first and last references, "
+                f"at {times[0]:.1f} s and {times[-1]:.1f} s"
+            )
+
+        # The interval the point is in, and how far through it.
+        j = min(int(np.searchsorted(times, t, side="right")) - 1, len(times) - 2)
+        w = (t - times[j]) / (times[j + 1] - times[j])
+
+        point_drift = (
+            (1 - w) * reference_resistances[j]
+            + w * reference_resistances[j + 1]
+            - reference_resistances[0]
         )
-        resistance = v / i
+
+        # The bound on linear interpolation's error, treated as rectangular
+        # and independent between points. It's 0 without curvature, which
+        # `ufloat` warns about.
+        bound = curvatures[j] * (t - times[j]) * (times[j + 1] - t) / 2
+        interpolation = bound / math.sqrt(3)
+        if interpolation > 0:
+            point_drift += ufloat(0.0, interpolation)
+        resistance, i = measured(point, offset)
         squared = i**2
+
         x.append(squared.nominal_value)
         u_x.append(squared.std_dev)
-        r.append(resistance.nominal_value)
-        u_r.append(resistance.std_dev)
-    return Points(np.array(x), np.array(u_x), np.array(r), np.array(u_r))
+        corrected.append(resistance - point_drift)
+        drift.append(point_drift)
+        u_interp.append(interpolation)
+
+    return Points(
+        x=np.array(x),
+        u_x=np.array(u_x),
+        r=np.array([r.nominal_value for r in corrected]),
+        covariance=np.array(covariance_matrix(corrected)),
+        corrected=corrected,
+        drift=drift,
+        u_interp=np.array(u_interp),
+        reference_drift=reference_resistances[-1] - reference_resistances[0],
+    )
 
 
 def line(x: np.ndarray, r0: float, b: float) -> np.ndarray:
     return r0 + b * x
 
 
-def fit_line(x: np.ndarray, r: np.ndarray, u_r: np.ndarray) -> Fit:
-    """Fits $R = R_0 + b x$, weighting each point by $1/u_r^2$.
+def fit_line(x: np.ndarray, r: np.ndarray, covariance: np.ndarray) -> Fit:
+    """Fits $R = R_0 + b x$ by generalised least squares, given the
+    resistances' covariance matrix.
 
     Raises `AnalysisError` if there are too few points for a goodness of fit,
-    or an uncertainty isn't finite and positive.
+    or the covariance matrix isn't finite, symmetric and positive definite.
     """
     # Two parameters, so at least one degree of freedom is left for chi-squared.
     if len(x) < 3:
         raise AnalysisError(f"expected at least 3 points, got {len(x)}")
 
-    # A zero would make its weight infinite.
-    if not np.all(np.isfinite(u_r) & (u_r > 0)):
-        raise AnalysisError(f"every resistance uncertainty must be finite and positive: {u_r}")
+    # Otherwise the fit can't invert it: a point with zero variance would have
+    # infinite weight.
+    if not np.all(np.isfinite(covariance)) or not np.allclose(covariance, covariance.T):
+        raise AnalysisError("the resistances' covariance matrix must be finite and symmetric")
+    try:
+        np.linalg.cholesky(covariance)
+    except np.linalg.LinAlgError:
+        raise AnalysisError("the resistances' covariance matrix must be positive definite") from None
 
-    # `sigma` is the standard uncertainties, not weights: `curve_fit` applies
-    # the 1/u^2 weighting itself. `absolute_sigma=True` stops it scaling the
-    # covariance by the reduced chi-squared, which the Birge inflation does
-    # deliberately instead (and never as a deflation).
+    # A 2-D `sigma` is the data's covariance matrix, and `curve_fit` whitens
+    # the residuals with it. `absolute_sigma=True` stops it scaling the
+    # parameters' covariance by the reduced chi-squared, which the Birge
+    # inflation does deliberately instead (and never as a deflation).
     popt, pcov, info, _, _ = curve_fit(
         line,
         x,
         r,
-        sigma=u_r,
+        sigma=covariance,
         absolute_sigma=True,
         p0=[r[0], 0.0],
         full_output=True,
@@ -109,27 +213,36 @@ def fit_line(x: np.ndarray, r: np.ndarray, u_r: np.ndarray) -> Fit:
         b=float(b),
         u_r0=float(u_r0),
         u_b=float(u_b),
-        # `fvec` is the weighted residuals.
+        # `fvec` is the whitened residuals.
         chi_squared=float(np.sum(info["fvec"] ** 2)),
         degrees_of_freedom=len(x) - 2,
     )
 
 
-def offset_corners(points: list[dict[str, Any]], offset_bound: float) -> tuple[float, float]:
+def offset_corners(
+    points: list[dict[str, Any]], references: list[dict[str, Any]], offset_bound: float
+) -> tuple[float, float]:
     """The fitted $R_0$ with the readback offset at $-\\delta_{max}$ and
     $+\\delta_{max}$, in that order. The order doesn't matter to the
     uncertainty, which only uses the difference; it's fixed so the stored
     `offset_corner_resistances_ohms` says which is which.
 
     The offset doesn't reverse with the current and isn't a scale factor on
-    $R_0$, so it's found by refitting with the currents shifted. $R_0$ is very
-    nearly linear in the offset, so the extremes are at the two ends.
+    $R_0$, so it's found by refitting with the currents shifted. The
+    references' currents are shifted too, and the drift corrected afresh.
+    $R_0$ is very nearly linear in the offset, so the extremes are at the two
+    ends.
     """
     corners = []
     for offset in (-offset_bound, offset_bound):
-        shifted = to_points(points, offset)
-        corners.append(fit_line(shifted.x, shifted.r, shifted.u_r).r0)
+        shifted = to_points(points, references, offset)
+        corners.append(fit_line(shifted.x, shifted.r, shifted.covariance).r0)
     return corners[0], corners[1]
+
+
+def derived(quantity: UFloat) -> dict[str, float]:
+    """`quantity` as a `Derived`."""
+    return {"value": quantity.nominal_value, "uncertainty": quantity.std_dev}
 
 
 def analyse(data: dict[str, Any]) -> dict[str, Any]:
@@ -140,14 +253,15 @@ def analyse(data: dict[str, Any]) -> dict[str, Any]:
     """
     parameters = data["parameters"]
     points = data["points"]
+    references = data["references"]
     warnings = []
 
-    nominal = to_points(points, 0.0)
-    fit = fit_line(nominal.x, nominal.r, nominal.u_r)
+    nominal = to_points(points, references, 0.0)
+    fit = fit_line(nominal.x, nominal.r, nominal.covariance)
     r0 = fit.r0
 
     # The uncertainty in x is ignored by the fit. Say so if it isn't small.
-    x_ratio = np.max(abs(fit.b) * nominal.u_x / nominal.u_r)
+    x_ratio = np.max(abs(fit.b) * nominal.u_x / np.sqrt(np.diag(nominal.covariance)))
     if x_ratio > 0.1:
         warnings.append(
             f"the uncertainty in I² isn't negligible: it's up to {x_ratio:.2f} "
@@ -182,7 +296,7 @@ def analyse(data: dict[str, Any]) -> dict[str, Any]:
     # Systematic terms, each treated as rectangular.
     voltage_gain_uncertainty = r0 * parameters["voltage_gain_bound"] / math.sqrt(3)
     current_gain_uncertainty = r0 * parameters["current_gain_bound"] / math.sqrt(3)
-    corners = offset_corners(points, parameters["current_offset_bound_amps"])
+    corners = offset_corners(points, references, parameters["current_offset_bound_amps"])
     current_offset_uncertainty = abs(corners[1] - corners[0]) / 2 / math.sqrt(3)
 
     combined_uncertainty = math.sqrt(
@@ -209,11 +323,14 @@ def analyse(data: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "chi_squared_p_value": p_value,
+        "corrected_resistances_ohms": [derived(r) for r in nominal.corrected],
         "current_gain_uncertainty_ohms": current_gain_uncertainty,
         "current_offset_uncertainty_ohms": current_offset_uncertainty,
+        "drift_corrections_ohms": [derived(d) for d in nominal.drift],
         "fit_uncertainty_ohms": fit_uncertainty,
         "offset_corner_resistances_ohms": list(corners),
         "reduced_chi_squared": reduced_chi_squared,
+        "reference_drift_ohms": derived(nominal.reference_drift),
         "reference_resistance_ohms": {
             "value": reference_resistance,
             "uncertainty": reference_combined_uncertainty,

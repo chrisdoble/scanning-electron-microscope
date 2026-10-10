@@ -14,12 +14,20 @@
       "items": {
         "$ref": "#/$defs/ColdResistanceFitPoint"
       }
+    },
+    "references": {
+      "description": "Every reference's reversal-corrected voltage and current, in the order\nmeasured, to correct the points for the mount's warming.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ColdResistanceFitPoint"
+      }
     }
   },
   "additionalProperties": false,
   "required": [
     "parameters",
-    "points"
+    "points",
+    "references"
   ],
   "$defs": {
     "ColdResistanceFitParameters": {
@@ -37,12 +45,12 @@
           "format": "double"
         },
         "filament_temperature_bound_kelvin": {
-          "description": "The bound on the filament temperature in kelvin, $a_T$: the\nthermometer's bound plus half the drift over the run.",
+          "description": "The bound on the filament temperature in kelvin, $a_T$: the\nthermometer's bound.",
           "type": "number",
           "format": "double"
         },
         "filament_temperature_celsius": {
-          "description": "The filament temperature, $T_f$: the mean of the start and end chamber\ntemperatures.",
+          "description": "The filament temperature, $T_f$: the chamber temperature at the start,\nsince the references correct for any warming during the run.",
           "type": "number",
           "format": "double"
         },
@@ -80,12 +88,17 @@
       ]
     },
     "ColdResistanceFitPoint": {
-      "description": "One setpoint's input to the fit, from its `ColdResistancePointAnalysis`.",
+      "description": "One setpoint's or reference's input to the fit, from its\n`ColdResistancePointAnalysis`.",
       "type": "object",
       "properties": {
         "current_amps": {
           "description": "The mean of the two polarities' currents, with the quantisation floor.",
           "$ref": "#/$defs/Derived"
+        },
+        "time_seconds": {
+          "description": "The mean of the two polarities' times, in seconds since the\ncold-resistance measurement started.",
+          "type": "number",
+          "format": "double"
         },
         "voltage_volts": {
           "description": "Half the difference between the two polarities' voltages.",
@@ -95,6 +108,7 @@
       "additionalProperties": false,
       "required": [
         "current_amps",
+        "time_seconds",
         "voltage_volts"
       ]
     },

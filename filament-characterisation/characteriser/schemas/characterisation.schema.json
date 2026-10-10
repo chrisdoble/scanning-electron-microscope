@@ -96,9 +96,8 @@
           ]
         },
         "references": {
-          "description": "The measurements at the reference current, interleaved with the\nsetpoints to track the mount's warming, in the order measured. Empty in\nresults from before references were measured.",
+          "description": "The measurements at the reference current, interleaved with the\nsetpoints to track the mount's warming, in the order measured.",
           "type": "array",
-          "default": [],
           "items": {
             "$ref": "#/$defs/ColdResistancePoint"
           }
@@ -120,6 +119,7 @@
       "required": [
         "chamber_start_temperature_celsius",
         "points",
+        "references",
         "room_temperature_celsius"
       ]
     },
@@ -132,6 +132,13 @@
           "type": "number",
           "format": "double"
         },
+        "corrected_resistances_ohms": {
+          "description": "Each point's resistance less the mount's drift since the first\nreference, $R'_i$, with its full uncertainty, in the order of the\npoints. These are what's fitted.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Derived"
+          }
+        },
         "current_gain_uncertainty_ohms": {
           "description": "The contribution of the supply's readback gain error.",
           "type": "number",
@@ -141,6 +148,13 @@
           "description": "The contribution of the supply's readback offset error, from the corner\nanalysis.",
           "type": "number",
           "format": "double"
+        },
+        "drift_corrections_ohms": {
+          "description": "The drift subtracted from each point, $\\Delta R(t_i)$, with its\nuncertainty, in the order of the points.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Derived"
+          }
         },
         "fit_uncertainty_ohms": {
           "description": "The statistical uncertainty of the fit's intercept, inflated by the\nBirge ratio when that's above 1.",
@@ -161,6 +175,10 @@
           "description": "Chi-squared divided by its degrees of freedom.",
           "type": "number",
           "format": "double"
+        },
+        "reference_drift_ohms": {
+          "description": "The last reference's resistance less the first's: the mount's drift\nover the run.",
+          "$ref": "#/$defs/Derived"
         },
         "reference_resistance_ohms": {
           "description": "The cold resistance corrected to the reference temperature, $R_{20}$,\nwith its combined standard uncertainty.",
@@ -200,11 +218,14 @@
       "additionalProperties": false,
       "required": [
         "chi_squared_p_value",
+        "corrected_resistances_ohms",
         "current_gain_uncertainty_ohms",
         "current_offset_uncertainty_ohms",
+        "drift_corrections_ohms",
         "fit_uncertainty_ohms",
         "offset_corner_resistances_ohms",
         "reduced_chi_squared",
+        "reference_drift_ohms",
         "reference_resistance_ohms",
         "resistance_ohms",
         "slope_ohms_per_amp_squared",
@@ -229,12 +250,12 @@
           "format": "double"
         },
         "filament_temperature_bound_kelvin": {
-          "description": "The bound on the filament temperature in kelvin, $a_T$: the\nthermometer's bound plus half the drift over the run.",
+          "description": "The bound on the filament temperature in kelvin, $a_T$: the\nthermometer's bound.",
           "type": "number",
           "format": "double"
         },
         "filament_temperature_celsius": {
-          "description": "The filament temperature, $T_f$: the mean of the start and end chamber\ntemperatures.",
+          "description": "The filament temperature, $T_f$: the chamber temperature at the start,\nsince the references correct for any warming during the run.",
           "type": "number",
           "format": "double"
         },
@@ -300,13 +321,9 @@
           "format": "double"
         },
         "negative_time_seconds": {
-          "description": "The midpoint of the sampling window in the polarity that gives a\nnegative voltage, in seconds since the cold-resistance measurement\nstarted. `None` in results from before it was recorded.",
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double",
-          "default": null
+          "description": "The midpoint of the sampling window in the polarity that gives a\nnegative voltage, in seconds since the cold-resistance measurement\nstarted.",
+          "type": "number",
+          "format": "double"
         },
         "negative_voltage_volts": {
           "description": "The voltage in the polarity that gives a negative voltage.",
@@ -322,13 +339,9 @@
           "format": "double"
         },
         "positive_time_seconds": {
-          "description": "The midpoint of the sampling window in the polarity that gives a\npositive voltage, in seconds since the cold-resistance measurement\nstarted. `None` in results from before it was recorded.",
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double",
-          "default": null
+          "description": "The midpoint of the sampling window in the polarity that gives a\npositive voltage, in seconds since the cold-resistance measurement\nstarted.",
+          "type": "number",
+          "format": "double"
         },
         "positive_voltage_volts": {
           "description": "The voltage in the polarity that gives a positive voltage.",
@@ -351,9 +364,11 @@
         "first_polarity",
         "negative_current_amps",
         "negative_settle_seconds",
+        "negative_time_seconds",
         "negative_voltage_volts",
         "positive_current_amps",
         "positive_settle_seconds",
+        "positive_time_seconds",
         "positive_voltage_volts",
         "setpoint_amps",
         "warnings"

@@ -98,8 +98,35 @@ For a linear interpolant, the error's size is $\tfrac12 |f''(\xi)|(t - t_j)(t_{j
   $$f'' \approx 2\left[\frac{R_{ref,k+1} - R_{ref,k}}{t_{k+1} - t_k} - \frac{R_{ref,k} - R_{ref,k-1}}{t_k - t_{k-1}}\right] \Big/ (t_{k+1} - t_{k-1})$$
 
   Each interval uses the larger magnitude of the estimates centred on its two ends.
+- **The first interval:** the first reference has no estimate centred on it, because no reference comes before it. That's where the drift curves most, so the next estimate alone would understate it. Instead, its estimate is extrapolated back from the two estimates centred on references 1 and 2, $c_1$ and $c_2$, assuming the curvature shrinks geometrically, as an exponential approach's does:
+
+  $$c_0 = \max\left(c_1,\; c_1\left(\frac{c_1}{c_2}\right)^{(t_1 - t_0)/(t_2 - t_1)}\right)$$
+
+  **Where the extrapolation comes from.** Here $c_k$ is the estimate centred on reference $k$, roughly the average of $|f''|$ from $t_{k-1}$ to $t_{k+1}$. For an exponential approach, $f(t) = a - b\,e^{-t/\tau}$, so
+
+  $$f''(t) = -\frac{b}{\tau^2}e^{-t/\tau}, \qquad |f''(t)| = \frac{b}{\tau^2}e^{-t/\tau}$$
+
+  The curvature at a time $\Delta$ later, relative to that at $t$, is
+
+  $$\frac{|f''(t + \Delta)|}{|f''(t)|} = e^{-\Delta/\tau}$$
+
+  That doesn't depend on $t$: the curvature shrinks by the same factor over any stretch of length $\Delta$, wherever it is in the run. Taking each ratio as later over earlier:
+
+  - $c_2$ is $t_2 - t_1$ after $c_1$, so $c_2/c_1 = e^{-(t_2 - t_1)/\tau}$, and so $c_1/c_2 = e^{(t_2 - t_1)/\tau}$.
+  - $c_1$ is $t_1 - t_0$ after $c_0$, so $c_1/c_0 = e^{-(t_1 - t_0)/\tau}$, and so $c_0 = c_1\,e^{(t_1 - t_0)/\tau}$.
+
+  τ isn't known. But writing the second exponent as a fraction of the first,
+
+  $$e^{(t_1 - t_0)/\tau} = \left(e^{(t_2 - t_1)/\tau}\right)^{(t_1 - t_0)/(t_2 - t_1)} = \left(\frac{c_1}{c_2}\right)^{(t_1 - t_0)/(t_2 - t_1)}$$
+
+  gives $c_0 = c_1\,(c_1/c_2)^{(t_1 - t_0)/(t_2 - t_1)}$, without τ. The drift levels off, so $c_1 > c_2$, and the extrapolated $c_0$ is larger than $c_1$, as the curvature at the start should be. With the schedule's spacing, about 80 s then 120 s, the measured ratio is raised to the power ⅔.
+
+  Treating each $c_k$, which is an average over a span, as the curvature at $t_k$ is an approximation, and the hold test's slower second component isn't a single exponential. The test against exponential drifts across a range of time constants (test 3) is what shows it works.
+
+  With 400 µΩ of drift, this bounds the first interval's actual error for time constants from 60 to 250 s, e.g. 11.8 µΩ against an actual 10.3 µΩ at 155 s. The estimate centred on reference 1 alone gives 7.5 µΩ. It needs four references and a nonzero $c_2$, and otherwise falls back to $c_1$.
+- **The last interval** has no estimate centred on the last reference either. But the drift has levelled off by then, so the one centred on the reference before is enough.
 - **As an uncertainty:** the resulting bound $e_i = \tfrac12|f''|(t_i - t_j)(t_{j+1} - t_i)$ is treated as rectangular, so $u_{interp,i} = e_i/\sqrt3$. It's independent between points.
-- **It's conservative.** Noise in the references inflates the second differences, and each interval takes the larger of two estimates.
+- **It's conservative.** Noise in the references inflates the second differences, and each interval takes the larger of two estimates. Noise can only make the first interval's extrapolation larger, because it's never less than $c_1$.
 - **The size:** with τ ≈ 155 s, a run's drift amplitude of about 0.5 mΩ, and references about 120 s apart, the largest interpolation error is about 40 µΩ at the start of the run, where the drift curves most, falling as it levels off. That's comparable to a point's own uncertainty, which is why the schedule puts an extra reference early.
 
 ### Propagating the uncertainty
@@ -183,14 +210,13 @@ R₀ refers to the mount's temperature at the first reference. For that to be th
 ### `results.rs`
 
 - **`ColdResistancePoint`** gains `negative_time_seconds` and `positive_time_seconds`: the midpoints of each polarity's sampling window, in seconds since the cold-resistance measurement started.
-  - They're `Option<f64>` with `#[serde(default)]`, so results files from before this change still load and validate. A missing time just means the run can't be fitted with compensation.
-- **`ColdResistance`** gains `references: Vec<ColdResistancePoint>`, in the order measured, with `#[serde(default)]` for the same reason.
+- **`ColdResistance`** gains `references: Vec<ColdResistancePoint>`, in the order measured.
 - **`ColdResistanceAnalysis`** gains:
   - `corrected_resistances_ohms: Vec<Derived>`: each point's $R'_i$ with its full uncertainty, in the order of `points`. That's what the visualiser plots once there's a fit.
   - `drift_corrections_ohms: Vec<Derived>`: each point's $\Delta R(t_i)$, for diagnosis.
   - `reference_drift_ohms: Derived`: the last reference less the first, which is the drift over the run.
 
-  All three use `#[serde(default)]`, so older complete runs still load.
+Results files from before this change aren't supported.
 
 ### `python.rs` and the schemas
 
@@ -216,7 +242,7 @@ R₀ refers to the mount's temperature at the first reference. For that to be th
   - fewer than two references;
   - a point outside the references' time range;
   - references whose times aren't increasing.
-- **A new warning** when the drift over the run is larger than `drift_warning_ohms`, a fit parameter, so an unusually warm start or a long run stands out. The Rust side passes 1% of the first reference's resistance.
+- **No drift warning.** The case worth catching is a filament that wasn't at the flange's temperature at the start, but that gives a smaller drift than usual, which the data alone can't tell from a normal run. The operator sees the drift after each reference and over the whole run, and judges whether the run is valid.
 
 ### Display and visualiser
 
@@ -246,13 +272,13 @@ Update it to match:
 3. **Exponential drift:** the fixture with $A(1 - e^{-t/\tau})$ added to points and references, with $A = 400$ µΩ, τ = 155 s, at the schedule's times.
    - R₀ is recovered to within the interpolation error;
    - χ²_ν is close to 1 when the fixture's noise is added;
-   - each $u_{interp,i}$ is at least the actual interpolation error at that point.
+   - each point's bound, $e_i = \sqrt3\,u_{interp,i}$, is at least the actual interpolation error at that point, for τ of 60, 95, 155 and 250 s.
 4. **Propagation:** a point midway between references 0 and 1 has $u^2(R') = u_i^2 + \tfrac14 u_{ref,1}^2 + \tfrac14 u_{ref,0}^2 + u_{interp}^2$, matching the covariance matrix's diagonal to $10^{-12}$ relative. Two points $a$ and $b$ both between references 0 and 1 have the off-diagonal covariance $w_a w_b\,(u_{ref,0}^2 + u_{ref,1}^2)$, and two points both between references 1 and 2 have $(1 - w_a)(1 - w_b)\,u_{ref,1}^2 + w_a w_b\,u_{ref,2}^2 + u_{ref,0}^2$.
 5. **Generalised least squares:** with a known covariance matrix, `fit_line`'s R₀, $b$, their uncertainties and χ² match the closed-form result, $\hat\beta = (X^\top C^{-1}X)^{-1}X^\top C^{-1}y$ with covariance $(X^\top C^{-1}X)^{-1}$, computed in the test, to $10^{-5}$ relative. This replaces test 6 in `2_COLD_RESISTANCE.md`, which is the diagonal case.
 6. **Corner analysis:** the references' resistances change with the offset shift, and the corners match a hand-built correction at $\pm\delta_{max}$.
 7. **Errors:** fewer than two references, a point outside the references' times, and references with times that aren't increasing each exit with a clear message.
 8. **Schemas:** the existing schema tests with the new input and output fields.
-9. **Existing tests:** they still pass, with two references that have no drift added to their inputs.
+9. **Existing tests:** they still pass, with the fixture's references added to their inputs, without drift. The exception is the offset corners: the shifted points don't lie on a line, so the corners depend on the weights, and those now include the references' uncertainties. The fixture's corners move from 0.092317 and 0.099849 Ω to 0.092013 and 0.100195 Ω, and its readback-offset uncertainty from 2.174 to 2.362 mΩ.
 
 ### Rust
 
@@ -268,7 +294,6 @@ Update it to match:
   - every point's time lies between the first and last reference;
   - R₀ is still 0.096 Ω, because the mock has no drift, so the corrections are zero;
   - `reference_drift_ohms` is 0.
-- **Compatibility:** a results file from before this change, e.g. a fixture without times or references, still deserialises.
 
 ### Visualiser
 

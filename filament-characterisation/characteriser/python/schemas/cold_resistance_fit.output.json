@@ -9,6 +9,13 @@
       "type": "number",
       "format": "double"
     },
+    "corrected_resistances_ohms": {
+      "description": "Each point's resistance less the mount's drift since the first\nreference, $R'_i$, with its full uncertainty, in the order of the\npoints. These are what's fitted.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Derived"
+      }
+    },
     "current_gain_uncertainty_ohms": {
       "description": "The contribution of the supply's readback gain error.",
       "type": "number",
@@ -18,6 +25,13 @@
       "description": "The contribution of the supply's readback offset error, from the corner\nanalysis.",
       "type": "number",
       "format": "double"
+    },
+    "drift_corrections_ohms": {
+      "description": "The drift subtracted from each point, $\\Delta R(t_i)$, with its\nuncertainty, in the order of the points.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Derived"
+      }
     },
     "fit_uncertainty_ohms": {
       "description": "The statistical uncertainty of the fit's intercept, inflated by the\nBirge ratio when that's above 1.",
@@ -38,6 +52,10 @@
       "description": "Chi-squared divided by its degrees of freedom.",
       "type": "number",
       "format": "double"
+    },
+    "reference_drift_ohms": {
+      "description": "The last reference's resistance less the first's: the mount's drift\nover the run.",
+      "$ref": "#/$defs/Derived"
     },
     "reference_resistance_ohms": {
       "description": "The cold resistance corrected to the reference temperature, $R_{20}$,\nwith its combined standard uncertainty.",
@@ -77,11 +95,14 @@
   "additionalProperties": false,
   "required": [
     "chi_squared_p_value",
+    "corrected_resistances_ohms",
     "current_gain_uncertainty_ohms",
     "current_offset_uncertainty_ohms",
+    "drift_corrections_ohms",
     "fit_uncertainty_ohms",
     "offset_corner_resistances_ohms",
     "reduced_chi_squared",
+    "reference_drift_ohms",
     "reference_resistance_ohms",
     "resistance_ohms",
     "slope_ohms_per_amp_squared",
