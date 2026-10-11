@@ -63,6 +63,7 @@ pub fn render(
         _ if exiting => "[Any key] Exit",
         Some(StepKind::Confirm { .. }) => "[Enter] Confirm   [Esc] Quit",
         Some(StepKind::Input { .. }) => "[Enter] Submit   [Esc] Quit",
+        Some(StepKind::Question { .. }) => "[Y] Yes   [N] No   [Esc] Quit",
         _ => "[↑/↓] Scroll   [Esc] Quit",
     };
     frame.render_widget(

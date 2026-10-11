@@ -107,6 +107,33 @@ impl Context {
         result
     }
 
+    /// Asks the user a yes/no question and waits for the answer: `true` for yes.
+    pub async fn ask(&self, prompt: impl Into<String>) -> Result<bool, ProcedureError> {
+        let (responder, answer) = oneshot::channel();
+        let path = self.push(StepKind::Question {
+            answer: None,
+            prompt: prompt.into(),
+            responder: Some(responder),
+        });
+
+        // A dropped responder means nobody can answer any more, which only
+        // happens as the application goes away.
+        let result = self
+            .unless_cancelled(answer)
+            .await
+            .and_then(|answer| answer.map_err(|_| ProcedureError::Cancelled));
+
+        if let Ok(given) = result {
+            self.update(&path, |kind| {
+                if let StepKind::Question { answer, .. } = kind {
+                    *answer = Some(given);
+                }
+            });
+        }
+        self.finish(&path, status(&result));
+        result
+    }
+
     /// Asks the user for a value and waits until they enter one that parses.
     ///
     /// A value that doesn't parse gets the parse error beside the prompt, and
@@ -342,6 +369,7 @@ impl Context {
             match &mut step.kind {
                 StepKind::Confirm { responder, .. } => *responder = None,
                 StepKind::Input { responder, .. } => *responder = None,
+                StepKind::Question { responder, .. } => *responder = None,
                 StepKind::Section(_) | StepKind::Text { .. } => {}
             }
         });

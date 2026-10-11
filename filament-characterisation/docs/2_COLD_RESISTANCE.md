@@ -707,7 +707,9 @@ Record the analysis and save. Show:
 
 ## 4. Spinning down and finishing
 
-Unchanged. Abort handling is already covered by `1_ARCHITECTURE.md` §16: every `Err`, including the new `ProcedureError::Check`, ends the run and `enter_safe_state` runs. Its current step to 0 A (rather than a ramp) is harmless at ≤300 mA.
+The filament system is made safe first: current zeroed, output disabled, relays de-energised, and a final save. Then, in vacuum, the operator is asked "Turn off the TMP and wait for it to spin down?". Yes spins it down as before. No leaves it running, so a run straight after, e.g. of another mode, passes through its pump-down in seconds rather than starting from atmosphere. The question is asked only once the filament is safe, because the operator may not answer straight away.
+
+Abort handling is already covered by `1_ARCHITECTURE.md` §16: every `Err`, including the new `ProcedureError::Check`, ends the run and `enter_safe_state` runs. Its current step to 0 A (rather than a ramp) is harmless at ≤300 mA.
 
 # Tests
 

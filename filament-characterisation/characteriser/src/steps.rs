@@ -42,9 +42,9 @@ pub enum StepKind {
     /// A gate: something the user has to make true, e.g. "Confirm that the
     /// roughing pump is running", before the procedure continues.
     ///
-    /// Not a yes/no question. There's no answer to record — the step's status
-    /// and `finished_at` say that it was passed and when — and no way to refuse:
-    /// a user who can't make it true quits instead.
+    /// Not a yes/no question, which is `Question`. There's no answer to record —
+    /// the step's status and `finished_at` say that it was passed and when — and
+    /// no way to refuse: a user who can't make it true quits instead.
     Confirm {
         prompt: String,
 
@@ -73,6 +73,20 @@ pub enum StepKind {
 
         /// The accepted value, set by the procedure once parsed.
         value: Option<String>,
+    },
+
+    /// A yes/no question, e.g. "Turn off the TMP and wait for it to spin
+    /// down?".
+    ///
+    /// Unlike `Confirm`, "no" is a real answer, and it's recorded.
+    Question {
+        /// The answer, once given: `true` for yes.
+        answer: Option<bool>,
+
+        prompt: String,
+
+        /// Taken by the application when the user answers.
+        responder: Option<oneshot::Sender<bool>>,
     },
 
     /// A group of steps.
@@ -172,6 +186,7 @@ impl Step {
         match &self.kind {
             StepKind::Confirm { responder, .. } => responder.is_some(),
             StepKind::Input { responder, .. } => responder.is_some(),
+            StepKind::Question { responder, .. } => responder.is_some(),
             StepKind::Section(_) | StepKind::Text { .. } => false,
         }
     }
@@ -237,6 +252,25 @@ impl Step {
                 }
                 if let Some(error) = error {
                     spans.push(Span::styled(format!("  {}", error), ERROR_STYLE));
+                }
+                vec![line(glyph, ellipsify(spans, available))]
+            }
+
+            StepKind::Question {
+                answer,
+                prompt,
+                responder,
+            } => {
+                let mut spans = vec![Span::raw(prompt.clone())];
+                if responder.is_some() {
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled("[Y] Yes  [N] No", CONFIRMATION_STYLE));
+                } else if let Some(answer) = answer {
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(
+                        if *answer { "Yes" } else { "No" },
+                        VARIABLE_STYLE,
+                    ));
                 }
                 vec![line(glyph, ellipsify(spans, available))]
             }

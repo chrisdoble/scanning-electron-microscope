@@ -282,6 +282,19 @@ impl App {
                 }
             }
 
+            // Only `y` and `n` answer a question. `Enter` doesn't, so one left
+            // over from the confirmations before it can't answer by accident.
+            (Some(StepKind::Question { responder, .. }), KeyCode::Char('y' | 'Y')) if !control => {
+                if let Some(responder) = responder.take() {
+                    let _ = responder.send(true);
+                }
+            }
+            (Some(StepKind::Question { responder, .. }), KeyCode::Char('n' | 'N')) if !control => {
+                if let Some(responder) = responder.take() {
+                    let _ = responder.send(false);
+                }
+            }
+
             // A pending input takes printable characters, so a `q` typed into
             // it is a character rather than a quit.
             (Some(StepKind::Input { buffer, .. }), KeyCode::Char(c))

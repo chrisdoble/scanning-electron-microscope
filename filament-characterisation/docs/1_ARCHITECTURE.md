@@ -685,9 +685,9 @@ pub enum StepKind {
     /// A gate: something the user has to make true, e.g. "Confirm that the
     /// roughing pump is running", before the procedure continues.
     ///
-    /// Not a yes/no question. There's no answer to record — the step's status
-    /// and `finished_at` say that it was passed and when — and no way to refuse:
-    /// a user who can't make it true quits instead.
+    /// Not a yes/no question, which is `Question`. There's no answer to record —
+    /// the step's status and `finished_at` say that it was passed and when — and
+    /// no way to refuse: a user who can't make it true quits instead.
     Confirm {
         prompt: String,
 
@@ -716,6 +716,20 @@ pub enum StepKind {
 
         /// The accepted value, set by the procedure once parsed.
         value: Option<String>,
+    },
+
+    /// A yes/no question, e.g. "Turn off the TMP and wait for it to spin
+    /// down?".
+    ///
+    /// Unlike `Confirm`, "no" is a real answer, and it's recorded.
+    Question {
+        /// The answer, once given: `true` for yes.
+        answer: Option<bool>,
+
+        prompt: String,
+
+        /// Taken by the application when the user answers.
+        responder: Option<oneshot::Sender<bool>>,
     },
 
     /// A group of steps.
@@ -847,6 +861,12 @@ operator has to make true — "Confirm that the roughing pump is running" — an
 waits until they press `Enter`. There's no "no". An operator who can't make it
 true quits, which cancels the token and unblocks the wait with
 `ProcedureError::Cancelled`, and cleanup runs as on any other exit (§16).
+
+A real yes/no choice is a `StepKind::Question`, asked with `Context::ask`, which
+returns the answer as a `bool`. It works exactly as below, except that the
+responder carries a `bool` rather than `()`, and the procedure records the
+answer in the step before finishing it, so the step shows it. `y` answers yes
+and `n` answers no (§15).
 
 The responder lives in the step, so no separate request message or pending
 registry is needed. The procedure creates the channel, parks the sender in the
@@ -1665,6 +1685,9 @@ Key events are routed in this order:
      a confirmation is a gate, not a question (§9.3).
    - **Input**: printable characters append to the buffer; `Backspace` deletes;
      `Enter` takes the responder and sends the buffer; `Esc` → quit.
+   - **Question**: `y` answers yes and `n` answers no; `Esc` → quit. `Enter`
+     does nothing, so one left over from the confirmations before it can't
+     answer by accident.
 3. Otherwise:
    - `↑` / `↓`, `PgUp` / `PgDn`, `Home` / `End` — scroll the step list.
    - `q` / `Esc` — quit.

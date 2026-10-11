@@ -235,12 +235,23 @@ pub async fn characterise(ctx: Context, hardware: Hardware) -> Result<(), Proced
         measure_cold_resistance(ctx, hardware.clone())
     })
     .await?;
-    if ctx.in_vacuum() {
-        ctx.section("Spinning down TMP", |ctx| spin_down(ctx, hardware.clone()))
-            .await?;
-    }
     ctx.section("Finishing", |ctx| finish(ctx, hardware.clone()))
         .await?;
+
+    // Asked once the filament is safe, since the operator may not answer
+    // straight away. Leaving the TMP running means the next run's pump-down
+    // passes straight through.
+    if ctx.in_vacuum() {
+        if ctx
+            .ask("Turn off the TMP and wait for it to spin down?")
+            .await?
+        {
+            ctx.section("Spinning down TMP", |ctx| spin_down(ctx, hardware.clone()))
+                .await?;
+        } else {
+            ctx.text("Left the TMP running");
+        }
+    }
     ctx.confirm("Press enter to exit").await?;
     Ok(())
 }
@@ -1486,8 +1497,9 @@ mod tests {
     }
 
     /// Answers whichever prompt is waiting, as the operator would: confirms a
-    /// gate, or enters a value for an input.
-    fn answer_prompt(root: &Mutex<Section>) {
+    /// gate, enters a value for an input, or answers a question with
+    /// `spin_down`, the only question asked.
+    fn answer_prompt(root: &Mutex<Section>, spin_down: bool) {
         let mut root = root.lock().unwrap();
         let Some(step) = root.pending_mut() else {
             return;
@@ -1511,17 +1523,23 @@ mod tests {
                     let _ = responder.send(String::from(value));
                 }
             }
+            StepKind::Question { responder, .. } => {
+                if let Some(responder) = responder.take() {
+                    let _ = responder.send(spin_down);
+                }
+            }
             _ => {}
         }
     }
 
     /// Runs the whole procedure against the mocks, `in_vacuum` or not, answering
-    /// its prompts. Returns the context, for the results, and the step tree.
+    /// its prompts, and whether to spin down the TMP with `spin_down`. Returns
+    /// the context, for the results, and the step tree.
     ///
     /// Call from a test on a paused clock, so tokio skips through the ramps and
     /// settles instead of waiting minutes for them. Needs the Python virtual
     /// environment, for the analysis scripts.
-    async fn run_against_mocks(in_vacuum: bool) -> (Context, Arc<Mutex<Section>>) {
+    async fn run_against_mocks(in_vacuum: bool, spin_down: bool) -> (Context, Arc<Mutex<Section>>) {
         let hardware = Hardware {
             filament: Arc::new(MockFilamentSystem::default()),
             vacuum: Arc::new(MockVacuumSystem::default()),
@@ -1537,7 +1555,7 @@ mod tests {
 
         let operator = async {
             loop {
-                answer_prompt(&root);
+                answer_prompt(&root, spin_down);
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
         };
@@ -1640,7 +1658,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn the_procedure_measures_the_mock_filament() {
-        let (ctx, root) = run_against_mocks(true).await;
+        let (ctx, root) = run_against_mocks(true, true).await;
         assert_measured_the_mock_filament(&ctx);
         assert!(ctx.characterisation.lock().unwrap().in_vacuum);
 
@@ -1649,11 +1667,24 @@ mod tests {
         assert!(titles.iter().any(|title| title == "Spinning down TMP"));
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn the_procedure_can_leave_the_tmp_running() {
+        let (ctx, root) = run_against_mocks(true, false).await;
+        assert_measured_the_mock_filament(&ctx);
+
+        let titles = section_titles(&root);
+        assert!(!titles.iter().any(|title| title == "Spinning down TMP"));
+        assert!(root.lock().unwrap().children.iter().any(|step| matches!(
+            &step.kind,
+            StepKind::Text { spans } if spans.iter().any(|span| span.content == "Left the TMP running")
+        )));
+    }
+
     // Without vacuum, the chamber is never pumped down and the TMP is never
     // started or stopped, but the measurement is the same.
     #[tokio::test(start_paused = true)]
     async fn the_procedure_measures_the_mock_filament_without_vacuum() {
-        let (ctx, root) = run_against_mocks(false).await;
+        let (ctx, root) = run_against_mocks(false, true).await;
         assert_measured_the_mock_filament(&ctx);
         assert!(!ctx.characterisation.lock().unwrap().in_vacuum);
 
