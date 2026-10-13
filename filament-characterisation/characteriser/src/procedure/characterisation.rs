@@ -420,24 +420,22 @@ async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(),
     // The filament's own power warms its mount, raising every reading over
     // the run. The references, at a fixed current, track that so the fit can
     // remove it.
+    //
+    // Setpoints and references are numbered together, in the order they're
+    // measured, so the count shows how far through the run is.
     let plan = measurement_plan(&setpoints);
-    let reference_count = plan
-        .iter()
-        .filter(|measure| **measure == MeasurementType::Reference)
-        .count();
-    let mut setpoint_number = 0;
-    let mut reference_number = 0;
+    let total = plan.len();
     let mut first_reference = None;
     let mut polarity = Polarity::Reverse;
-    for measure in plan {
+    for (index, measure) in plan.into_iter().enumerate() {
+        let number = index + 1;
         match measure {
             MeasurementType::Setpoint(setpoint) => {
-                setpoint_number += 1;
                 let title = format!(
                     "Measuring at {:.0} mA ({}/{})",
                     setpoint * 1000.0,
-                    setpoint_number,
-                    setpoints.len()
+                    number,
+                    total
                 );
                 (polarity, _) = ctx
                     .section(title, |ctx| {
@@ -455,12 +453,11 @@ async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(),
                     .await?;
             }
             MeasurementType::Reference => {
-                reference_number += 1;
                 let title = format!(
                     "Measuring the reference at {:.0} mA ({}/{})",
                     REFERENCE_CURRENT_AMPS * 1000.0,
-                    reference_number,
-                    reference_count
+                    number,
+                    total
                 );
                 let resistance;
                 (polarity, resistance) = ctx
