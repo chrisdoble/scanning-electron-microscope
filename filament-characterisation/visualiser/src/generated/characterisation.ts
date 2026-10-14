@@ -18,6 +18,10 @@
  * rail — which is equivalent to `Nil` and is never used.
  */
 export type Polarity = "Forward" | "Nil" | "Reverse";
+/**
+ * Which way the sweep was going when a point was measured.
+ */
+export type HotSweepDirection = "Down" | "Up";
 
 /**
  * Everything measured during one characterisation run.
@@ -44,6 +48,11 @@ export interface Characterisation {
    * (`null` in the file) says so honestly where an empty string wouldn't.
    */
   filament_id?: string | null;
+  /**
+   * Everything recorded while measuring the hot sweep, once its setup has
+   * finished.
+   */
+  hot_sweep?: HotSweep | null;
   /**
    * Whether the run was in a pumped-down chamber.
    *
@@ -327,4 +336,91 @@ export interface Measurement {
    * The mean of the samples.
    */
   value: number;
+}
+/**
+ * Everything recorded while measuring the hot sweep.
+ *
+ * Created when the sweep's setup has run and saved at every step after, as
+ * `ColdResistance` is.
+ */
+export interface HotSweep {
+  /**
+   * The sweep's maximum current in amperes.
+   */
+  maximum_current_amps: number;
+  /**
+   * The scope's reading with no current on every vertical scale, in the
+   * order of `VERTICAL_SCALES_VOLTS_PER_DIVISION`, once read.
+   */
+  offsets: HotSweepOffset[];
+  /**
+   * One entry per setpoint, up then down, in the order measured.
+   */
+  points: HotSweepPoint[];
+  /**
+   * The setpoints' spacing in I², in A².
+   */
+  step_amps_squared: number;
+}
+/**
+ * The scope's reading with no current on one vertical scale: its offset,
+ * subtracted from every voltage measured on that scale.
+ */
+export interface HotSweepOffset {
+  /**
+   * The vertical scale it was read on.
+   */
+  vertical_scale_volts_per_division: number;
+  voltage_volts: Measurement;
+}
+/**
+ * The measurements at one setpoint of the hot sweep, in one direction.
+ *
+ * Measured in one polarity only: at these voltages, what reversal would
+ * cancel is negligible apart from the scope's offset, which is subtracted
+ * instead.
+ */
+export interface HotSweepPoint {
+  /**
+   * The output of `hot_sweep_point.py`, once it's run.
+   */
+  analysis?: HotSweepPointAnalysis | null;
+  current_amps: Measurement;
+  direction: HotSweepDirection;
+  /**
+   * The current this point was measured at in amperes.
+   */
+  setpoint_amps: number;
+  /**
+   * How long the filament took to settle, in seconds.
+   */
+  settle_seconds: number;
+  /**
+   * The midpoint of the sampling window, in seconds since the sweep
+   * started.
+   */
+  time_seconds: number;
+  /**
+   * The oscilloscope's vertical scale for this point.
+   */
+  vertical_scale_volts_per_division: number;
+  voltage_volts: Measurement;
+  /**
+   * Warnings raised while measuring this point, e.g. a settle timeout, or a
+   * scale that differs from the way up.
+   */
+  warnings: string[];
+}
+/**
+ * The analysis of one hot sweep point: exactly the output of
+ * `hot_sweep_point.py`.
+ *
+ * Every uncertainty is statistical. The scope's gain error, common to every
+ * point on a scale, and the supply's readback offset and gain errors, common
+ * to every point, aren't included.
+ */
+export interface HotSweepPointAnalysis {
+  current_amps: Derived;
+  resistance_ohms: Derived;
+  voltage_volts: Derived;
 }

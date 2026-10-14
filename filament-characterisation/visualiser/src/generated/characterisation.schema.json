@@ -22,6 +22,17 @@
         "null"
       ]
     },
+    "hot_sweep": {
+      "description": "Everything recorded while measuring the hot sweep, once its setup has\nfinished.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HotSweep"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "in_vacuum": {
       "description": "Whether the run was in a pumped-down chamber.\n\n`false` for a bench test with `--no-vacuum`, e.g. against a precision\nresistor standing in for a filament, which needs no vacuum. Recorded so\na results file always says which it was.",
       "type": "boolean"
@@ -435,6 +446,160 @@
       "required": [
         "uncertainty",
         "value"
+      ]
+    },
+    "HotSweep": {
+      "description": "Everything recorded while measuring the hot sweep.\n\nCreated when the sweep's setup has run and saved at every step after, as\n`ColdResistance` is.",
+      "type": "object",
+      "properties": {
+        "maximum_current_amps": {
+          "description": "The sweep's maximum current in amperes.",
+          "type": "number",
+          "format": "double"
+        },
+        "offsets": {
+          "description": "The scope's reading with no current on every vertical scale, in the\norder of `VERTICAL_SCALES_VOLTS_PER_DIVISION`, once read.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HotSweepOffset"
+          }
+        },
+        "points": {
+          "description": "One entry per setpoint, up then down, in the order measured.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HotSweepPoint"
+          }
+        },
+        "step_amps_squared": {
+          "description": "The setpoints' spacing in I², in A².",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "maximum_current_amps",
+        "offsets",
+        "points",
+        "step_amps_squared"
+      ]
+    },
+    "HotSweepDirection": {
+      "description": "Which way the sweep was going when a point was measured.",
+      "type": "string",
+      "enum": [
+        "Down",
+        "Up"
+      ]
+    },
+    "HotSweepOffset": {
+      "description": "The scope's reading with no current on one vertical scale: its offset,\nsubtracted from every voltage measured on that scale.",
+      "type": "object",
+      "properties": {
+        "vertical_scale_volts_per_division": {
+          "description": "The vertical scale it was read on.",
+          "type": "number",
+          "format": "double"
+        },
+        "voltage_volts": {
+          "description": "The reading.",
+          "$ref": "#/$defs/Measurement"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "vertical_scale_volts_per_division",
+        "voltage_volts"
+      ]
+    },
+    "HotSweepPoint": {
+      "description": "The measurements at one setpoint of the hot sweep, in one direction.\n\nMeasured in one polarity only: at these voltages, what reversal would\ncancel is negligible apart from the scope's offset, which is subtracted\ninstead.",
+      "type": "object",
+      "properties": {
+        "analysis": {
+          "description": "The output of `hot_sweep_point.py`, once it's run.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HotSweepPointAnalysis"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "current_amps": {
+          "description": "The current.",
+          "$ref": "#/$defs/Measurement"
+        },
+        "direction": {
+          "description": "Which way the sweep was going.",
+          "$ref": "#/$defs/HotSweepDirection"
+        },
+        "setpoint_amps": {
+          "description": "The current this point was measured at in amperes.",
+          "type": "number",
+          "format": "double"
+        },
+        "settle_seconds": {
+          "description": "How long the filament took to settle, in seconds.",
+          "type": "number",
+          "format": "double"
+        },
+        "time_seconds": {
+          "description": "The midpoint of the sampling window, in seconds since the sweep\nstarted.",
+          "type": "number",
+          "format": "double"
+        },
+        "vertical_scale_volts_per_division": {
+          "description": "The oscilloscope's vertical scale for this point.",
+          "type": "number",
+          "format": "double"
+        },
+        "voltage_volts": {
+          "description": "The voltage, before the scale's offset is subtracted.",
+          "$ref": "#/$defs/Measurement"
+        },
+        "warnings": {
+          "description": "Warnings raised while measuring this point, e.g. a settle timeout, or a\nscale that differs from the way up.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "current_amps",
+        "direction",
+        "settle_seconds",
+        "setpoint_amps",
+        "time_seconds",
+        "vertical_scale_volts_per_division",
+        "voltage_volts",
+        "warnings"
+      ]
+    },
+    "HotSweepPointAnalysis": {
+      "description": "The analysis of one hot sweep point: exactly the output of\n`hot_sweep_point.py`.\n\nEvery uncertainty is statistical. The scope's gain error, common to every\npoint on a scale, and the supply's readback offset and gain errors, common\nto every point, aren't included.",
+      "type": "object",
+      "properties": {
+        "current_amps": {
+          "description": "The mean current, with the quantisation floor.",
+          "$ref": "#/$defs/Derived"
+        },
+        "resistance_ohms": {
+          "description": "`voltage_volts` / `current_amps`.",
+          "$ref": "#/$defs/Derived"
+        },
+        "voltage_volts": {
+          "description": "The voltage less the scale's offset, as a magnitude.",
+          "$ref": "#/$defs/Derived"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "current_amps",
+        "resistance_ohms",
+        "voltage_volts"
       ]
     },
     "Measurement": {

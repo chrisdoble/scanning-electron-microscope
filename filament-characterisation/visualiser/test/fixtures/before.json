@@ -1,6 +1,7 @@
 {
   "cold_resistance": null,
   "filament_id": "fixture",
+  "hot_sweep": null,
   "in_vacuum": true,
   "started_at": 1791001538
 }

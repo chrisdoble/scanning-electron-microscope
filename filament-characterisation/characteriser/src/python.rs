@@ -13,7 +13,7 @@
 
 use crate::results::{
     ColdResistanceAnalysis, ColdResistanceFitParameters, ColdResistancePointAnalysis, Derived,
-    Measurement,
+    HotSweepPointAnalysis, Measurement,
 };
 use log::*;
 use schemars::JsonSchema;
@@ -113,6 +113,25 @@ pub struct MeanAndStandardErrorOutput {
 
     /// The mean of the samples.
     pub value: f64,
+}
+
+/// The input to `hot_sweep_point.py`: one hot sweep point's measurements, and
+/// the offset to subtract from its voltage.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HotSweepPointInput {
+    /// The current.
+    pub current_amps: Measurement,
+
+    /// The supply's current readback resolution in amperes, for the
+    /// quantisation floor.
+    pub current_resolution_amps: f64,
+
+    /// The scope's reading with no current on the point's vertical scale.
+    pub offset_voltage_volts: Measurement,
+
+    /// The voltage, before the offset is subtracted.
+    pub voltage_volts: Measurement,
 }
 
 /// The input to `cold_resistance_point.py`: one setpoint's measurements in
@@ -237,6 +256,20 @@ pub async fn cold_resistance_point(
     input: &ColdResistancePointInput,
 ) -> Result<ColdResistancePointAnalysis, PythonError> {
     run_script("cold_resistance_point.py", input).await
+}
+
+/// Analyses one hot sweep point: subtracts the scope's offset, and derives the
+/// resistance and its uncertainty.
+///
+/// Wraps `hot_sweep_point.py`.
+#[expect(
+    dead_code,
+    reason = "used by the hot sweep section, added in step 4 of 5_HOT_SWEEP.md"
+)]
+pub async fn hot_sweep_point(
+    input: &HotSweepPointInput,
+) -> Result<HotSweepPointAnalysis, PythonError> {
+    run_script("hot_sweep_point.py", input).await
 }
 
 /// Fits the setpoints' resistances against the square of their currents,
@@ -383,7 +416,7 @@ mod tests {
     fn schemas_are_up_to_date() {
         // Each script, by the name its schemas are filed under, with its input
         // and output schemas.
-        let scripts: [(&str, Schema, Schema); 3] = [
+        let scripts: [(&str, Schema, Schema); 4] = [
             (
                 "cold_resistance_fit",
                 schema_for!(ColdResistanceFitInput),
@@ -393,6 +426,11 @@ mod tests {
                 "cold_resistance_point",
                 schema_for!(ColdResistancePointInput),
                 schema_for!(ColdResistancePointAnalysis),
+            ),
+            (
+                "hot_sweep_point",
+                schema_for!(HotSweepPointInput),
+                schema_for!(HotSweepPointAnalysis),
             ),
             (
                 "mean_and_standard_error",

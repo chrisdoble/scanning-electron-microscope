@@ -288,6 +288,101 @@ pub struct ColdResistancePoint {
     pub warnings: Vec<String>,
 }
 
+/// Everything recorded while measuring the hot sweep.
+///
+/// Created when the sweep's setup has run and saved at every step after, as
+/// `ColdResistance` is.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+pub struct HotSweep {
+    /// The sweep's maximum current in amperes.
+    pub maximum_current_amps: f64,
+
+    /// The scope's reading with no current on every vertical scale, in the
+    /// order of `VERTICAL_SCALES_VOLTS_PER_DIVISION`, once read.
+    pub offsets: Vec<HotSweepOffset>,
+
+    /// One entry per setpoint, up then down, in the order measured.
+    pub points: Vec<HotSweepPoint>,
+
+    /// The setpoints' spacing in I², in A².
+    pub step_amps_squared: f64,
+}
+
+/// Which way the sweep was going when a point was measured.
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+pub enum HotSweepDirection {
+    Down,
+    Up,
+}
+
+/// The scope's reading with no current on one vertical scale: its offset,
+/// subtracted from every voltage measured on that scale.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HotSweepOffset {
+    /// The vertical scale it was read on.
+    pub vertical_scale_volts_per_division: f64,
+
+    /// The reading.
+    pub voltage_volts: Measurement,
+}
+
+/// The measurements at one setpoint of the hot sweep, in one direction.
+///
+/// Measured in one polarity only: at these voltages, what reversal would
+/// cancel is negligible apart from the scope's offset, which is subtracted
+/// instead.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+pub struct HotSweepPoint {
+    /// The output of `hot_sweep_point.py`, once it's run.
+    pub analysis: Option<HotSweepPointAnalysis>,
+
+    /// The current.
+    pub current_amps: Measurement,
+
+    /// Which way the sweep was going.
+    pub direction: HotSweepDirection,
+
+    /// How long the filament took to settle, in seconds.
+    pub settle_seconds: f64,
+
+    /// The current this point was measured at in amperes.
+    pub setpoint_amps: f64,
+
+    /// The midpoint of the sampling window, in seconds since the sweep
+    /// started.
+    pub time_seconds: f64,
+
+    /// The oscilloscope's vertical scale for this point.
+    pub vertical_scale_volts_per_division: f64,
+
+    /// The voltage, before the scale's offset is subtracted.
+    pub voltage_volts: Measurement,
+
+    /// Warnings raised while measuring this point, e.g. a settle timeout, or a
+    /// scale that differs from the way up.
+    pub warnings: Vec<String>,
+}
+
+/// The analysis of one hot sweep point: exactly the output of
+/// `hot_sweep_point.py`.
+///
+/// Every uncertainty is statistical. The scope's gain error, common to every
+/// point on a scale, and the supply's readback offset and gain errors, common
+/// to every point, aren't included.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HotSweepPointAnalysis {
+    /// The mean current, with the quantisation floor.
+    pub current_amps: Derived,
+
+    /// `voltage_volts` / `current_amps`.
+    pub resistance_ohms: Derived,
+
+    /// The voltage less the scale's offset, as a magnitude.
+    pub voltage_volts: Derived,
+}
+
 /// Everything measured during one characterisation run.
 ///
 /// Written to disk at checkpoints throughout the procedure so that a run which
@@ -310,6 +405,10 @@ pub struct Characterisation {
     /// (`null` in the file) says so honestly where an empty string wouldn't.
     pub filament_id: Option<String>,
 
+    /// Everything recorded while measuring the hot sweep, once its setup has
+    /// finished.
+    pub hot_sweep: Option<HotSweep>,
+
     /// Whether the run was in a pumped-down chamber.
     ///
     /// `false` for a bench test with `--no-vacuum`, e.g. against a precision
@@ -327,6 +426,7 @@ impl Characterisation {
         Self {
             cold_resistance: None,
             filament_id: None,
+            hot_sweep: None,
             in_vacuum,
 
             // Only fails if the system clock is set before 1970.

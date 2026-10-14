@@ -2170,6 +2170,7 @@
     "vertical_scale_volts_per_division": 0.01
   },
   "filament_id": "test",
+  "hot_sweep": null,
   "in_vacuum": false,
   "started_at": 1791596423
 }

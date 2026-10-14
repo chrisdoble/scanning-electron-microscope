@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HotSweepPointInput",
+  "description": "The input to `hot_sweep_point.py`: one hot sweep point's measurements, and\nthe offset to subtract from its voltage.",
+  "type": "object",
+  "properties": {
+    "current_amps": {
+      "description": "The current.",
+      "$ref": "#/$defs/Measurement"
+    },
+    "current_resolution_amps": {
+      "description": "The supply's current readback resolution in amperes, for the\nquantisation floor.",
+      "type": "number",
+      "format": "double"
+    },
+    "offset_voltage_volts": {
+      "description": "The scope's reading with no current on the point's vertical scale.",
+      "$ref": "#/$defs/Measurement"
+    },
+    "voltage_volts": {
+      "description": "The voltage, before the offset is subtracted.",
+      "$ref": "#/$defs/Measurement"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "current_amps",
+    "current_resolution_amps",
+    "offset_voltage_volts",
+    "voltage_volts"
+  ],
+  "$defs": {
+    "Measurement": {
+      "description": "A measured quantity: the samples taken, and the value derived from them.\n\n`value` and `uncertainty` are the mean and standard error returned by\n`mean_and_standard_error.py`, not calculated in Rust.\n\nThis is the shape every measured field takes, and the unit goes in the name\nof the field holding it — `filament_voltage_volts: Measurement` — since the\nconsumer is another program with no doc comments to read.",
+      "type": "object",
+      "properties": {
+        "samples": {
+          "description": "The individual samples, in the order they were taken.",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "uncertainty": {
+          "description": "The standard error of the mean.",
+          "type": "number",
+          "format": "double"
+        },
+        "value": {
+          "description": "The mean of the samples.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "samples",
+        "uncertainty",
+        "value"
+      ]
+    }
+  }
+}

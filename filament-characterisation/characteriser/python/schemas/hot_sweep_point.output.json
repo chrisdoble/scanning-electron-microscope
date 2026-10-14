@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HotSweepPointAnalysis",
+  "description": "The analysis of one hot sweep point: exactly the output of\n`hot_sweep_point.py`.\n\nEvery uncertainty is statistical. The scope's gain error, common to every\npoint on a scale, and the supply's readback offset and gain errors, common\nto every point, aren't included.",
+  "type": "object",
+  "properties": {
+    "current_amps": {
+      "description": "The mean current, with the quantisation floor.",
+      "$ref": "#/$defs/Derived"
+    },
+    "resistance_ohms": {
+      "description": "`voltage_volts` / `current_amps`.",
+      "$ref": "#/$defs/Derived"
+    },
+    "voltage_volts": {
+      "description": "The voltage less the scale's offset, as a magnitude.",
+      "$ref": "#/$defs/Derived"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "current_amps",
+    "resistance_ohms",
+    "voltage_volts"
+  ],
+  "$defs": {
+    "Derived": {
+      "description": "A value derived by Python from measurements, with its standard uncertainty.\n\nUnlike `Measurement` there are no samples: it's calculated from other\nquantities, not sampled.",
+      "type": "object",
+      "properties": {
+        "uncertainty": {
+          "description": "The standard uncertainty.",
+          "type": "number",
+          "format": "double"
+        },
+        "value": {
+          "description": "The value.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "uncertainty",
+        "value"
+      ]
+    }
+  }
+}
