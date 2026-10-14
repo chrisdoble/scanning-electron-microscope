@@ -12,10 +12,10 @@ pub const FILAMENT_OPERATING_PRESSURE_MBAR: f64 = 1e-5;
 
 /// The maximum heating current the filament may be driven with in amperes.
 ///
-/// The largest cold-resistance setpoint, which dissipates only about 10 mW in a
-/// 0.1 Ω filament. The Rigol DP-932E can supply 3 A per channel, so the supply
-/// isn't the binding constraint.
-pub const MAXIMUM_HEATING_CURRENT_AMPS: f64 = 0.3;
+/// The Rigol DP-932E's maximum per channel, so this only guards against asking
+/// for something the supply can't do. The limit that matters for the filament
+/// is the hot sweep's maximum.
+pub const MAXIMUM_HEATING_CURRENT_AMPS: f64 = 3.0;
 
 /// The maximum voltage limit the filament channel may be set to in volts.
 ///

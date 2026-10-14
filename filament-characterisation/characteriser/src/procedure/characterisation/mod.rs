@@ -6,6 +6,7 @@
 //! once-a-second snapshot, as `take_samples` does.
 
 mod cold_resistance;
+mod hot_sweep;
 mod measurement;
 
 use super::{Context, ProcedureError};
