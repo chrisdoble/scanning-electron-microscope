@@ -1,39 +1,23 @@
-//! The characterisation procedure itself.
-//!
-//! The top-level sections of the run, in order, each an ordinary async function
-//! so the procedure reads as the sequence of things that happen. Every section
-//! takes the `Hardware`: that's how one reads an instrument more often than the
-//! once-a-second snapshot, as `take_samples` does.
+//! Measuring the cold resistance: the setpoints in both polarities, with
+//! references to track the mount's warming, and the fit.
+//! See `filament-characterisation/docs/2_COLD_RESISTANCE.md` and
+//! `filament-characterisation/docs/4_TEMPERATURE_COMPENSATION.md`.
 
-use super::{Context, ProcedureError};
+use super::measurement::{
+    CURRENT_READBACK_RESOLUTION_AMPS, OVERCURRENT_PROTECTION_MARGIN_AMPS, SAMPLE_COUNT,
+    SETPOINT_APPLY_TIME, Settle, VERTICAL_SCALES_VOLTS_PER_DIVISION, change_polarity, ramp_to,
+    read_unclipped, summarise, take_samples, wait_for_settle,
+};
 use crate::{
-    constants::{
-        FILAMENT_ABORT_PRESSURE_MBAR, FILAMENT_OPERATING_PRESSURE_MBAR,
-        TMP_MAXIMUM_BACKING_PRESSURE_MBAR,
-    },
     hardware::Hardware,
+    procedure::{Context, ProcedureError},
     python::{self, ColdResistanceFitInput, ColdResistanceFitPoint, ColdResistancePointInput},
     results::{ColdResistance, ColdResistanceFitParameters, ColdResistancePoint, Measurement},
 };
-use host::{
-    oscilloscope::Voltages,
-    power_supply::{Polarity, RegulationMode},
-};
+use host::power_supply::Polarity;
 use log::*;
 use rand::seq::SliceRandom;
-use std::time::Duration;
 use tokio::time::Instant;
-
-/// A reading counts as clipped if the voltage's peak is more than this
-/// fraction of the way to the edge of the screen (4 divisions from the
-/// centre).
-///
-/// The scale is chosen once, then fixed, and later readings are bigger: the
-/// filament's resistance keeps rising as it settles, a later window can catch a
-/// larger noise peak, and offsets drift. Without margin, a scale that only just
-/// fits would clip mid-run and abort it. The margin costs almost nothing,
-/// because the gain uncertainty doesn't depend on the scale.
-const CLIPPING_HEADROOM: f64 = 0.8;
 
 /// The currents the cold resistance is measured at in amperes.
 const COLD_RESISTANCE_SETPOINTS_AMPS: [f64; 9] = [
@@ -62,48 +46,11 @@ const CURRENT_OFFSET_BOUND_AMPS: f64 = 0.005;
 /// 20–30 °C, in amperes.
 const CURRENT_OFFSET_TEMPERATURE_COEFFICIENT_AMPS_PER_CELSIUS: f64 = 0.002;
 
-/// The supply's current readback resolution in amperes, with the HIRES option.
-const CURRENT_READBACK_RESOLUTION_AMPS: f64 = 1e-4;
-
-/// How long `wait_for_settle` waits before giving up and carrying on.
-const MAXIMUM_SETTLE_TIME: Duration = Duration::from_secs(60);
-
-/// How far above the largest setpoint the supply's overcurrent protection is
-/// set, in amperes, as a hardware backstop.
-///
-/// Its 10 ms delay should ride out any overshoot when the output is re-enabled
-/// at a setpoint. If it trips anyway, widen this or lengthen the delay.
-const OVERCURRENT_PROTECTION_MARGIN_AMPS: f64 = 0.05;
-
-/// How far `ramp_to` moves the current at each step in amperes.
-///
-/// With `RAMP_STEP_INTERVAL`, 50 mA/s. At cold-resistance currents ramping has
-/// no physical benefit; it's there so `ramp_to` is ready for hot measurements,
-/// where each jump should be small compared with what the filament's thermal
-/// time constant smooths out.
-const RAMP_STEP_AMPS: f64 = 0.005;
-
-/// How long `ramp_to` waits between steps.
-const RAMP_STEP_INTERVAL: Duration = Duration::from_millis(100);
-
-/// How long the output stays off while the polarity relays move.
-const RELAY_SETTLE_TIME: Duration = Duration::from_millis(50);
-
-/// How long to wait after changing the setpoint, or re-enabling the output,
-/// before a single reading is taken as being at the new current.
-///
-/// The supply has been seen to take about 0.6 s to apply a setpoint change
-/// (see "Appendix: the supply's current readback" in
-/// `filament-characterisation/docs/2_COLD_RESISTANCE.md`).
-/// `wait_for_settle` doesn't need this, because it compares seconds of
-/// readings.
-const SETPOINT_APPLY_TIME: Duration = Duration::from_secs(1);
-
 /// The current the references are measured at in amperes.
 ///
 /// Mid-range: a good voltage without adding as much heat to every reference as
 /// the largest setpoint would. It's also measured as an ordinary setpoint.
-const REFERENCE_CURRENT_AMPS: f64 = 0.2;
+pub(super) const REFERENCE_CURRENT_AMPS: f64 = 0.2;
 
 /// How many setpoints are measured between references, after the reference
 /// that follows the first setpoint.
@@ -116,22 +63,6 @@ const REFERENCE_INTERVAL: usize = 2;
 
 /// The temperature the cold resistance is corrected to in °C.
 const REFERENCE_TEMPERATURE_CELSIUS: f64 = 20.0;
-
-/// How many samples each measured quantity is summarised from.
-const SAMPLE_COUNT: usize = 20;
-
-/// The relative change in resistance between two windows below which the
-/// filament counts as settled, whatever the noise.
-///
-/// About one point's statistical uncertainty in resistance at the lowest
-/// setpoint, so a remaining drift is below what the point can resolve anyway.
-/// A starting point: tune it from the logged settle times and per-point
-/// uncertainties after the first runs on the rig.
-const SETTLE_TOLERANCE: f64 = 2e-4;
-
-/// The length of each of the two windows `wait_for_settle` compares. The
-/// earliest possible settle is twice this.
-const SETTLE_WINDOW: Duration = Duration::from_secs(2);
 
 /// The bound on the filament temperature in kelvin: the thermometer's accuracy
 /// plus how far the filament might sit from the flange's temperature.
@@ -148,13 +79,6 @@ const TUNGSTEN_TEMPERATURE_COEFFICIENT_BOUND_PER_KELVIN: f64 = 0.0003;
 /// Tungsten's temperature coefficient of resistance near room temperature,
 /// $\alpha$.
 const TUNGSTEN_TEMPERATURE_COEFFICIENT_PER_KELVIN: f64 = 0.0045;
-
-/// The oscilloscope's vertical scales in volts per division, smallest first.
-///
-/// Starts at 10 mV/div, because the ±1% gain spec is only "typical" at 5 mV/div
-/// and below.
-const VERTICAL_SCALES_VOLTS_PER_DIVISION: [f64; 10] =
-    [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0];
 
 /// The bound on the oscilloscope's gain error, relative.
 ///
@@ -210,131 +134,15 @@ impl MeasurementSlot {
     }
 }
 
-/// How `wait_for_settle` finished, and after how long.
-enum Settle {
-    Settled(Duration),
-    TimedOut(Duration),
-}
-
-/// Characterises a filament.
-///
-/// Without vacuum (`--no-vacuum`), the chamber is never pumped down, so the TMP
-/// is never started or stopped.
-pub async fn characterise(ctx: Context, hardware: Hardware) -> Result<(), ProcedureError> {
-    ctx.section("Preparing", |ctx| prepare(ctx, hardware.clone()))
-        .await?;
-    if ctx.in_vacuum() {
-        ctx.section("Pumping down chamber", |ctx| {
-            pump_down(ctx, hardware.clone())
-        })
-        .await?;
-    } else {
-        ctx.text("Running without vacuum, so the chamber isn't pumped down");
-    }
-    ctx.section("Measuring cold resistance", |ctx| {
-        measure_cold_resistance(ctx, hardware.clone())
-    })
-    .await?;
-    ctx.section("Finishing", |ctx| finish(ctx, hardware.clone()))
-        .await?;
-
-    // Asked once the filament is safe, since the operator may not answer
-    // straight away. Leaving the TMP running means the next run's pump-down
-    // passes straight through.
-    if ctx.in_vacuum() {
-        if ctx
-            .ask("Turn off the TMP and wait for it to spin down?")
-            .await?
-        {
-            ctx.section("Spinning down TMP", |ctx| spin_down(ctx, hardware.clone()))
-                .await?;
-        } else {
-            ctx.text("Left the TMP running");
-        }
-    }
-    ctx.confirm("Press enter to exit").await?;
-    Ok(())
-}
-
-/// Identifies the filament and has the operator confirm the rig is ready.
-///
-/// Sets no limits on the supply: each measurement sets the ones it needs.
-async fn prepare(ctx: Context, _hardware: Hardware) -> Result<(), ProcedureError> {
-    // First, before anything is measured, so no results file with a
-    // measurement in it can lack one. The first save is also what tells the
-    // operator where the results are going.
-    let filament_id: String = ctx.input("Filament ID", None).await?;
-    ctx.record(|characterisation| characterisation.filament_id = Some(filament_id));
-    ctx.save();
-
-    ctx.confirm("Confirm that the filament is mounted").await?;
-    if ctx.in_vacuum() {
-        ctx.confirm("Confirm that the chamber is sealed").await?;
-    }
-
-    // The scope's probe ratio is reset to 1×, so this is what makes that
-    // correct. A probe switched to 10× would read 10× low.
-    ctx.confirm(
-        "Confirm that a 1× probe is connected to the oscilloscope's channel 1 and that its switch is set to 1×",
-    )
-    .await?;
-
-    // The cold resistance is relative to the mount's temperature at the first
-    // reference, which should be the flange's. The mount takes about 15
-    // minutes to cool after the filament's been powered, e.g. by an earlier
-    // run.
-    ctx.confirm("Confirm that the filament hasn't been powered for at least 15 minutes")
-        .await?;
-
-    // The supply's accuracy figures assume a 1-hour warm-up, and the
-    // pump-down usually covers it.
-    ctx.confirm(
-        "Confirm that the oscilloscope has been on for at least 30 minutes and the power supply for at least 60 minutes",
-    )
-    .await?;
-    Ok(())
-}
-
-/// Brings the chamber down to the pressure the filament is operated at.
-async fn pump_down(ctx: Context, hardware: Hardware) -> Result<(), ProcedureError> {
-    // Nothing can check this: a low chamber pressure only proves the roughing
-    // pump was running, not that it still is.
-    ctx.confirm("Confirm that the roughing pump is running")
-        .await?;
-
-    ctx.wait_for(
-        "Waiting for the chamber to reach the TMP's operating pressure",
-        |s| s.vacuum.pressure.value < TMP_MAXIMUM_BACKING_PRESSURE_MBAR,
-    )
-    .await?;
-
-    hardware.vacuum.set_tmp_running(true).await?;
-    ctx.text("Turned on the TMP");
-
-    ctx.wait_for("Waiting for the TMP to reach speed", |s| {
-        s.vacuum.tmp_current_rotation_speed >= s.vacuum.tmp_target_rotation_speed
-    })
-    .await?;
-
-    ctx.wait_for(
-        "Waiting for the chamber to reach the filament's operating pressure",
-        |s| s.vacuum.pressure.value < FILAMENT_OPERATING_PRESSURE_MBAR,
-    )
-    .await?;
-
-    ctx.measurement(
-        "Base pressure",
-        format!("{:.1e} mbar", ctx.snapshot().vacuum.pressure.value),
-    );
-    Ok(())
-}
-
 /// Measures the filament's resistance at each setpoint, in both directions.
 ///
 /// Reversing the direction cancels everything that doesn't reverse with the
 /// current, such as the Seebeck voltages at the filament's junctions and the
 /// scope's offset.
-async fn measure_cold_resistance(ctx: Context, hardware: Hardware) -> Result<(), ProcedureError> {
+pub(super) async fn measure_cold_resistance(
+    ctx: Context,
+    hardware: Hardware,
+) -> Result<(), ProcedureError> {
     let filament = &hardware.filament;
 
     // Every measurement's time is relative to this.
@@ -853,85 +661,6 @@ async fn measure_polarity(
     })
 }
 
-/// Stops the TMP and waits for it to come to rest.
-async fn spin_down(ctx: Context, hardware: Hardware) -> Result<(), ProcedureError> {
-    hardware.vacuum.set_tmp_running(false).await?;
-    ctx.text("Turned off the TMP");
-
-    ctx.wait_for("Waiting for the TMP to spin down", |s| {
-        s.vacuum.tmp_current_rotation_speed == 0
-    })
-    .await?;
-    Ok(())
-}
-
-/// Leaves the filament system unpowered and saves a final time.
-async fn finish(ctx: Context, hardware: Hardware) -> Result<(), ProcedureError> {
-    let filament = &hardware.filament;
-
-    // The output goes off before the relays are switched, which
-    // `set_polarity` insists on.
-    filament.set_heating_current_limit(0.0).await?;
-    filament.set_output_enabled(false).await?;
-    filament.set_polarity(Polarity::Nil).await?;
-    ctx.text("Zeroed the current, disabled the output and de-energised the relays");
-
-    ctx.save();
-    Ok(())
-}
-
-// Helpers.
-
-/// Changes the direction of the current through the filament, leaving the
-/// output enabled at the unchanged setpoint.
-///
-/// The output is disabled while the relays move, since switching them under
-/// load would arc their contacts. There's deliberately no ramp down and back
-/// up: the filament dissipates the same power in either direction, and the
-/// jump is harmless at these currents. Ramping would only lengthen the time it
-/// spends cooling, and so the settle that follows.
-async fn change_polarity(hardware: &Hardware, polarity: Polarity) -> Result<(), ProcedureError> {
-    let filament = &hardware.filament;
-    filament.set_output_enabled(false).await?;
-    filament.set_polarity(polarity).await?;
-    tokio::time::sleep(RELAY_SETTLE_TIME).await;
-    filament.set_output_enabled(true).await?;
-    Ok(())
-}
-
-/// Fails with `ProcedureError::Check` if the chamber isn't fit for a powered
-/// filament: the pressure has risen above `FILAMENT_ABORT_PRESSURE_MBAR`, or
-/// the TMP has stopped.
-///
-/// Called between every sample and every ramp step. Checks nothing without
-/// vacuum (`--no-vacuum`), when the chamber is at atmospheric pressure and the
-/// TMP is off by design.
-fn check_conditions(ctx: &Context) -> Result<(), ProcedureError> {
-    if !ctx.in_vacuum() {
-        return Ok(());
-    }
-
-    let vacuum = ctx.snapshot().vacuum;
-
-    if vacuum.pressure.value > FILAMENT_ABORT_PRESSURE_MBAR {
-        error!(
-            "the pressure rose to {:.1e} mbar with the filament powered",
-            vacuum.pressure.value
-        );
-        return Err(ProcedureError::Check(format!(
-            "the pressure rose to {:.1e} mbar, above {:.0e} mbar",
-            vacuum.pressure.value, FILAMENT_ABORT_PRESSURE_MBAR
-        )));
-    }
-
-    if !vacuum.tmp_running {
-        error!("the TMP stopped with the filament powered");
-        return Err(ProcedureError::Check(String::from("the TMP stopped")));
-    }
-
-    Ok(())
-}
-
 /// The supply's current readback bounds, gain (relative) and offset (in
 /// amperes), at `room_temperature_celsius`.
 ///
@@ -992,19 +721,6 @@ fn largest_setpoint() -> f64 {
         .fold(f64::MIN, f64::max)
 }
 
-/// The mean and standard error of `values`, or `None` if there are fewer than
-/// two.
-fn mean_and_standard_error(values: &[f64]) -> Option<(f64, f64)> {
-    if values.len() < 2 {
-        return None;
-    }
-
-    let n = values.len() as f64;
-    let mean = values.iter().sum::<f64>() / n;
-    let variance = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n - 1.0);
-    Some((mean, (variance / n).sqrt()))
-}
-
 /// The order to measure `setpoints` and the references in: a reference first,
 /// after the first setpoint, after every `REFERENCE_INTERVAL` setpoints after
 /// that, and last, so every setpoint has a reference before and after it.
@@ -1026,77 +742,6 @@ fn measurement_plan(setpoints: &[f64]) -> Vec<MeasurementType> {
 /// removing it.
 fn offset_limit_volts(scale: f64) -> f64 {
     2.0 * (0.1 * scale + 0.002)
-}
-
-/// Ramps the current from its present setpoint to `to` in steps of
-/// `RAMP_STEP_AMPS`, one every `RAMP_STEP_INTERVAL`, checking the chamber
-/// before each.
-///
-/// Starts from the setpoint rather than the measured current, which can be off
-/// by as much as a step.
-async fn ramp_to(ctx: &Context, hardware: &Hardware, to: f64) -> Result<(), ProcedureError> {
-    ctx.waiting(format!("Ramping to {:.3} A", to), || async {
-        let from = hardware.filament.get_heating_current_limit().await?;
-        for current in ramp_steps(from, to) {
-            check_conditions(ctx)?;
-            hardware.filament.set_heating_current_limit(current).await?;
-            tokio::time::sleep(RAMP_STEP_INTERVAL).await;
-        }
-        Ok(())
-    })
-    .await
-}
-
-/// The currents `ramp_to` sets on its way from `from` to `to`: steps of
-/// `RAMP_STEP_AMPS`, finishing exactly on `to`. Empty if they're equal.
-fn ramp_steps(from: f64, to: f64) -> Vec<f64> {
-    // Less a little, so rounding can't add a step: 0.1 / 0.005 is
-    // 20.000000000000004.
-    let steps = ((to - from).abs() / RAMP_STEP_AMPS - 1e-9).ceil().max(0.0) as usize;
-    let direction = (to - from).signum();
-
-    let mut currents: Vec<f64> = (1..steps)
-        .map(|k| from + direction * k as f64 * RAMP_STEP_AMPS)
-        .collect();
-    if steps > 0 {
-        currents.push(to);
-    }
-    currents
-}
-
-/// Reads the filament voltage's average, stepping the vertical scale up through
-/// `VERTICAL_SCALES_VOLTS_PER_DIVISION` while it clips. `scale_index` is the
-/// scale in use, and is left at the one that didn't clip.
-///
-/// Checks the chamber before each reading, as `sample` does.
-async fn read_unclipped(
-    ctx: &Context,
-    hardware: &Hardware,
-    scale_index: &mut usize,
-) -> Result<f64, ProcedureError> {
-    let filament = &hardware.filament;
-    loop {
-        check_conditions(ctx)?;
-        let scale = VERTICAL_SCALES_VOLTS_PER_DIVISION[*scale_index];
-        let voltages = filament.get_filament_voltages().await?;
-        if let Some(average) = unclipped_average(voltages, scale) {
-            return Ok(average);
-        }
-
-        *scale_index += 1;
-        let Some(&next) = VERTICAL_SCALES_VOLTS_PER_DIVISION.get(*scale_index) else {
-            error!("the filament voltage clips even at {} V/div", scale);
-            return Err(ProcedureError::Check(format!(
-                "the filament voltage clips even at {} V/div",
-                scale
-            )));
-        };
-        info!(
-            "the filament voltage clipped, so increasing the scale to {} V/div",
-            next
-        );
-        filament.set_vertical_scale(next).await?;
-    }
 }
 
 /// A resistance and its standard uncertainty for display, with the expanded
@@ -1123,185 +768,9 @@ fn record_cold_resistance(ctx: &Context, f: impl FnOnce(&mut ColdResistance)) {
     });
 }
 
-/// Takes one sample of the filament's voltage (the acquisition's average) and
-/// current, in that order, failing with `ProcedureError::Check` if anything
-/// is wrong.
-///
-/// Checks the chamber first, and after the readings, that overcurrent
-/// protection hasn't tripped, that the supply is still in constant current, and
-/// that the voltage isn't clipped on `scale`.
-async fn sample(
-    ctx: &Context,
-    hardware: &Hardware,
-    scale: f64,
-) -> Result<(f64, f64), ProcedureError> {
-    let filament = &hardware.filament;
-
-    check_conditions(ctx)?;
-
-    let voltages = filament.get_filament_voltages().await?;
-    let current = filament.get_heating_current().await?;
-
-    // Before the mode, because a tripped output isn't in constant current
-    // either, and this is the more useful message.
-    if filament.get_overcurrent_tripped().await? {
-        error!("overcurrent protection tripped");
-        return Err(ProcedureError::Check(String::from(
-            "overcurrent protection tripped",
-        )));
-    }
-
-    let mode = filament.get_regulation_mode().await?;
-    if mode != RegulationMode::ConstantCurrent {
-        error!("the supply left constant current: {:?}", mode);
-        return Err(ProcedureError::Check(format!(
-            "the supply left constant current ({:?}), so the filament circuit is probably open",
-            mode
-        )));
-    }
-
-    let Some(voltage) = unclipped_average(voltages, scale) else {
-        error!("the filament voltage clipped: {:?}", voltages);
-        return Err(ProcedureError::Check(String::from(
-            "the filament voltage clipped; the scale must not change mid-run, so restart the run",
-        )));
-    };
-
-    Ok((voltage, current))
-}
-
-/// Takes `n` samples of the filament's voltage and current, returning them in
-/// that order, followed by the midpoint of the sampling window in seconds since
-/// `start`.
-async fn take_samples(
-    ctx: &Context,
-    hardware: &Hardware,
-    scale: f64,
-    n: usize,
-    start: Instant,
-) -> Result<(Vec<f64>, Vec<f64>, f64), ProcedureError> {
-    ctx.waiting(format!("Taking {} samples", n), || async {
-        let window_start = Instant::now();
-        let mut voltages = Vec::with_capacity(n);
-        let mut currents = Vec::with_capacity(n);
-        for _ in 0..n {
-            let (voltage, current) = sample(ctx, hardware, scale).await?;
-            voltages.push(voltage);
-            currents.push(current);
-        }
-        let midpoint = window_start + (Instant::now() - window_start) / 2;
-        Ok((voltages, currents, (midpoint - start).as_secs_f64()))
-    })
-    .await
-}
-
-/// The average of `voltages`, or `None` if it's clipped on `scale`: if any
-/// value is invalid, or the peak is beyond `CLIPPING_HEADROOM` of the way to
-/// the edge of the screen.
-fn unclipped_average(voltages: Voltages, scale: f64) -> Option<f64> {
-    let limit = CLIPPING_HEADROOM * 4.0 * scale;
-    match voltages {
-        Voltages {
-            average: Some(average),
-            maximum: Some(maximum),
-            minimum: Some(minimum),
-        } if maximum.abs().max(minimum.abs()) <= limit => Some(average),
-        _ => None,
-    }
-}
-
-/// Samples until the filament's resistance stops changing, or until
-/// `MAXIMUM_SETTLE_TIME`, without recording the samples.
-///
-/// Compares the latest `SETTLE_WINDOW` of quick resistances ($V/I$ in one
-/// polarity) with the window before it. Offsets and thermal EMFs make the quick
-/// resistance slightly wrong, but they're constant over seconds, so they
-/// cancel in the comparison.
-async fn wait_for_settle(
-    ctx: &Context,
-    hardware: &Hardware,
-    scale: f64,
-) -> Result<Settle, ProcedureError> {
-    ctx.waiting("Waiting for the filament to settle", || async {
-        let start = Instant::now();
-        let mut resistances = Vec::new();
-
-        loop {
-            let (voltage, current) = sample(ctx, hardware, scale).await?;
-            let now = Instant::now();
-            resistances.push((now, voltage / current));
-
-            let elapsed = now - start;
-            if elapsed >= 2 * SETTLE_WINDOW && is_settled(&resistances, now) {
-                return Ok(Settle::Settled(elapsed));
-            }
-            if elapsed >= MAXIMUM_SETTLE_TIME {
-                return Ok(Settle::TimedOut(elapsed));
-            }
-        }
-    })
-    .await
-}
-
-/// Whether the quick resistances in the latest `SETTLE_WINDOW` before `now`
-/// (B) differ from those in the window before it (A) by less than
-/// `SETTLE_TOLERANCE`, or by less than noise can explain.
-///
-/// This is control flow rather than a reported statistic, so it's done here
-/// rather than in Python.
-fn is_settled(resistances: &[(Instant, f64)], now: Instant) -> bool {
-    let window = |newest: Duration, oldest: Duration| -> Vec<f64> {
-        resistances
-            .iter()
-            .filter(|(time, _)| {
-                let age = now - *time;
-                age >= newest && age < oldest
-            })
-            .map(|(_, resistance)| *resistance)
-            .collect()
-    };
-
-    let (Some((mean_a, error_a)), Some((mean_b, error_b))) = (
-        mean_and_standard_error(&window(SETTLE_WINDOW, 2 * SETTLE_WINDOW)),
-        mean_and_standard_error(&window(Duration::ZERO, SETTLE_WINDOW)),
-    ) else {
-        return false;
-    };
-
-    // The difference is either negligible or undetectable. On its own, the
-    // noise term would demand arbitrary flatness when the noise is low, and
-    // the tolerance could be exceeded by chance alone when it's high. The
-    // quick resistance is negative in the reverse polarity, hence `abs`.
-    let difference_uncertainty = (error_a.powi(2) + error_b.powi(2)).sqrt();
-    (mean_b - mean_a).abs() < (SETTLE_TOLERANCE * mean_b.abs()).max(2.0 * difference_uncertainty)
-}
-
-/// The mean and standard error of `samples`, from Python, with the samples kept
-/// so the analysis can be redone.
-async fn summarise(samples: Vec<f64>) -> Result<Measurement, ProcedureError> {
-    let (value, uncertainty) = python::mean_and_standard_error(&samples).await?;
-    Ok(Measurement {
-        samples,
-        uncertainty,
-        value,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        hardware::{self, MockFilamentSystem, MockVacuumSystem},
-        procedure,
-        results::Characterisation,
-        steps::{Section, StepKind},
-    };
-    use std::{
-        fs,
-        sync::{Arc, Mutex},
-    };
-    use tokio::sync::watch;
-    use tokio_util::sync::CancellationToken;
 
     #[test]
     fn current_readback_bounds_widen_outside_20_to_30_celsius() {
@@ -1321,45 +790,6 @@ mod tests {
         let (gain, offset) = current_readback_bounds(33.0);
         assert!((gain - 0.0018).abs() < 1e-12);
         assert!((offset - 0.011).abs() < 1e-12);
-    }
-
-    // A reading is clipped if any value is invalid or its peak is past the
-    // headroom, even when the average is fine.
-    #[test]
-    fn unclipped_average_rejects_any_clipped_value() {
-        let scale = 0.01;
-        let limit = CLIPPING_HEADROOM * 4.0 * scale;
-        let voltages = |maximum, minimum| Voltages {
-            average: Some(0.001),
-            maximum,
-            minimum,
-        };
-
-        assert_eq!(
-            unclipped_average(voltages(Some(limit), Some(-limit)), scale),
-            Some(0.001)
-        );
-        assert_eq!(
-            unclipped_average(voltages(Some(limit * 1.01), Some(0.0)), scale),
-            None
-        );
-        assert_eq!(
-            unclipped_average(voltages(Some(0.0), Some(-limit * 1.01)), scale),
-            None
-        );
-        assert_eq!(unclipped_average(voltages(None, Some(0.0)), scale), None);
-        assert_eq!(unclipped_average(voltages(Some(0.0), None), scale), None);
-        assert_eq!(
-            unclipped_average(
-                Voltages {
-                    average: None,
-                    maximum: Some(0.0),
-                    minimum: Some(0.0),
-                },
-                scale
-            ),
-            None
-        );
     }
 
     #[test]
@@ -1439,254 +869,5 @@ mod tests {
                 .collect();
             assert_eq!(measured, setpoints);
         }
-    }
-
-    #[test]
-    fn ramp_steps_end_exactly_on_the_target() {
-        let up = ramp_steps(0.0, 0.1);
-        assert_eq!(up.len(), 20);
-        assert_eq!(up.last(), Some(&0.1));
-        assert!((up[0] - 0.005).abs() < 1e-12);
-
-        let down = ramp_steps(0.3, 0.1);
-        assert_eq!(down.len(), 40);
-        assert_eq!(down.last(), Some(&0.1));
-        assert!((down[0] - 0.295).abs() < 1e-12);
-
-        // A distance that isn't a whole number of steps ends with a short one.
-        let uneven = ramp_steps(0.0, 0.012);
-        assert_eq!(uneven.len(), 3);
-        assert!((uneven[1] - 0.010).abs() < 1e-12);
-        assert_eq!(uneven[2], 0.012);
-
-        assert!(ramp_steps(0.1, 0.1).is_empty());
-    }
-
-    #[test]
-    fn ramp_steps_are_never_larger_than_a_step() {
-        let steps = ramp_steps(0.0, 0.3);
-        let mut previous = 0.0;
-        for current in steps {
-            assert!(current - previous <= RAMP_STEP_AMPS + 1e-12);
-            previous = current;
-        }
-    }
-
-    // The mock refuses to switch the relays with the output enabled, so this
-    // also checks the output is disabled first.
-    #[tokio::test]
-    async fn change_polarity_leaves_the_output_on_at_the_same_setpoint() {
-        let hardware = Hardware {
-            filament: Arc::new(MockFilamentSystem::default()),
-            vacuum: Arc::new(MockVacuumSystem::default()),
-        };
-        let filament = &hardware.filament;
-        filament.set_polarity(Polarity::Forward).await.unwrap();
-        filament.set_heating_current_limit(0.1).await.unwrap();
-        filament.set_output_enabled(true).await.unwrap();
-
-        change_polarity(&hardware, Polarity::Reverse).await.unwrap();
-
-        let snapshot = filament.snapshot().await.unwrap();
-        assert_eq!(snapshot.polarity, Polarity::Reverse);
-        assert!(snapshot.output_enabled);
-        assert_eq!(snapshot.heating_current, 0.1);
-    }
-
-    /// Answers whichever prompt is waiting, as the operator would: confirms a
-    /// gate, enters a value for an input, or answers a question with
-    /// `spin_down`, the only question asked.
-    fn answer_prompt(root: &Mutex<Section>, spin_down: bool) {
-        let mut root = root.lock().unwrap();
-        let Some(step) = root.pending_mut() else {
-            return;
-        };
-
-        match &mut step.kind {
-            StepKind::Confirm { responder, .. } => {
-                if let Some(responder) = responder.take() {
-                    let _ = responder.send(());
-                }
-            }
-            StepKind::Input {
-                prompt, responder, ..
-            } => {
-                let value = match prompt.as_str() {
-                    "Filament ID" => "test",
-                    "Room temperature near the power supply" => "21",
-                    _ => "22",
-                };
-                if let Some(responder) = responder.take() {
-                    let _ = responder.send(String::from(value));
-                }
-            }
-            StepKind::Question { responder, .. } => {
-                if let Some(responder) = responder.take() {
-                    let _ = responder.send(spin_down);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    /// Runs the whole procedure against the mocks, `in_vacuum` or not, answering
-    /// its prompts, and whether to spin down the TMP with `spin_down`. Returns
-    /// the context, for the results, and the step tree.
-    ///
-    /// Call from a test on a paused clock, so tokio skips through the ramps and
-    /// settles instead of waiting minutes for them. Needs the Python virtual
-    /// environment, for the analysis scripts.
-    async fn run_against_mocks(in_vacuum: bool, spin_down: bool) -> (Context, Arc<Mutex<Section>>) {
-        let hardware = Hardware {
-            filament: Arc::new(MockFilamentSystem::default()),
-            vacuum: Arc::new(MockVacuumSystem::default()),
-        };
-        let root = Arc::new(Mutex::new(Section::default()));
-        let (snapshots_tx, snapshots_rx) = watch::channel(None);
-        let ctx = Context::new(
-            CancellationToken::new(),
-            Characterisation::new(in_vacuum),
-            Arc::clone(&root),
-            snapshots_rx,
-        );
-
-        let operator = async {
-            loop {
-                answer_prompt(&root, spin_down);
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        };
-
-        let result = tokio::select! {
-            result = procedure::run(ctx.clone(), hardware.clone()) => result,
-            e = hardware::poll(hardware.clone(), &snapshots_tx) => panic!("the poll failed: {}", e),
-            _ = operator => unreachable!("the operator never stops"),
-        };
-
-        // Saving writes to `out/`, which a test shouldn't leave behind.
-        let _ = fs::remove_file(ctx.characterisation.lock().unwrap().path());
-        result.unwrap();
-
-        (ctx, root)
-    }
-
-    /// Checks the run measured every setpoint and reference and found the mock
-    /// filament's 0.096 Ω, which has no self-heating.
-    fn assert_measured_the_mock_filament(ctx: &Context) {
-        let characterisation = ctx.characterisation.lock().unwrap();
-        let cold_resistance = characterisation.cold_resistance.as_ref().unwrap();
-        assert_eq!(cold_resistance.points.len(), 9);
-        assert_eq!(cold_resistance.references.len(), 6);
-        assert!(
-            cold_resistance
-                .points
-                .iter()
-                .chain(&cold_resistance.references)
-                .all(|point| point.analysis.is_some())
-        );
-        assert!(
-            cold_resistance
-                .references
-                .iter()
-                .all(|reference| reference.setpoint_amps == REFERENCE_CURRENT_AMPS)
-        );
-
-        // Every polarity's time, in the order they were measured.
-        let positive_polarity = cold_resistance.positive_polarity.unwrap();
-        let times = |points: &[ColdResistancePoint]| -> Vec<f64> {
-            points
-                .iter()
-                .flat_map(|point| {
-                    let positive = point.positive_time_seconds;
-                    let negative = point.negative_time_seconds;
-                    if point.first_polarity == positive_polarity {
-                        [positive, negative]
-                    } else {
-                        [negative, positive]
-                    }
-                })
-                .collect()
-        };
-        let point_times = times(&cold_resistance.points);
-        let reference_times = times(&cold_resistance.references);
-        for times in [&point_times, &reference_times] {
-            assert!(
-                times.windows(2).all(|pair| pair[0] < pair[1]),
-                "expected increasing times, got {:?}",
-                times
-            );
-        }
-
-        // Every point is bracketed by references.
-        assert!(reference_times.first() < point_times.first());
-        assert!(reference_times.last() > point_times.last());
-
-        let analysis = cold_resistance.analysis.as_ref().unwrap();
-        let resistance = analysis.resistance_ohms.value;
-        assert!(
-            (resistance - 0.096).abs() < 1e-9,
-            "expected 0.096 Ω, got {} Ω",
-            resistance
-        );
-
-        // The mock doesn't drift, so nothing is corrected.
-        assert_eq!(analysis.reference_drift_ohms.value, 0.0);
-        assert_eq!(analysis.corrected_resistances_ohms.len(), 9);
-        assert!(
-            analysis
-                .drift_corrections_ohms
-                .iter()
-                .all(|drift| drift.value.abs() < 1e-12)
-        );
-    }
-
-    /// The titles of the top-level sections the run went through.
-    fn section_titles(root: &Mutex<Section>) -> Vec<String> {
-        root.lock()
-            .unwrap()
-            .children
-            .iter()
-            .filter_map(|step| match &step.kind {
-                StepKind::Section(section) => Some(section.title.clone()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn the_procedure_measures_the_mock_filament() {
-        let (ctx, root) = run_against_mocks(true, true).await;
-        assert_measured_the_mock_filament(&ctx);
-        assert!(ctx.characterisation.lock().unwrap().in_vacuum);
-
-        let titles = section_titles(&root);
-        assert!(titles.iter().any(|title| title == "Pumping down chamber"));
-        assert!(titles.iter().any(|title| title == "Spinning down TMP"));
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn the_procedure_can_leave_the_tmp_running() {
-        let (ctx, root) = run_against_mocks(true, false).await;
-        assert_measured_the_mock_filament(&ctx);
-
-        let titles = section_titles(&root);
-        assert!(!titles.iter().any(|title| title == "Spinning down TMP"));
-        assert!(root.lock().unwrap().children.iter().any(|step| matches!(
-            &step.kind,
-            StepKind::Text { spans } if spans.iter().any(|span| span.content == "Left the TMP running")
-        )));
-    }
-
-    // Without vacuum, the chamber is never pumped down and the TMP is never
-    // started or stopped, but the measurement is the same.
-    #[tokio::test(start_paused = true)]
-    async fn the_procedure_measures_the_mock_filament_without_vacuum() {
-        let (ctx, root) = run_against_mocks(false, true).await;
-        assert_measured_the_mock_filament(&ctx);
-        assert!(!ctx.characterisation.lock().unwrap().in_vacuum);
-
-        let titles = section_titles(&root);
-        assert!(!titles.iter().any(|title| title == "Pumping down chamber"));
-        assert!(!titles.iter().any(|title| title == "Spinning down TMP"));
     }
 }
