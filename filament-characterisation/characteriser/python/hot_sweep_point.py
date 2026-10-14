@@ -10,7 +10,7 @@ from typing import Any
 
 from uncertainties import ufloat
 
-from cold_resistance_point import AnalysisError, current_uncertainty, derived
+from analysis import AnalysisError, current_uncertainty, derived
 from script_io import read_input, write_output
 
 

@@ -5,33 +5,13 @@ Reads a `ColdResistancePointInput` on stdin and prints a
 `filament-characterisation/docs/2_COLD_RESISTANCE.md` for the method.
 """
 
-import math
 import sys
 from typing import Any
 
 from uncertainties import UFloat, ufloat
 
+from analysis import AnalysisError, current_uncertainty, derived
 from script_io import read_input, write_output
-
-
-class AnalysisError(Exception):
-    """The measurements can't be analysed. The message says why."""
-
-
-def current_uncertainty(standard_error: float, resolution: float) -> float:
-    """The standard uncertainty of a mean current, with a quantisation floor.
-
-    The current is usually steadier than one readback step, so every sample
-    reads the same and the standard error is 0, but the value is still only
-    known to within one step: a rectangular distribution of full width
-    `resolution`, whose standard deviation is `resolution / sqrt(12)`.
-    """
-    return math.sqrt(standard_error**2 + resolution**2 / 12)
-
-
-def derived(quantity: UFloat) -> dict[str, float]:
-    """`quantity` as a `Derived`."""
-    return {"value": quantity.nominal_value, "uncertainty": quantity.std_dev}
 
 
 def analyse(point: dict[str, Any]) -> dict[str, Any]:

@@ -17,11 +17,8 @@ from scipy.optimize import curve_fit
 from scipy.stats import chi2
 from uncertainties import UFloat, covariance_matrix, ufloat
 
+from analysis import AnalysisError, derived
 from script_io import read_input, write_output
-
-
-class AnalysisError(Exception):
-    """The points can't be fitted. The message says why."""
 
 
 @dataclass
@@ -238,11 +235,6 @@ def offset_corners(
         shifted = to_points(points, references, offset)
         corners.append(fit_line(shifted.x, shifted.r, shifted.covariance).r0)
     return corners[0], corners[1]
-
-
-def derived(quantity: UFloat) -> dict[str, float]:
-    """`quantity` as a `Derived`."""
-    return {"value": quantity.nominal_value, "uncertainty": quantity.std_dev}
 
 
 def analyse(data: dict[str, Any]) -> dict[str, Any]:

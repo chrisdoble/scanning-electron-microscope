@@ -18,8 +18,8 @@ from typing import Any, Callable
 import jsonschema
 import numpy as np
 
+import analysis
 import cold_resistance_fit
-import cold_resistance_point
 
 PYTHON_DIR = Path(__file__).parent
 
@@ -368,7 +368,7 @@ class TestPoint(unittest.TestCase):
     def test_quantisation_floor(self) -> None:
         expected = 1e-4 / math.sqrt(12)
         self.assertAlmostEqual(
-            cold_resistance_point.current_uncertainty(0.0, 1e-4), expected, delta=expected * 1e-12
+            analysis.current_uncertainty(0.0, 1e-4), expected, delta=expected * 1e-12
         )
 
     def test_positive_polarity_must_be_positive(self) -> None:
