@@ -30,8 +30,10 @@ def analyse(point: dict[str, Any]) -> dict[str, Any]:
         raise AnalysisError("the voltage less the scope's offset is 0")
 
     # A magnitude, because the sign depends on how the relays and sense leads
-    # are wired, which the sweep doesn't need to know.
-    v = abs(v)
+    # are wired, which the sweep doesn't need to know. Negated rather than
+    # `abs`, which `uncertainties` deprecates.
+    if v.nominal_value < 0:
+        v = -v
 
     i = ufloat(
         point["current_amps"]["value"],

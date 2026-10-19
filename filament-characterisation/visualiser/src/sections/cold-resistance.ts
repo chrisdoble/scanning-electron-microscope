@@ -4,6 +4,7 @@
 // hollow markers showing them as measured.
 
 import * as Plot from '@observablehq/plot';
+import { caption, withUncertainty } from '../shared.ts';
 import type { Characterisation } from '../generated/characterisation.ts';
 
 /** One setpoint, as plotted. */
@@ -66,7 +67,11 @@ const FIT_COLOUR = '#d62728';
 /** The opacity of the hollow markers showing the points as measured. */
 const MEASURED_OPACITY = 0.35;
 
-/** Renders the graph into `container`. */
+/** What the graph shows, beneath it. */
+const CAPTION =
+  "Error bars are ±1 standard uncertainty (k = 1). The intercept's is its combined standard uncertainty. Once fitted, the points are corrected for the mount's warming, and the hollow markers show them as measured.";
+
+/** Renders the graph, and its caption, into `container`. */
 export function render(container: HTMLElement, characterisation: Characterisation | null): void {
   const points = plottedPoints(characterisation);
   const fit = plottedFit(characterisation, points);
@@ -77,8 +82,6 @@ export function render(container: HTMLElement, characterisation: Characterisatio
     height: 500,
     marginLeft: 70,
     grid: true,
-    caption:
-      "Error bars are ±1 standard uncertainty (k = 1). The intercept's is its combined standard uncertainty. Once fitted, the points are corrected for the mount's warming, and the hollow markers show them as measured.",
     x: { domain: X_DOMAIN, label: 'I² (A²)' },
     y: { domain: yDomain(points, fit), label: 'R (Ω)' },
     marks: [
@@ -130,7 +133,7 @@ export function render(container: HTMLElement, characterisation: Characterisatio
     ],
   });
 
-  container.replaceChildren(graph);
+  container.replaceChildren(graph, caption(container.ownerDocument, CAPTION));
 }
 
 /**
@@ -287,16 +290,4 @@ function tooltip(point: PlottedPoint): string {
     ...resistance,
     `I² = ${withUncertainty(point.x, point.xUncertainty)} A²`,
   ].join('\n');
-}
-
-/**
- * `value ± uncertainty`, with the uncertainty to two significant figures and
- * the value to the same number of decimal places.
- */
-export function withUncertainty(value: number, uncertainty: number): string {
-  if (!(uncertainty > 0)) {
-    return `${value} ± ${uncertainty}`;
-  }
-  const decimals = Math.max(0, 1 - Math.floor(Math.log10(uncertainty)));
-  return `${value.toFixed(decimals)} ± ${uncertainty.toFixed(decimals)}`;
 }

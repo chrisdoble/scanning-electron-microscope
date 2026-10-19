@@ -9,7 +9,6 @@ import {
   plottedFit,
   plottedPoints,
   render,
-  withUncertainty,
   yDomain,
   type PlottedPoint,
 } from '../src/sections/cold-resistance.ts';
@@ -87,8 +86,15 @@ describe('the cold resistance graph', () => {
     const container = document.createElement('div');
     render(container, fixture('partial'));
     render(container, fixture('complete'));
-    expect(container.children).toHaveLength(1);
+    expect(container.children).toHaveLength(2);
     expect(dots(container)).toBe(9);
+  });
+
+  it("puts its caption beneath the graph, as the hot sweep's is", () => {
+    const container = document.createElement('div');
+    render(container, fixture('complete'));
+    expect(container.querySelectorAll('figcaption')).toHaveLength(0);
+    expect(container.lastElementChild?.matches('p.caption')).toBe(true);
   });
 
   it.each([
@@ -234,17 +240,5 @@ describe('yDomain', () => {
     // Corrected downwards by more than its error bar.
     const corrected = { ...point(0.04, 0.1, 0.0001), measured: 0.1005, corrected: true };
     expect(yDomain([corrected], null)).toEqual([(0.1 - 0.0001) * 0.99, 0.1005 * 1.01]);
-  });
-});
-
-describe('withUncertainty', () => {
-  it('gives the uncertainty to two significant figures, and the value to match', () => {
-    expect(withUncertainty(0.0960004, 0.0000087)).toBe('0.0960004 ± 0.0000087');
-    expect(withUncertainty(1.01234, 0.025)).toBe('1.012 ± 0.025');
-    expect(withUncertainty(123.4, 5.6)).toBe('123.4 ± 5.6');
-  });
-
-  it("doesn't fail on a zero uncertainty", () => {
-    expect(withUncertainty(0.1, 0)).toBe('0.1 ± 0');
   });
 });

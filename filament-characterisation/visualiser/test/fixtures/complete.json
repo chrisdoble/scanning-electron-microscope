@@ -4,103 +4,103 @@
       "chi_squared_p_value": 1.0,
       "corrected_resistances_ohms": [
         {
-          "uncertainty": 2.0805684334469983e-05,
+          "uncertainty": 1.4965538014958288e-05,
           "value": 0.096
         },
         {
-          "uncertainty": 1.500723249921882e-05,
-          "value": 0.09600000000000002
-        },
-        {
-          "uncertainty": 1.657549809652556e-05,
-          "value": 0.09600000000000002
-        },
-        {
-          "uncertainty": 1.5661221992056517e-05,
+          "uncertainty": 1.3860949239701812e-05,
           "value": 0.096
         },
         {
-          "uncertainty": 1.4518153760059368e-05,
+          "uncertainty": 1.4144108154912705e-05,
           "value": 0.096
         },
         {
-          "uncertainty": 1.3859131452767376e-05,
+          "uncertainty": 1.45243248090711e-05,
           "value": 0.096
         },
         {
-          "uncertainty": 1.788833339470146e-05,
-          "value": 0.096
-        },
-        {
-          "uncertainty": 1.987202065883361e-05,
-          "value": 0.09600000000000002
-        },
-        {
-          "uncertainty": 1.4150067469852147e-05,
+          "uncertainty": 2.309431895162153e-05,
           "value": 0.09599999999999996
+        },
+        {
+          "uncertainty": 1.98911046602007e-05,
+          "value": 0.096
+        },
+        {
+          "uncertainty": 1.4987185055268698e-05,
+          "value": 0.096
+        },
+        {
+          "uncertainty": 1.566860663010844e-05,
+          "value": 0.09599999999999996
+        },
+        {
+          "uncertainty": 1.6565655699293816e-05,
+          "value": 0.096
         }
       ],
       "current_gain_uncertainty_ohms": 8.31384387633061e-05,
-      "current_offset_uncertainty_ohms": 0.0023137598827974344,
+      "current_offset_uncertainty_ohms": 0.0022220125136161923,
       "drift_corrections_ohms": [
         {
-          "uncertainty": 6.9911730507554885e-06,
+          "uncertainty": 7.300730197075836e-06,
           "value": 0.0
         },
         {
-          "uncertainty": 1.2221504630517376e-05,
-          "value": -1.3877787807814457e-17
-        },
-        {
-          "uncertainty": 1.222126761207206e-05,
-          "value": -1.3877787807814457e-17
-        },
-        {
-          "uncertainty": 1.221776879321567e-05,
-          "value": -1.3877787807814457e-17
-        },
-        {
-          "uncertainty": 1.2220343227615417e-05,
+          "uncertainty": 1.2225352639450676e-05,
           "value": 0.0
         },
         {
-          "uncertainty": 1.222329161717167e-05,
+          "uncertainty": 1.2217975936861873e-05,
+          "value": 0.0
+        },
+        {
+          "uncertainty": 1.222767398810576e-05,
           "value": 1.3877787807814457e-17
         },
         {
-          "uncertainty": 1.221989382005117e-05,
+          "uncertainty": 1.222078425630799e-05,
           "value": 1.3877787807814457e-17
         },
         {
-          "uncertainty": 1.221217446096762e-05,
-          "value": -1.3877787807814457e-17
+          "uncertainty": 1.2243204017047904e-05,
+          "value": 0.0
         },
         {
-          "uncertainty": 1.2224874228278824e-05,
+          "uncertainty": 1.2196879274183932e-05,
+          "value": 0.0
+        },
+        {
+          "uncertainty": 1.2227233281862184e-05,
           "value": 1.3877787807814457e-17
+        },
+        {
+          "uncertainty": 1.2207915204714722e-05,
+          "value": 0.0
         }
       ],
-      "fit_uncertainty_ohms": 1.3153992184860676e-05,
+      "fit_uncertainty_ohms": 1.26191817321205e-05,
       "offset_corner_resistances_ohms": [
-        0.09208677902978496,
-        0.10010187837682452
+        0.09224505609955966,
+        0.0999423332368338
       ],
-      "reduced_chi_squared": 1.9213192178520606e-24,
+      "reduced_chi_squared": 1.086234548692251e-24,
       "reference_drift_ohms": {
         "uncertainty": 1.3856406460551015e-05,
         "value": 0.0
       },
       "reference_resistance_ohms": {
-        "uncertainty": 0.002556057193498005,
+        "uncertainty": 0.0024748051121064856,
         "value": 0.09514370664023786
       },
       "resistance_ohms": {
-        "uncertainty": 0.0025669767865629787,
+        "uncertainty": 0.002484594706267913,
         "value": 0.096
       },
       "slope_ohms_per_amp_squared": {
-        "uncertainty": 0.00014709524951356882,
-        "value": 0.0
+        "uncertainty": 0.0001655021535473504,
+        "value": 8.580778307920496e-17
       },
       "temperature_coefficient_uncertainty_ohms": 3.266476390908233e-05,
       "temperature_uncertainty_ohms": 0.00024498572931811754,
@@ -126,680 +126,136 @@
         "analysis": {
           "current_amps": {
             "uncertainty": 2.0412414523193152e-05,
-            "value": 0.1
+            "value": 0.15
           },
           "current_squared_amps_squared": {
-            "uncertainty": 4.08248290463863e-06,
-            "value": 0.010000000000000002
+            "uncertainty": 6.123724356957945e-06,
+            "value": 0.0225
           },
           "offset_voltage_volts": {
             "uncertainty": 0.0,
             "value": 0.0
           },
           "resistance_ohms": {
-            "uncertainty": 1.959591794226542e-05,
+            "uncertainty": 1.3063945294843616e-05,
             "value": 0.096
           },
           "voltage_volts": {
             "uncertainty": 0.0,
-            "value": 0.0096
+            "value": 0.0144
           },
           "warnings": []
         },
         "first_polarity": "Forward",
         "negative_current_amps": {
           "samples": [
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
           ],
           "uncertainty": 0.0,
-          "value": 0.1
+          "value": 0.15
         },
         "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 2380.95,
+        "negative_time_seconds": 2719.65,
         "negative_voltage_volts": {
           "samples": [
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001,
-            -0.009600000000000001
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144,
+            -0.0144
           ],
           "uncertainty": 0.0,
-          "value": -0.0096
+          "value": -0.0144
         },
         "positive_current_amps": {
           "samples": [
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
           ],
           "uncertainty": 0.0,
-          "value": 0.1
+          "value": 0.15
         },
         "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 1720.2,
+        "positive_time_seconds": 2059.0,
         "positive_voltage_volts": {
           "samples": [
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001,
-            0.009600000000000001
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144,
+            0.0144
           ],
           "uncertainty": 0.0,
-          "value": 0.0096
+          "value": 0.0144
         },
-        "setpoint_amps": 0.1,
-        "warnings": []
-      },
-      {
-        "analysis": {
-          "current_amps": {
-            "uncertainty": 2.0412414523193152e-05,
-            "value": 0.225
-          },
-          "current_squared_amps_squared": {
-            "uncertainty": 9.18558653543692e-06,
-            "value": 0.050625
-          },
-          "offset_voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.0
-          },
-          "resistance_ohms": {
-            "uncertainty": 8.709296863229077e-06,
-            "value": 0.096
-          },
-          "voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.0216
-          },
-          "warnings": []
-        },
-        "first_polarity": "Forward",
-        "negative_current_amps": {
-          "samples": [
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225
-          ],
-          "uncertainty": 0.0,
-          "value": 0.225
-        },
-        "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 5685.35,
-        "negative_voltage_volts": {
-          "samples": [
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216,
-            -0.0216
-          ],
-          "uncertainty": 0.0,
-          "value": -0.0216
-        },
-        "positive_current_amps": {
-          "samples": [
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225,
-            0.225
-          ],
-          "uncertainty": 0.0,
-          "value": 0.225
-        },
-        "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 5023.4,
-        "positive_voltage_volts": {
-          "samples": [
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216,
-            0.0216
-          ],
-          "uncertainty": 0.0,
-          "value": 0.0216
-        },
-        "setpoint_amps": 0.225,
-        "warnings": []
-      },
-      {
-        "analysis": {
-          "current_amps": {
-            "uncertainty": 2.0412414523193152e-05,
-            "value": 0.175
-          },
-          "current_squared_amps_squared": {
-            "uncertainty": 7.144345083117603e-06,
-            "value": 0.030624999999999996
-          },
-          "offset_voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.0
-          },
-          "resistance_ohms": {
-            "uncertainty": 1.1197667395580242e-05,
-            "value": 0.096
-          },
-          "voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.0168
-          },
-          "warnings": []
-        },
-        "first_polarity": "Reverse",
-        "negative_current_amps": {
-          "samples": [
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175
-          ],
-          "uncertainty": 0.0,
-          "value": 0.175
-        },
-        "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 6681.2,
-        "negative_voltage_volts": {
-          "samples": [
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168,
-            -0.0168
-          ],
-          "uncertainty": 0.0,
-          "value": -0.0168
-        },
-        "positive_current_amps": {
-          "samples": [
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175,
-            0.175
-          ],
-          "uncertainty": 0.0,
-          "value": 0.175
-        },
-        "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 7344.85,
-        "positive_voltage_volts": {
-          "samples": [
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168,
-            0.0168
-          ],
-          "uncertainty": 0.0,
-          "value": 0.0168
-        },
-        "setpoint_amps": 0.175,
-        "warnings": []
-      },
-      {
-        "analysis": {
-          "current_amps": {
-            "uncertainty": 2.0412414523193152e-05,
-            "value": 0.2
-          },
-          "current_squared_amps_squared": {
-            "uncertainty": 8.16496580927726e-06,
-            "value": 0.04000000000000001
-          },
-          "offset_voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.0
-          },
-          "resistance_ohms": {
-            "uncertainty": 9.79795897113271e-06,
-            "value": 0.096
-          },
-          "voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.0192
-          },
-          "warnings": []
-        },
-        "first_polarity": "Reverse",
-        "negative_current_amps": {
-          "samples": [
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2
-          ],
-          "uncertainty": 0.0,
-          "value": 0.2
-        },
-        "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 10003.3,
-        "negative_voltage_volts": {
-          "samples": [
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002,
-            -0.019200000000000002
-          ],
-          "uncertainty": 0.0,
-          "value": -0.0192
-        },
-        "positive_current_amps": {
-          "samples": [
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2,
-            0.2
-          ],
-          "uncertainty": 0.0,
-          "value": 0.2
-        },
-        "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 10670.95,
-        "positive_voltage_volts": {
-          "samples": [
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002,
-            0.019200000000000002
-          ],
-          "uncertainty": 0.0,
-          "value": 0.0192
-        },
-        "setpoint_amps": 0.2,
-        "warnings": []
-      },
-      {
-        "analysis": {
-          "current_amps": {
-            "uncertainty": 2.0412414523193152e-05,
-            "value": 0.25
-          },
-          "current_squared_amps_squared": {
-            "uncertainty": 1.0206207261596576e-05,
-            "value": 0.0625
-          },
-          "offset_voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.0
-          },
-          "resistance_ohms": {
-            "uncertainty": 7.83836717690617e-06,
-            "value": 0.096
-          },
-          "voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.024
-          },
-          "warnings": []
-        },
-        "first_polarity": "Forward",
-        "negative_current_amps": {
-          "samples": [
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25
-          ],
-          "uncertainty": 0.0,
-          "value": 0.25
-        },
-        "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 12332.85,
-        "negative_voltage_volts": {
-          "samples": [
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024,
-            -0.024
-          ],
-          "uncertainty": 0.0,
-          "value": -0.024
-        },
-        "positive_current_amps": {
-          "samples": [
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25
-          ],
-          "uncertainty": 0.0,
-          "value": 0.25
-        },
-        "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 11667.2,
-        "positive_voltage_volts": {
-          "samples": [
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024,
-            0.024
-          ],
-          "uncertainty": 0.0,
-          "value": 0.024
-        },
-        "setpoint_amps": 0.25,
+        "setpoint_amps": 0.15,
         "warnings": []
       },
       {
@@ -854,7 +310,7 @@
           "value": 0.3
         },
         "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 15663.05,
+        "negative_time_seconds": 6047.95,
         "negative_voltage_volts": {
           "samples": [
             -0.0288,
@@ -908,7 +364,7 @@
           "value": 0.3
         },
         "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 15001.868,
+        "positive_time_seconds": 5384.9,
         "positive_voltage_volts": {
           "samples": [
             0.0288,
@@ -942,278 +398,6 @@
         "analysis": {
           "current_amps": {
             "uncertainty": 2.0412414523193152e-05,
-            "value": 0.15
-          },
-          "current_squared_amps_squared": {
-            "uncertainty": 6.123724356957945e-06,
-            "value": 0.0225
-          },
-          "offset_voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.0
-          },
-          "resistance_ohms": {
-            "uncertainty": 1.3063945294843616e-05,
-            "value": 0.096
-          },
-          "voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.0144
-          },
-          "warnings": []
-        },
-        "first_polarity": "Reverse",
-        "negative_current_amps": {
-          "samples": [
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15
-          ],
-          "uncertainty": 0.0,
-          "value": 0.15
-        },
-        "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 16673.1,
-        "negative_voltage_volts": {
-          "samples": [
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144,
-            -0.0144
-          ],
-          "uncertainty": 0.0,
-          "value": -0.0144
-        },
-        "positive_current_amps": {
-          "samples": [
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-            0.15
-          ],
-          "uncertainty": 0.0,
-          "value": 0.15
-        },
-        "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 17345.05,
-        "positive_voltage_volts": {
-          "samples": [
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144,
-            0.0144
-          ],
-          "uncertainty": 0.0,
-          "value": 0.0144
-        },
-        "setpoint_amps": 0.15,
-        "warnings": []
-      },
-      {
-        "analysis": {
-          "current_amps": {
-            "uncertainty": 2.0412414523193152e-05,
-            "value": 0.125
-          },
-          "current_squared_amps_squared": {
-            "uncertainty": 5.103103630798288e-06,
-            "value": 0.015625
-          },
-          "offset_voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.0
-          },
-          "resistance_ohms": {
-            "uncertainty": 1.567673435381234e-05,
-            "value": 0.096
-          },
-          "voltage_volts": {
-            "uncertainty": 0.0,
-            "value": 0.012
-          },
-          "warnings": []
-        },
-        "first_polarity": "Reverse",
-        "negative_current_amps": {
-          "samples": [
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125
-          ],
-          "uncertainty": 0.0,
-          "value": 0.125
-        },
-        "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 20026.3,
-        "negative_voltage_volts": {
-          "samples": [
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012,
-            -0.012
-          ],
-          "uncertainty": 0.0,
-          "value": -0.012
-        },
-        "positive_current_amps": {
-          "samples": [
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125,
-            0.125
-          ],
-          "uncertainty": 0.0,
-          "value": 0.125
-        },
-        "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 20685.55,
-        "positive_voltage_volts": {
-          "samples": [
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012,
-            0.012
-          ],
-          "uncertainty": 0.0,
-          "value": 0.012
-        },
-        "setpoint_amps": 0.125,
-        "warnings": []
-      },
-      {
-        "analysis": {
-          "current_amps": {
-            "uncertainty": 2.0412414523193152e-05,
             "value": 0.275
           },
           "current_squared_amps_squared": {
@@ -1234,7 +418,7 @@
           },
           "warnings": []
         },
-        "first_polarity": "Forward",
+        "first_polarity": "Reverse",
         "negative_current_amps": {
           "samples": [
             0.275,
@@ -1262,7 +446,7 @@
           "value": 0.275
         },
         "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 22338.926,
+        "negative_time_seconds": 7056.6,
         "negative_voltage_volts": {
           "samples": [
             -0.026400000000000003,
@@ -1316,7 +500,7 @@
           "value": 0.275
         },
         "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 21678.9,
+        "positive_time_seconds": 7730.55,
         "positive_voltage_volts": {
           "samples": [
             0.026400000000000003,
@@ -1344,6 +528,822 @@
           "value": 0.0264
         },
         "setpoint_amps": 0.275,
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.0412414523193152e-05,
+            "value": 0.25
+          },
+          "current_squared_amps_squared": {
+            "uncertainty": 1.0206207261596576e-05,
+            "value": 0.0625
+          },
+          "offset_voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0
+          },
+          "resistance_ohms": {
+            "uncertainty": 7.83836717690617e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.024
+          },
+          "warnings": []
+        },
+        "first_polarity": "Reverse",
+        "negative_current_amps": {
+          "samples": [
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25
+          ],
+          "uncertainty": 0.0,
+          "value": 0.25
+        },
+        "negative_settle_seconds": 4.0,
+        "negative_time_seconds": 10408.6,
+        "negative_voltage_volts": {
+          "samples": [
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024,
+            -0.024
+          ],
+          "uncertainty": 0.0,
+          "value": -0.024
+        },
+        "positive_current_amps": {
+          "samples": [
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25
+          ],
+          "uncertainty": 0.0,
+          "value": 0.25
+        },
+        "positive_settle_seconds": 4.0,
+        "positive_time_seconds": 11082.95,
+        "positive_voltage_volts": {
+          "samples": [
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024,
+            0.024
+          ],
+          "uncertainty": 0.0,
+          "value": 0.024
+        },
+        "setpoint_amps": 0.25,
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.0412414523193152e-05,
+            "value": 0.1
+          },
+          "current_squared_amps_squared": {
+            "uncertainty": 4.08248290463863e-06,
+            "value": 0.010000000000000002
+          },
+          "offset_voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0
+          },
+          "resistance_ohms": {
+            "uncertainty": 1.959591794226542e-05,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0096
+          },
+          "warnings": []
+        },
+        "first_polarity": "Forward",
+        "negative_current_amps": {
+          "samples": [
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1
+          ],
+          "uncertainty": 0.0,
+          "value": 0.1
+        },
+        "negative_settle_seconds": 4.0,
+        "negative_time_seconds": 12789.15,
+        "negative_voltage_volts": {
+          "samples": [
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001,
+            -0.009600000000000001
+          ],
+          "uncertainty": 0.0,
+          "value": -0.0096
+        },
+        "positive_current_amps": {
+          "samples": [
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1
+          ],
+          "uncertainty": 0.0,
+          "value": 0.1
+        },
+        "positive_settle_seconds": 4.0,
+        "positive_time_seconds": 12114.7,
+        "positive_voltage_volts": {
+          "samples": [
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0096
+        },
+        "setpoint_amps": 0.1,
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.0412414523193152e-05,
+            "value": 0.125
+          },
+          "current_squared_amps_squared": {
+            "uncertainty": 5.103103630798288e-06,
+            "value": 0.015625
+          },
+          "offset_voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0
+          },
+          "resistance_ohms": {
+            "uncertainty": 1.567673435381234e-05,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.012
+          },
+          "warnings": []
+        },
+        "first_polarity": "Forward",
+        "negative_current_amps": {
+          "samples": [
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125
+          ],
+          "uncertainty": 0.0,
+          "value": 0.125
+        },
+        "negative_settle_seconds": 4.0,
+        "negative_time_seconds": 16017.75,
+        "negative_voltage_volts": {
+          "samples": [
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012,
+            -0.012
+          ],
+          "uncertainty": 0.0,
+          "value": -0.012
+        },
+        "positive_current_amps": {
+          "samples": [
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125
+          ],
+          "uncertainty": 0.0,
+          "value": 0.125
+        },
+        "positive_settle_seconds": 4.0,
+        "positive_time_seconds": 15363.8,
+        "positive_voltage_volts": {
+          "samples": [
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012,
+            0.012
+          ],
+          "uncertainty": 0.0,
+          "value": 0.012
+        },
+        "setpoint_amps": 0.125,
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.0412414523193152e-05,
+            "value": 0.225
+          },
+          "current_squared_amps_squared": {
+            "uncertainty": 9.18558653543692e-06,
+            "value": 0.050625
+          },
+          "offset_voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0
+          },
+          "resistance_ohms": {
+            "uncertainty": 8.709296863229077e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0216
+          },
+          "warnings": []
+        },
+        "first_polarity": "Reverse",
+        "negative_current_amps": {
+          "samples": [
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225
+          ],
+          "uncertainty": 0.0,
+          "value": 0.225
+        },
+        "negative_settle_seconds": 4.0,
+        "negative_time_seconds": 16957.7,
+        "negative_voltage_volts": {
+          "samples": [
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216,
+            -0.0216
+          ],
+          "uncertainty": 0.0,
+          "value": -0.0216
+        },
+        "positive_current_amps": {
+          "samples": [
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225,
+            0.225
+          ],
+          "uncertainty": 0.0,
+          "value": 0.225
+        },
+        "positive_settle_seconds": 4.0,
+        "positive_time_seconds": 17598.75,
+        "positive_voltage_volts": {
+          "samples": [
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216,
+            0.0216
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0216
+        },
+        "setpoint_amps": 0.225,
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.0412414523193152e-05,
+            "value": 0.2
+          },
+          "current_squared_amps_squared": {
+            "uncertainty": 8.16496580927726e-06,
+            "value": 0.04000000000000001
+          },
+          "offset_voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0
+          },
+          "resistance_ohms": {
+            "uncertainty": 9.79795897113271e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0192
+          },
+          "warnings": []
+        },
+        "first_polarity": "Reverse",
+        "negative_current_amps": {
+          "samples": [
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2
+          ],
+          "uncertainty": 0.0,
+          "value": 0.2
+        },
+        "negative_settle_seconds": 4.0,
+        "negative_time_seconds": 20255.9,
+        "negative_voltage_volts": {
+          "samples": [
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002,
+            -0.019200000000000002
+          ],
+          "uncertainty": 0.0,
+          "value": -0.0192
+        },
+        "positive_current_amps": {
+          "samples": [
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2
+          ],
+          "uncertainty": 0.0,
+          "value": 0.2
+        },
+        "positive_settle_seconds": 4.0,
+        "positive_time_seconds": 20922.95,
+        "positive_voltage_volts": {
+          "samples": [
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0192
+        },
+        "setpoint_amps": 0.2,
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.0412414523193152e-05,
+            "value": 0.175
+          },
+          "current_squared_amps_squared": {
+            "uncertainty": 7.144345083117603e-06,
+            "value": 0.030624999999999996
+          },
+          "offset_voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0
+          },
+          "resistance_ohms": {
+            "uncertainty": 1.1197667395580242e-05,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0168
+          },
+          "warnings": []
+        },
+        "first_polarity": "Forward",
+        "negative_current_amps": {
+          "samples": [
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175
+          ],
+          "uncertainty": 0.0,
+          "value": 0.175
+        },
+        "negative_settle_seconds": 4.0,
+        "negative_time_seconds": 22611.25,
+        "negative_voltage_volts": {
+          "samples": [
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168,
+            -0.0168
+          ],
+          "uncertainty": 0.0,
+          "value": -0.0168
+        },
+        "positive_current_amps": {
+          "samples": [
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175,
+            0.175
+          ],
+          "uncertainty": 0.0,
+          "value": 0.175
+        },
+        "positive_settle_seconds": 4.0,
+        "positive_time_seconds": 21928.1,
+        "positive_voltage_volts": {
+          "samples": [
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168,
+            0.0168
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0168
+        },
+        "setpoint_amps": 0.175,
         "warnings": []
       }
     ],
@@ -1455,7 +1455,7 @@
           "value": 0.2
         },
         "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 713.65,
+        "positive_time_seconds": 1046.85,
         "positive_voltage_volts": {
           "samples": [
             0.019200000000000002,
@@ -1537,7 +1537,7 @@
           "value": 0.2
         },
         "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 3374.9,
+        "negative_time_seconds": 3718.6,
         "negative_voltage_volts": {
           "samples": [
             -0.019200000000000002,
@@ -1591,7 +1591,7 @@
           "value": 0.2
         },
         "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 4030.446,
+        "positive_time_seconds": 4390.638,
         "positive_voltage_volts": {
           "samples": [
             0.019200000000000002,
@@ -1673,7 +1673,7 @@
           "value": 0.2
         },
         "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 8996.85,
+        "negative_time_seconds": 9408.15,
         "negative_voltage_volts": {
           "samples": [
             -0.019200000000000002,
@@ -1727,7 +1727,7 @@
           "value": 0.2
         },
         "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 8333.5,
+        "positive_time_seconds": 8730.776,
         "positive_voltage_volts": {
           "samples": [
             0.019200000000000002,
@@ -1809,7 +1809,7 @@
           "value": 0.2
         },
         "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 13331.94,
+        "negative_time_seconds": 13808.9,
         "negative_voltage_volts": {
           "samples": [
             -0.019200000000000002,
@@ -1863,7 +1863,7 @@
           "value": 0.2
         },
         "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 14002.15,
+        "positive_time_seconds": 14474.03,
         "positive_voltage_volts": {
           "samples": [
             0.019200000000000002,
@@ -1945,7 +1945,7 @@
           "value": 0.2
         },
         "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 19032.15,
+        "negative_time_seconds": 19254.15,
         "negative_voltage_volts": {
           "samples": [
             -0.019200000000000002,
@@ -1999,7 +1999,7 @@
           "value": 0.2
         },
         "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 18329.8,
+        "positive_time_seconds": 18570.0,
         "positive_voltage_volts": {
           "samples": [
             0.019200000000000002,
@@ -2081,7 +2081,7 @@
           "value": 0.2
         },
         "negative_settle_seconds": 4.0,
-        "negative_time_seconds": 23329.4,
+        "negative_time_seconds": 23635.3,
         "negative_voltage_volts": {
           "samples": [
             -0.019200000000000002,
@@ -2135,7 +2135,7 @@
           "value": 0.2
         },
         "positive_settle_seconds": 4.0,
-        "positive_time_seconds": 23989.85,
+        "positive_time_seconds": 24334.05,
         "positive_voltage_volts": {
           "samples": [
             0.019200000000000002,
@@ -2170,7 +2170,3042 @@
     "vertical_scale_volts_per_division": 0.01
   },
   "filament_id": "test",
-  "hot_sweep": null,
+  "hot_sweep": {
+    "maximum_current_amps": 0.6,
+    "offsets": [
+      {
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0
+        }
+      },
+      {
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0
+        }
+      },
+      {
+        "vertical_scale_volts_per_division": 0.05,
+        "voltage_volts": {
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0
+        }
+      },
+      {
+        "vertical_scale_volts_per_division": 0.1,
+        "voltage_volts": {
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0
+        }
+      },
+      {
+        "vertical_scale_volts_per_division": 0.2,
+        "voltage_volts": {
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0
+        }
+      },
+      {
+        "vertical_scale_volts_per_division": 0.5,
+        "voltage_volts": {
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0
+        }
+      },
+      {
+        "vertical_scale_volts_per_division": 1.0,
+        "voltage_volts": {
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0
+        }
+      },
+      {
+        "vertical_scale_volts_per_division": 2.0,
+        "voltage_volts": {
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0
+        }
+      },
+      {
+        "vertical_scale_volts_per_division": 5.0,
+        "voltage_volts": {
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0
+        }
+      },
+      {
+        "vertical_scale_volts_per_division": 10.0,
+        "voltage_volts": {
+          "samples": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0
+        }
+      }
+    ],
+    "points": [
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.1
+          },
+          "resistance_ohms": {
+            "uncertainty": 2.771281292110203e-05,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0096
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1
+          ],
+          "uncertainty": 0.0,
+          "value": 0.1
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.1,
+        "time_seconds": 3409.124,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0096
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.1414213562373095
+          },
+          "resistance_ohms": {
+            "uncertainty": 1.9595917942265424e-05,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.013576450198781712
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095
+          ],
+          "uncertainty": 0.0,
+          "value": 0.1414213562373095
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.1414213562373095,
+        "time_seconds": 4442.724,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712
+          ],
+          "uncertainty": 0.0,
+          "value": 0.013576450198781712
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.2
+          },
+          "resistance_ohms": {
+            "uncertainty": 1.3856406460551015e-05,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0192
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2
+          ],
+          "uncertainty": 0.0,
+          "value": 0.2
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.2,
+        "time_seconds": 5458.024,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0192
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.2449489742783178
+          },
+          "resistance_ohms": {
+            "uncertainty": 1.131370849898476e-05,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.02351510153071851
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178
+          ],
+          "uncertainty": 0.0,
+          "value": 0.2449489742783178
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.2449489742783178,
+        "time_seconds": 6446.424,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851
+          ],
+          "uncertainty": 0.0,
+          "value": 0.02351510153071851
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.282842712474619
+          },
+          "resistance_ohms": {
+            "uncertainty": 9.797958971132712e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.027152900397563424
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619
+          ],
+          "uncertainty": 0.0,
+          "value": 0.282842712474619
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.282842712474619,
+        "time_seconds": 7477.124,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424
+          ],
+          "uncertainty": 0.0,
+          "value": 0.027152900397563424
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.31622776601683794
+          },
+          "resistance_ohms": {
+            "uncertainty": 8.763560920082657e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.03035786553761644
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794
+          ],
+          "uncertainty": 0.0,
+          "value": 0.31622776601683794
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.31622776601683794,
+        "time_seconds": 8511.624,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442
+          ],
+          "uncertainty": 0.0,
+          "value": 0.03035786553761644
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.34641016151377546
+          },
+          "resistance_ohms": {
+            "uncertainty": 8.000000000000001e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.03325537550532245
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546
+          ],
+          "uncertainty": 0.0,
+          "value": 0.34641016151377546
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.34641016151377546,
+        "time_seconds": 9503.1,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245
+          ],
+          "uncertainty": 0.0,
+          "value": 0.03325537550532245
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.37416573867739417
+          },
+          "resistance_ohms": {
+            "uncertainty": 7.406560798180411e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.03591991091302984
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417
+          ],
+          "uncertainty": 0.0,
+          "value": 0.37416573867739417
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.37416573867739417,
+        "time_seconds": 10504.224,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984
+          ],
+          "uncertainty": 0.0,
+          "value": 0.03591991091302984
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.4
+          },
+          "resistance_ohms": {
+            "uncertainty": 6.928203230275508e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0384
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4
+          ],
+          "uncertainty": 0.0,
+          "value": 0.4
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.4,
+        "time_seconds": 11494.624,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0384
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.42426406871192845
+          },
+          "resistance_ohms": {
+            "uncertainty": 6.531972647421811e-06,
+            "value": 0.09600000000000002
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.04072935059634514
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285
+          ],
+          "uncertainty": 0.0,
+          "value": 0.42426406871192845
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.4242640687119285,
+        "time_seconds": 12492.32,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514
+          ],
+          "uncertainty": 0.0,
+          "value": 0.04072935059634514
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.447213595499958
+          },
+          "resistance_ohms": {
+            "uncertainty": 6.196773353931866e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.04293250516799596
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579
+          ],
+          "uncertainty": 0.0,
+          "value": 0.447213595499958
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.4472135954999579,
+        "time_seconds": 13482.324,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596
+          ],
+          "uncertainty": 0.0,
+          "value": 0.04293250516799596
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.469041575982343
+          },
+          "resistance_ohms": {
+            "uncertainty": 5.908391567007972e-06,
+            "value": 0.09600000000000002
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.04502799129430493
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343
+          ],
+          "uncertainty": 0.0,
+          "value": 0.469041575982343
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.469041575982343,
+        "time_seconds": 14516.324,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924
+          ],
+          "uncertainty": 0.0,
+          "value": 0.04502799129430493
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.4898979485566356
+          },
+          "resistance_ohms": {
+            "uncertainty": 5.656854249492381e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.04703020306143702
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356
+          ],
+          "uncertainty": 0.0,
+          "value": 0.4898979485566356
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.4898979485566356,
+        "time_seconds": 15528.124,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702
+          ],
+          "uncertainty": 0.0,
+          "value": 0.04703020306143702
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.5099019513592785
+          },
+          "resistance_ohms": {
+            "uncertainty": 5.43492976389406e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.048950587330490736
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785
+          ],
+          "uncertainty": 0.0,
+          "value": 0.5099019513592785
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.5099019513592785,
+        "time_seconds": 16524.824,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736
+          ],
+          "uncertainty": 0.0,
+          "value": 0.048950587330490736
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.5291502622129182
+          },
+          "resistance_ohms": {
+            "uncertainty": 5.2372293656638165e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.05079842517244014
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182
+          ],
+          "uncertainty": 0.0,
+          "value": 0.5291502622129182
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.5291502622129182,
+        "time_seconds": 17540.824,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015
+          ],
+          "uncertainty": 0.0,
+          "value": 0.05079842517244014
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.5477225575051661
+          },
+          "resistance_ohms": {
+            "uncertainty": 5.059644256269409e-06,
+            "value": 0.09600000000000002
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.05258136552049595
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661
+          ],
+          "uncertainty": 0.0,
+          "value": 0.5477225575051661
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.5477225575051661,
+        "time_seconds": 18552.924,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594
+          ],
+          "uncertainty": 0.0,
+          "value": 0.05258136552049595
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.565685424949238
+          },
+          "resistance_ohms": {
+            "uncertainty": 4.898979485566356e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.05430580079512685
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238
+          ],
+          "uncertainty": 0.0,
+          "value": 0.565685424949238
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.565685424949238,
+        "time_seconds": 19551.924,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685
+          ],
+          "uncertainty": 0.0,
+          "value": 0.05430580079512685
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.5830951894845301
+          },
+          "resistance_ohms": {
+            "uncertainty": 4.752708206288035e-06,
+            "value": 0.09599999999999996
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.05597713819051488
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301
+          ],
+          "uncertainty": 0.0,
+          "value": 0.5830951894845301
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.5830951894845301,
+        "time_seconds": 20566.624,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489
+          ],
+          "uncertainty": 0.0,
+          "value": 0.05597713819051488
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.6
+          },
+          "resistance_ohms": {
+            "uncertainty": 4.618802153517006e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0576
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6,
+            0.6
+          ],
+          "uncertainty": 0.0,
+          "value": 0.6
+        },
+        "direction": "Up",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.6,
+        "time_seconds": 21579.724,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576,
+            0.0576
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0576
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.5830951894845301
+          },
+          "resistance_ohms": {
+            "uncertainty": 4.752708206288035e-06,
+            "value": 0.09599999999999996
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.05597713819051488
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301,
+            0.5830951894845301
+          ],
+          "uncertainty": 0.0,
+          "value": 0.5830951894845301
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.5830951894845301,
+        "time_seconds": 22577.804,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489,
+            0.05597713819051489
+          ],
+          "uncertainty": 0.0,
+          "value": 0.05597713819051488
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.565685424949238
+          },
+          "resistance_ohms": {
+            "uncertainty": 4.898979485566356e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.05430580079512685
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238,
+            0.565685424949238
+          ],
+          "uncertainty": 0.0,
+          "value": 0.565685424949238
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.565685424949238,
+        "time_seconds": 23571.104,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685,
+            0.05430580079512685
+          ],
+          "uncertainty": 0.0,
+          "value": 0.05430580079512685
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.5477225575051661
+          },
+          "resistance_ohms": {
+            "uncertainty": 5.059644256269409e-06,
+            "value": 0.09600000000000002
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.05258136552049595
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661,
+            0.5477225575051661
+          ],
+          "uncertainty": 0.0,
+          "value": 0.5477225575051661
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.5477225575051661,
+        "time_seconds": 24567.504,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594,
+            0.05258136552049594
+          ],
+          "uncertainty": 0.0,
+          "value": 0.05258136552049595
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.5291502622129182
+          },
+          "resistance_ohms": {
+            "uncertainty": 5.2372293656638165e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.05079842517244014
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182,
+            0.5291502622129182
+          ],
+          "uncertainty": 0.0,
+          "value": 0.5291502622129182
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.5291502622129182,
+        "time_seconds": 25566.656,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015,
+            0.05079842517244015
+          ],
+          "uncertainty": 0.0,
+          "value": 0.05079842517244014
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.5099019513592785
+          },
+          "resistance_ohms": {
+            "uncertainty": 5.43492976389406e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.048950587330490736
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785,
+            0.5099019513592785
+          ],
+          "uncertainty": 0.0,
+          "value": 0.5099019513592785
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.5099019513592785,
+        "time_seconds": 26576.768,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736,
+            0.048950587330490736
+          ],
+          "uncertainty": 0.0,
+          "value": 0.048950587330490736
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.4898979485566356
+          },
+          "resistance_ohms": {
+            "uncertainty": 5.656854249492381e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.04703020306143702
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356,
+            0.4898979485566356
+          ],
+          "uncertainty": 0.0,
+          "value": 0.4898979485566356
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.4898979485566356,
+        "time_seconds": 27567.104,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702,
+            0.04703020306143702
+          ],
+          "uncertainty": 0.0,
+          "value": 0.04703020306143702
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.469041575982343
+          },
+          "resistance_ohms": {
+            "uncertainty": 5.908391567007972e-06,
+            "value": 0.09600000000000002
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.04502799129430493
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343,
+            0.469041575982343
+          ],
+          "uncertainty": 0.0,
+          "value": 0.469041575982343
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.469041575982343,
+        "time_seconds": 28569.204,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924,
+            0.045027991294304924
+          ],
+          "uncertainty": 0.0,
+          "value": 0.04502799129430493
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.447213595499958
+          },
+          "resistance_ohms": {
+            "uncertainty": 6.196773353931866e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.04293250516799596
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579,
+            0.4472135954999579
+          ],
+          "uncertainty": 0.0,
+          "value": 0.447213595499958
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.4472135954999579,
+        "time_seconds": 29569.188,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596,
+            0.04293250516799596
+          ],
+          "uncertainty": 0.0,
+          "value": 0.04293250516799596
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.42426406871192845
+          },
+          "resistance_ohms": {
+            "uncertainty": 6.531972647421811e-06,
+            "value": 0.09600000000000002
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.04072935059634514
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285,
+            0.4242640687119285
+          ],
+          "uncertainty": 0.0,
+          "value": 0.42426406871192845
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.4242640687119285,
+        "time_seconds": 30565.004,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514,
+            0.04072935059634514
+          ],
+          "uncertainty": 0.0,
+          "value": 0.04072935059634514
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.4
+          },
+          "resistance_ohms": {
+            "uncertainty": 6.928203230275508e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0384
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4
+          ],
+          "uncertainty": 0.0,
+          "value": 0.4
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.4,
+        "time_seconds": 31561.004,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004,
+            0.038400000000000004
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0384
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.37416573867739417
+          },
+          "resistance_ohms": {
+            "uncertainty": 7.406560798180411e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.03591991091302984
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417,
+            0.37416573867739417
+          ],
+          "uncertainty": 0.0,
+          "value": 0.37416573867739417
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.37416573867739417,
+        "time_seconds": 32581.204,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984,
+            0.03591991091302984
+          ],
+          "uncertainty": 0.0,
+          "value": 0.03591991091302984
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.34641016151377546
+          },
+          "resistance_ohms": {
+            "uncertainty": 8.000000000000001e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.03325537550532245
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546,
+            0.34641016151377546
+          ],
+          "uncertainty": 0.0,
+          "value": 0.34641016151377546
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.34641016151377546,
+        "time_seconds": 33601.352,
+        "vertical_scale_volts_per_division": 0.02,
+        "voltage_volts": {
+          "samples": [
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245,
+            0.03325537550532245
+          ],
+          "uncertainty": 0.0,
+          "value": 0.03325537550532245
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.31622776601683794
+          },
+          "resistance_ohms": {
+            "uncertainty": 8.763560920082657e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.03035786553761644
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794,
+            0.31622776601683794
+          ],
+          "uncertainty": 0.0,
+          "value": 0.31622776601683794
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.31622776601683794,
+        "time_seconds": 34604.844,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442,
+            0.030357865537616442
+          ],
+          "uncertainty": 0.0,
+          "value": 0.03035786553761644
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.282842712474619
+          },
+          "resistance_ohms": {
+            "uncertainty": 9.797958971132712e-06,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.027152900397563424
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619,
+            0.282842712474619
+          ],
+          "uncertainty": 0.0,
+          "value": 0.282842712474619
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.282842712474619,
+        "time_seconds": 35597.204,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424,
+            0.027152900397563424
+          ],
+          "uncertainty": 0.0,
+          "value": 0.027152900397563424
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.2449489742783178
+          },
+          "resistance_ohms": {
+            "uncertainty": 1.131370849898476e-05,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.02351510153071851
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178,
+            0.2449489742783178
+          ],
+          "uncertainty": 0.0,
+          "value": 0.2449489742783178
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.2449489742783178,
+        "time_seconds": 36611.604,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851,
+            0.02351510153071851
+          ],
+          "uncertainty": 0.0,
+          "value": 0.02351510153071851
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.2
+          },
+          "resistance_ohms": {
+            "uncertainty": 1.3856406460551015e-05,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0192
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2
+          ],
+          "uncertainty": 0.0,
+          "value": 0.2
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.2,
+        "time_seconds": 37604.704,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002,
+            0.019200000000000002
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0192
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.1414213562373095
+          },
+          "resistance_ohms": {
+            "uncertainty": 1.9595917942265424e-05,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.013576450198781712
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095,
+            0.1414213562373095
+          ],
+          "uncertainty": 0.0,
+          "value": 0.1414213562373095
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.1414213562373095,
+        "time_seconds": 38600.804,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712,
+            0.013576450198781712
+          ],
+          "uncertainty": 0.0,
+          "value": 0.013576450198781712
+        },
+        "warnings": []
+      },
+      {
+        "analysis": {
+          "current_amps": {
+            "uncertainty": 2.886751345948129e-05,
+            "value": 0.1
+          },
+          "resistance_ohms": {
+            "uncertainty": 2.771281292110203e-05,
+            "value": 0.096
+          },
+          "voltage_volts": {
+            "uncertainty": 0.0,
+            "value": 0.0096
+          }
+        },
+        "current_amps": {
+          "samples": [
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1
+          ],
+          "uncertainty": 0.0,
+          "value": 0.1
+        },
+        "direction": "Down",
+        "settle_seconds": 4.0,
+        "setpoint_amps": 0.1,
+        "time_seconds": 39626.404,
+        "vertical_scale_volts_per_division": 0.01,
+        "voltage_volts": {
+          "samples": [
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001,
+            0.009600000000000001
+          ],
+          "uncertainty": 0.0,
+          "value": 0.0096
+        },
+        "warnings": []
+      }
+    ],
+    "step_amps_squared": 0.02
+  },
   "in_vacuum": false,
-  "started_at": 1791596423
+  "started_at": 1792383227
 }

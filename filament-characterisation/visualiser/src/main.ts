@@ -3,20 +3,34 @@
 import type { Characterisation } from './generated/characterisation.ts';
 import { poll, type PageState } from './data.ts';
 import * as coldResistance from './sections/cold-resistance.ts';
+import * as hotSweep from './sections/hot-sweep.ts';
 
-/**
- * Renders one part of the page from the results, or from `null` while there
- * are none, e.g. before the file exists.
- */
-type Section = (container: HTMLElement, characterisation: Characterisation | null) => void;
+/** One part of the page, under its own heading. */
+interface Section {
+  title: string;
+
+  /**
+   * Renders the part beneath the heading from the results, or from `null`
+   * while there are none, e.g. before the file exists.
+   */
+  render: (container: HTMLElement, characterisation: Characterisation | null) => void;
+}
 
 /** The page's sections, in order. */
-const SECTIONS: Section[] = [coldResistance.render];
+const SECTIONS: Section[] = [
+  { title: 'Cold resistance', render: coldResistance.render },
+  { title: 'Hot sweep', render: hotSweep.render },
+];
 
 const status = requireElement('#status');
 const main = requireElement('#sections');
 
-const containers = SECTIONS.map(() => main.appendChild(document.createElement('section')));
+// The heading stays put, and each render replaces what's beneath it.
+const containers = SECTIONS.map(({ title }) => {
+  const section = main.appendChild(document.createElement('section'));
+  section.appendChild(document.createElement('h2')).textContent = title;
+  return section.appendChild(document.createElement('div'));
+});
 
 poll((state) => {
   const message = statusMessage(state);
@@ -30,7 +44,7 @@ poll((state) => {
   }
 
   const characterisation = state.kind === 'loaded' ? state.characterisation : null;
-  SECTIONS.forEach((render, i) => render(containers[i], characterisation));
+  SECTIONS.forEach(({ render }, i) => render(containers[i], characterisation));
 });
 
 /** What the status line says in `state`, or `null` if it's hidden. */

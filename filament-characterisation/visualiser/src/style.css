@@ -12,3 +12,23 @@ body {
 #status {
   color: #b00020;
 }
+
+/* A section's heading, above its graphs. Plot titles each graph with an h2 of
+   its own, inside the graph's figure, so this only matches the section's. */
+section > h2 {
+  margin: 2rem 0 1rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #ddd;
+  font-size: 1.5rem;
+}
+
+figure h2 {
+  font-size: 1.1rem;
+}
+
+/* The caption beneath a section's graphs. */
+.caption {
+  max-width: 800px;
+  color: #555;
+  font-size: 0.875rem;
+}
