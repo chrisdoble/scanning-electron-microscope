@@ -115,9 +115,9 @@ Enable the output at 0 A. Then measure each setpoint going up, then each going d
 2. Set the vertical scale (see below).
 3. `wait_for_settle`, then `take_samples(SAMPLE_COUNT)`, as in the cold resistance. `wait_for_settle`'s quick resistances are V/I in one polarity, which is what the sweep measures anyway.
 4. Summarise the voltage and current with `summarise`.
-5. Record the point, with its direction, setpoint, scale, settle time and time, and save.
+5. Record the point, with its direction, setpoint, scale, settle time and time, and save. Then call `hot_sweep_point.py` (see "Analysis") with the point's voltage and current and its scale's offset. Record the analysis and save again, so the measurements survive an analysis that fails.
    - **The settle time** shows whether incomplete settling could be contributing to the up/down difference (see "Reading the results").
-   - **The time,** the midpoint of `take_samples`' window as for the cold resistance, records the sweep's timing. The mount's warming at each point depends on how long the sweep took to get there, so a run that went unusually slowly, and warmed the mount more, shows up. Then call `hot_sweep_point.py` (see "Analysis") with the point's voltage and current and its scale's offset. Record the analysis and save again, so the measurements survive an analysis that fails.
+   - **The time,** the midpoint of `take_samples`' window as for the cold resistance, records the sweep's timing. The mount's warming at each point depends on how long the sweep took to get there, so a run that went unusually slowly, and warmed the mount more, shows up.
 6. Show its resistance (e.g. "Resistance: 132.41 ± 0.02 mΩ") and its power, VI from the analysis (e.g. "Power: 41.2 mW").
 7. **On the way down,** also show the change since the same setpoint on the way up, e.g. "Change since the way up: +0.31 mΩ (+0.23%)". This is the number the operator watches. It's only a difference, so it's fine in Rust.
 
@@ -138,6 +138,8 @@ Enable the output at 0 A. Then measure each setpoint going up, then each going d
 
 `hot_sweep_point.py`, following the pattern of `cold_resistance_point.py` (`2_COLD_RESISTANCE.md`, 3.3). It reads a `HotSweepPointInput` on stdin and writes a `HotSweepPointAnalysis` on stdout, both defined in Rust with schemas generated from them (see "Results").
 
+**Shared code.** It needs `cold_resistance_point.py`'s `AnalysisError`, `current_uncertainty` and `derived`, and `cold_resistance_fit.py` already duplicates `AnalysisError` and `derived`. Rather than one script importing from another, move all three into a new `python/analysis.py`, beside `script_io.py`, and have all three analysis scripts import from it. `test_cold_resistance.py`'s quantisation-floor test calls `analysis.current_uncertainty`.
+
 **The input:**
 - `voltage_volts` and `current_amps`, the point's `Measurement`s;
 - `offset_voltage_volts`, the offset `Measurement` for the point's scale (3.1);
@@ -153,9 +155,9 @@ Enable the output at 0 A. Then measure each setpoint going up, then each going d
 
 **What the uncertainty covers.** Each point's uncertainty is statistical: the samples' scatter, the current's quantisation, and the offset reading's own uncertainty.
 
-**The scope's gain error isn't propagated anywhere.** It's common to every point on a scale, so it's systematic, and there's no fit or budget for it to join, as there is for the cold resistance (`2_COLD_RESISTANCE.md`, 3.4.3).
-- **The up/down difference at a setpoint isn't affected,** because both are measured on one scale, so the error cancels. That difference is the sweep's main output.
-- **Absolute values carry it:** each R has a systematic uncertainty of about 1.2% from its scale, and R/R₀ about 1.6%, since the cold and hot measurements use independent scales.
+**The systematic errors aren't propagated anywhere.** The scope's gain error is common to every point on a scale, and the supply's readback offset and gain errors are common to every point. There's no fit or budget for them to join, as there is for the cold resistance (`2_COLD_RESISTANCE.md`, 3.4).
+- **The up/down difference at a setpoint isn't affected,** because both are measured on one scale with the same supply, so the errors cancel. That difference is the sweep's main output.
+- **Absolute values carry them:** each R has a systematic uncertainty of about 1.2% from its scale's gain, and the readback offset adds about (5 mA / I)/√3, which is largest at low current: about 2.9% at 100 mA, and 0.5% at 600 mA.
 - **The curve's shape can step** by up to a few percent where the scale changes between adjacent setpoints.
 - **The visualiser's caption says this,** so the error bars aren't read as the whole uncertainty.
 
@@ -239,16 +241,24 @@ pub struct HotSweepPointAnalysis {
 
 ## Visualiser
 
-A new section, `sections/hot-sweep.ts`, after the cold resistance's in `main.ts`'s `SECTIONS`, following `sections/cold-resistance.ts`'s structure. It draws two graphs:
+A new section, `sections/hot-sweep.ts`, after the cold resistance's in `main.ts`'s `SECTIONS`, following `sections/cold-resistance.ts`'s structure.
 
-- **R against I²:**
-  - x from 0 to the maximum current squared, from `maximum_current_amps`, so points appear in place as they're measured;
+**Section headings.** With two sections, the page needs to say which graphs are which. `SECTIONS` becomes a list of `{ title, render }`, and `main.ts` draws each title as a heading, "Cold resistance" and "Hot sweep", with the section rendering into an element beneath it, so a render never touches its heading.
+
+**Shared helpers.** A new `src/shared.ts` holds what the sections share:
+- `withUncertainty`, moved from `sections/cold-resistance.ts`, with its tests moved to `test/shared.test.ts`;
+- `caption(document, text)`, a paragraph with the `caption` class, styled in `style.css`. Every section's caption is one of these, beneath its graphs, rather than Plot's own caption, so the cold resistance's single graph and the hot sweep's two have captions that look the same.
+
+The hot sweep draws two titled graphs:
+
+- **"Resistance against current squared":**
+  - x from 0 to a little past the maximum current squared, from `maximum_current_amps`, so points appear in place as they're measured;
   - y rescaled to the points, 1% beyond the outermost error bars, as the cold resistance's is.
-- **R against P,** with P = VI computed from each point's analysis, and both axes rescaled to the points.
+- **"Resistance against power,"** with P = VI computed from each point's analysis, in milliwatts. The x axis runs from 0 to a little past the largest power, and the y axis is shared with the other graph so they can be compared.
 
 **In both:**
 - **Up and down are two series,** with distinct colours and marker shapes and a legend, so the up/down difference reads at a glance.
-- **Error bars** are ±1 standard uncertainty in R. A caption says so, and that the scope's gain error isn't included.
+- **Error bars** are ±1 statistical standard uncertainty in R. One caption beneath both graphs says so, and that the scope's gain error and the supply's readback errors aren't included. Every section's caption is a paragraph made by `caption` in `shared.ts`, rather than Plot's own caption, so they all look the same.
 - **A point's tooltip** shows its setpoint, direction, R ± u, P, and scale.
 - **Points without an analysis** aren't plotted, as in the cold resistance section.
 
@@ -315,15 +325,11 @@ Each commit builds, and passes `cargo clippy --all-targets -- -D warnings`, `car
 2. **Setpoints.** `hot_sweep_setpoints` and its tests, and `MAXIMUM_HEATING_CURRENT_AMPS` raised to 3.0 A.
 3. **Analysis and results.**
    - The results types and `HotSweepPointInput`.
-   - `hot_sweep_point.py` and its tests.
+   - `hot_sweep_point.py` and its tests, and the shared `analysis.py`.
    - Regenerated schemas and visualiser types.
 4. **The procedure.**
    - `ProcedureError::Clipped`.
    - `take_offset_samples`.
    - The new section: setup, offsets, and the sweep with its display.
    - The end-to-end tests.
-5. **The visualiser.** `sections/hot-sweep.ts`, the recaptured and new fixtures, and its tests.
-6. **Docs.**
-   - `3_VISUALISER.md`: the new section.
-   - `1_ARCHITECTURE.md`: `ProcedureError::Clipped` in the list of procedure errors, and the `procedure/characterisation/` directory in the code layout.
-   - `2_COLD_RESISTANCE.md`: references to `characterisation.rs` become the file each item moved to.
+5. **The visualiser.** The section headings, `shared.ts`, `sections/hot-sweep.ts`, the recaptured and new fixtures, and their tests.
