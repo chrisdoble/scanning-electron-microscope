@@ -29,9 +29,16 @@ pub enum ProcedureError {
     #[error("cancelled")]
     Cancelled,
 
-    /// One of the procedure's own checks failed, e.g. a clipped reading.
+    /// One of the procedure's own checks failed, e.g. an overcurrent trip.
     #[error("check failed: {0}")]
     Check(String),
+
+    /// A reading clipped on the vertical scale in use.
+    ///
+    /// Separate from `Check` so that a measurement that can change the scale
+    /// can step it up and measure again. Anything else lets it end the run.
+    #[error("check failed: {0}")]
+    Clipped(String),
 
     #[error("hardware error: {0}")]
     Hardware(#[from] HardwareError),

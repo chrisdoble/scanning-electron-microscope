@@ -262,10 +262,6 @@ pub async fn cold_resistance_point(
 /// resistance and its uncertainty.
 ///
 /// Wraps `hot_sweep_point.py`.
-#[expect(
-    dead_code,
-    reason = "used by the hot sweep section, added in step 4 of 5_HOT_SWEEP.md"
-)]
 pub async fn hot_sweep_point(
     input: &HotSweepPointInput,
 ) -> Result<HotSweepPointAnalysis, PythonError> {

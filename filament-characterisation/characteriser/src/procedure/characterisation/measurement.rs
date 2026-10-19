@@ -237,7 +237,7 @@ pub(super) async fn read_unclipped(
 
 /// Takes one sample of the filament's voltage (the acquisition's average) and
 /// current, in that order, failing with `ProcedureError::Check` if anything
-/// is wrong.
+/// is wrong, or `ProcedureError::Clipped` if the voltage clipped.
 ///
 /// Checks the chamber first, and after the readings, that overcurrent
 /// protection hasn't tripped, that the supply is still in constant current, and
@@ -274,7 +274,7 @@ async fn sample(
 
     let Some(voltage) = unclipped_average(voltages, scale) else {
         error!("the filament voltage clipped: {:?}", voltages);
-        return Err(ProcedureError::Check(String::from(
+        return Err(ProcedureError::Clipped(String::from(
             "the filament voltage clipped; the scale must not change mid-run, so restart the run",
         )));
     };
@@ -303,6 +303,41 @@ pub(super) async fn take_samples(
         }
         let midpoint = window_start + (Instant::now() - window_start) / 2;
         Ok((voltages, currents, (midpoint - start).as_secs_f64()))
+    })
+    .await
+}
+
+/// Takes `n` readings of the filament's voltage on `scale` with no current
+/// flowing, e.g. with the output off, for the scope's offset.
+///
+/// Unlike `take_samples`, it doesn't read the current or check the supply,
+/// which isn't regulating. It still checks the chamber before each reading. A
+/// reading that clips with no current means something's wrong, so it fails with
+/// `ProcedureError::Check`.
+pub(super) async fn take_offset_samples(
+    ctx: &Context,
+    hardware: &Hardware,
+    scale: f64,
+    n: usize,
+) -> Result<Vec<f64>, ProcedureError> {
+    ctx.waiting(format!("Taking {} samples", n), || async {
+        let mut voltages = Vec::with_capacity(n);
+        for _ in 0..n {
+            check_conditions(ctx)?;
+            let readings = hardware.filament.get_filament_voltages().await?;
+            let Some(voltage) = unclipped_average(readings, scale) else {
+                error!(
+                    "the voltage clipped with no current on {} V/div: {:?}",
+                    scale, readings
+                );
+                return Err(ProcedureError::Check(format!(
+                    "the voltage clipped with no current on {} V/div",
+                    scale
+                )));
+            };
+            voltages.push(voltage);
+        }
+        Ok(voltages)
     })
     .await
 }

@@ -16,6 +16,7 @@ use crate::{
 };
 use cold_resistance::measure_cold_resistance;
 use host::power_supply::Polarity;
+use hot_sweep::measure_hot_sweep;
 
 /// Characterises a filament.
 ///
@@ -34,6 +35,10 @@ pub async fn characterise(ctx: Context, hardware: Hardware) -> Result<(), Proced
     }
     ctx.section("Measuring cold resistance", |ctx| {
         measure_cold_resistance(ctx, hardware.clone())
+    })
+    .await?;
+    ctx.section("Measuring hot sweep", |ctx| {
+        measure_hot_sweep(ctx, hardware.clone())
     })
     .await?;
     ctx.section("Finishing", |ctx| finish(ctx, hardware.clone()))
@@ -163,7 +168,7 @@ mod tests {
     use crate::{
         hardware::{self, MockFilamentSystem, MockVacuumSystem},
         procedure,
-        results::{Characterisation, ColdResistancePoint},
+        results::{Characterisation, ColdResistancePoint, HotSweepDirection},
         steps::{Section, StepKind},
     };
     use cold_resistance::REFERENCE_CURRENT_AMPS;
@@ -322,6 +327,66 @@ mod tests {
         );
     }
 
+    /// Checks the run read every scale's offset, measured every setpoint up and
+    /// back down, and found the mock filament's 0.096 Ω at each, which doesn't
+    /// change with current.
+    fn assert_measured_the_hot_sweep(ctx: &Context) {
+        let characterisation = ctx.characterisation.lock().unwrap();
+        let hot_sweep = characterisation.hot_sweep.as_ref().unwrap();
+
+        // The mock reads 0 V with the output off.
+        assert_eq!(hot_sweep.offsets.len(), 10);
+        assert!(
+            hot_sweep
+                .offsets
+                .iter()
+                .all(|offset| offset.voltage_volts.value == 0.0)
+        );
+
+        let (ups, downs): (Vec<_>, Vec<_>) = hot_sweep
+            .points
+            .iter()
+            .partition(|point| point.direction == HotSweepDirection::Up);
+        assert_eq!(ups.len(), 19);
+        assert_eq!(downs.len(), 18);
+
+        // Above about 333 mA the mock's voltage clips at 10 mV/div, so the
+        // scale steps up partway.
+        assert!(
+            ups.iter().any(|up| up.vertical_scale_volts_per_division
+                != ups[0].vertical_scale_volts_per_division)
+        );
+
+        // Each down point is on the same scale as the up point at its
+        // setpoint.
+        for down in &downs {
+            let up = ups
+                .iter()
+                .find(|up| up.setpoint_amps == down.setpoint_amps)
+                .unwrap();
+            assert_eq!(
+                down.vertical_scale_volts_per_division,
+                up.vertical_scale_volts_per_division
+            );
+        }
+
+        assert!(
+            hot_sweep
+                .points
+                .windows(2)
+                .all(|pair| pair[0].time_seconds < pair[1].time_seconds)
+        );
+        for point in &hot_sweep.points {
+            let resistance = point.analysis.as_ref().unwrap().resistance_ohms.value;
+            assert!(
+                (resistance - 0.096).abs() < 1e-9,
+                "expected 0.096 Ω at {} A, got {} Ω",
+                point.setpoint_amps,
+                resistance
+            );
+        }
+    }
+
     /// The titles of the top-level sections the run went through.
     fn section_titles(root: &Mutex<Section>) -> Vec<String> {
         root.lock()
@@ -339,6 +404,7 @@ mod tests {
     async fn the_procedure_measures_the_mock_filament() {
         let (ctx, root) = run_against_mocks(true, true).await;
         assert_measured_the_mock_filament(&ctx);
+        assert_measured_the_hot_sweep(&ctx);
         assert!(ctx.characterisation.lock().unwrap().in_vacuum);
 
         let titles = section_titles(&root);
@@ -350,6 +416,7 @@ mod tests {
     async fn the_procedure_can_leave_the_tmp_running() {
         let (ctx, root) = run_against_mocks(true, false).await;
         assert_measured_the_mock_filament(&ctx);
+        assert_measured_the_hot_sweep(&ctx);
 
         let titles = section_titles(&root);
         assert!(!titles.iter().any(|title| title == "Spinning down TMP"));
@@ -365,6 +432,7 @@ mod tests {
     async fn the_procedure_measures_the_mock_filament_without_vacuum() {
         let (ctx, root) = run_against_mocks(false, true).await;
         assert_measured_the_mock_filament(&ctx);
+        assert_measured_the_hot_sweep(&ctx);
         assert!(!ctx.characterisation.lock().unwrap().in_vacuum);
 
         let titles = section_titles(&root);
