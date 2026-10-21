@@ -276,12 +276,6 @@ impl Oscilloscope {
 
         let state = self.state.lock().await;
 
-        // Set the vertical scale.
-        state
-            .device
-            .write_str(format!(":CHANnel1:SCALe {}", scale).as_str())
-            .await?;
-
         // Clone the handle so `poll`'s futures own it rather than borrowing the
         // guard (see `poll`). Clones of a `UsbTmcDevice` share the same device
         // and serialise against each other, and the guard is still held, so the
@@ -289,10 +283,17 @@ impl Oscilloscope {
         let device = state.device.clone();
 
         // The scope takes a moment to apply the new scale, so read it back
-        // until it's the value we set.
+        // until it's the value we set. The scale is sent on every attempt, not
+        // just the first, because the scope clamps a big step down without
+        // reporting an error, whether it's running or stopped: going from
+        // 10 V/div to 0.01 V/div gave 0.156 V/div. Sent again, it steps down
+        // from the clamped scale and lands on the one we asked for.
         poll(move || {
             let device = device.clone();
             async move {
+                device
+                    .write_str(format!(":CHANnel1:SCALe {}", scale).as_str())
+                    .await?;
                 let f: f64 = device.query_str(":CHANnel1:SCALe?").await?.trim().parse()?;
 
                 Ok(if f == scale {

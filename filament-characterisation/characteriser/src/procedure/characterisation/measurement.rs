@@ -273,9 +273,12 @@ async fn sample(
     }
 
     let Some(voltage) = unclipped_average(voltages, scale) else {
-        error!("the filament voltage clipped: {:?}", voltages);
-        return Err(ProcedureError::Clipped(String::from(
-            "the filament voltage clipped; the scale must not change mid-run, so restart the run",
+        // Not necessarily an error: the hot sweep steps the scale up and
+        // measures again.
+        info!("the filament voltage clipped: {:?}", voltages);
+        return Err(ProcedureError::Clipped(format!(
+            "the filament voltage clipped at {} V/div",
+            scale
         )));
     };
 
