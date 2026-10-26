@@ -3,15 +3,17 @@
 //! `filament-characterisation/docs/5_HOT_SWEEP.md`.
 
 use super::measurement::{
-    CURRENT_READBACK_RESOLUTION_AMPS, SAMPLE_COUNT, SETPOINT_APPLY_TIME, Settle, ramp_to,
-    read_unclipped, summarise, take_offset_samples, take_samples, wait_for_settle,
+    CURRENT_READBACK_RESOLUTION_AMPS, SAMPLE_COUNT, Settle, ramp_to, read_unclipped, summarise,
+    take_offset_samples, take_samples, wait_for_settle,
 };
 use crate::{
     hardware::Hardware,
     procedure::{Context, ProcedureError},
     python::{self, HotSweepPointInput},
     results::{HotSweep, HotSweepDirection, HotSweepOffset, HotSweepPoint, Measurement},
-    sampling::{OVERCURRENT_PROTECTION_MARGIN_AMPS, VERTICAL_SCALES_VOLTS_PER_DIVISION},
+    sampling::{
+        OVERCURRENT_PROTECTION_MARGIN_AMPS, SETPOINT_APPLY_TIME, VERTICAL_SCALES_VOLTS_PER_DIVISION,
+    },
 };
 use host::power_supply::Polarity;
 use log::*;

@@ -26,6 +26,16 @@ pub const OVERCURRENT_PROTECTION_MARGIN_AMPS: f64 = 0.05;
 /// How long the output stays off while the polarity relays move.
 pub const RELAY_SETTLE_TIME: Duration = Duration::from_millis(50);
 
+/// How long to wait after changing the setpoint, or re-enabling the output,
+/// before a single reading is taken as being at the new current.
+///
+/// The supply has been seen to take about 0.6 s to apply a setpoint change
+/// (see "Appendix: the supply's current readback" in
+/// `filament-characterisation/docs/2_COLD_RESISTANCE.md`).
+/// The characteriser's `wait_for_settle` doesn't need this, because it
+/// compares seconds of readings.
+pub const SETPOINT_APPLY_TIME: Duration = Duration::from_secs(1);
+
 /// The oscilloscope's vertical scales in volts per division, smallest first.
 ///
 /// Starts at 10 mV/div, because the ±1% gain spec is only "typical" at 5 mV/div

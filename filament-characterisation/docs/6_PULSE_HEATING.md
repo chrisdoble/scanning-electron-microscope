@@ -60,7 +60,7 @@ The characteriser is currently a single binary: every module is declared in `mai
 
 - **`src/lib.rs`** declares `constants`, `hardware`, `python` and `results`, which don't depend on the UI or the procedure.
 - **`build_hardware`** moves from `main.rs` into `hardware`, so both binaries build the hardware from the same connection options (only the characteriser keeps its mock mode):
-  - `--device-path`, `--adc-gauge-number` and `--tmp-address`, for the controller, the gauge and the TMP.
+  - the device path, the ADC gauge number and the TMP address, positional arguments in both, for the controller, the gauge and the TMP.
 - **`src/main.rs`** keeps `app`, `procedure`, `steps`, `style` and `ui` as its own modules, and uses the rest from the library.
 - **`src/bin/pulse.rs`** is the new binary, in one file unless it grows.
 
@@ -84,16 +84,16 @@ A new top-level type, `PulseRun`, defined in `src/bin/pulse.rs` rather than in t
 ## The binary's arguments
 
 ```
-pulse --filament-id 1 --current 2.0 --duration 5 [--maximum-energy 10] --device-path … --adc-gauge-number … --tmp-address …
+pulse <DEVICE_PATH> <ADC_GAUGE_NUMBER> <TMP_ADDRESS> --filament-id 1 --current 2.0 --duration 5 [--maximum-energy 10]
 ```
 
-| Argument                                               | Meaning                                                           | Default  | Limits                                                        |
-| ------------------------------------------------------ | ----------------------------------------------------------------- | -------- | ------------------------------------------------------------- |
-| `--filament-id`                                        | Recorded in the results                                           | required |                                                               |
-| `--current`                                            | The pulse current, in A                                           | required | above the probe current, at most `MAXIMUM_PULSE_CURRENT_AMPS` |
-| `--duration`                                           | How long the pulse is held, in s                                  | required | more than 0, at most `MAXIMUM_PULSE_DURATION`                 |
-| `--maximum-energy`                                     | Ends the pulse early once it has delivered this much energy, in J | none     | more than 0                                                   |
-| `--device-path`, `--adc-gauge-number`, `--tmp-address` | As for the characteriser                                          |          |                                                               |
+| Argument                                         | Meaning                                                           | Default  | Limits                                                               |
+| ------------------------------------------------ | ----------------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
+| `--filament-id`                                  | Recorded in the results                                           | required |                                                                      |
+| `--current`                                      | The pulse current, in A                                           | required | above the probe current, at most `POWER_SUPPLY_MAXIMUM_CURRENT_AMPS` |
+| `--duration`                                     | How long the pulse is held, in s                                  | required | more than 0, at most `MAXIMUM_PULSE_DURATION`                        |
+| `--maximum-energy`                               | Ends the pulse early once it has delivered this much energy, in J | none     | more than 0                                                          |
+| `DEVICE_PATH`, `ADC_GAUGE_NUMBER`, `TMP_ADDRESS` | Positional, as for the characteriser                              |          |                                                                      |
 
 Out-of-range arguments are rejected before anything is powered.
 
@@ -101,7 +101,6 @@ Out-of-range arguments are rejected before anything is powered.
 
 | Constant                                 | Value  | Why                                                                                                                                                                                                                                                                                                     |
 | ---------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MAXIMUM_PULSE_CURRENT_AMPS`             | 3.0    | The supply's maximum. The real limit is the operator's step-by-step plan (see "Using it safely").                                                                                                                                                                                                       |
 | `MAXIMUM_PULSE_DURATION`                 | 10 s   | Longer than filming needs. A pulse this long at incandescent currents would put tens of joules into the mount.                                                                                                                                                                                          |
 | `PULSE_VOLTAGE_LIMIT_VOLTS`              | 5.0    | Bounds the pulse's power, and sets the scope's scale (see "The pulse"). Above what 3 A needs unless the hot resistance exceeds 1.7 Ω. To be revisited once the hot resistance is measured.                                                                                                              |
 | `PROBE_CURRENT_AMPS`                     | 0.1    | Keeps the probe's own warming negligible (see "Why 100 mA").                                                                                                                                                                                                                                            |

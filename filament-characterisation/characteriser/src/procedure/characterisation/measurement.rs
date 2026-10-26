@@ -36,16 +36,6 @@ const RAMP_STEP_AMPS: f64 = 0.005;
 /// How long `ramp_to` waits between steps.
 const RAMP_STEP_INTERVAL: Duration = Duration::from_millis(100);
 
-/// How long to wait after changing the setpoint, or re-enabling the output,
-/// before a single reading is taken as being at the new current.
-///
-/// The supply has been seen to take about 0.6 s to apply a setpoint change
-/// (see "Appendix: the supply's current readback" in
-/// `filament-characterisation/docs/2_COLD_RESISTANCE.md`).
-/// `wait_for_settle` doesn't need this, because it compares seconds of
-/// readings.
-pub(super) const SETPOINT_APPLY_TIME: Duration = Duration::from_secs(1);
-
 /// How many samples each measured quantity is summarised from.
 pub(super) const SAMPLE_COUNT: usize = 20;
 

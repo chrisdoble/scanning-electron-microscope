@@ -10,18 +10,21 @@ pub const FILAMENT_ABORT_PRESSURE_MBAR: f64 = 5e-5;
 /// An arbitrary but comfortable threshold.
 pub const FILAMENT_OPERATING_PRESSURE_MBAR: f64 = 1e-5;
 
-/// The maximum heating current the filament may be driven with in amperes.
+/// The power supply's maximum current in amperes: the Rigol DP-932E's maximum
+/// per channel.
 ///
-/// The Rigol DP-932E's maximum per channel, so this only guards against asking
-/// for something the supply can't do. The limit that matters for the filament
-/// is the hot sweep's maximum.
-pub const MAXIMUM_HEATING_CURRENT_AMPS: f64 = 3.0;
+/// The filament is never driven above it, but it only guards against asking
+/// for something the supply can't do. The limits that matter for the filament
+/// are the hot sweep's maximum and, for the pulse binary, the operator's
+/// step-by-step plan.
+pub const POWER_SUPPLY_MAXIMUM_CURRENT_AMPS: f64 = 3.0;
 
-/// The maximum voltage limit the filament channel may be set to in volts.
+/// The power supply's maximum voltage in volts: the DP-932E's channels 1 and 2
+/// go to 30 V.
 ///
-/// A general ceiling: the DP-932E's channels 1 and 2 go to 30 V. Each
-/// measurement sets its own, much lower, limit.
-pub const MAXIMUM_HEATING_VOLTAGE_VOLTS: f64 = 30.0;
+/// The filament channel's voltage limit is never set above it, but it's only a
+/// general ceiling. Each measurement sets its own, much lower, limit.
+pub const POWER_SUPPLY_MAXIMUM_VOLTAGE_VOLTS: f64 = 30.0;
 
 /// The maximum backing pressure supported by the TMP in mbar.
 ///

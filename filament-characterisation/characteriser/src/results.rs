@@ -446,11 +446,7 @@ impl Characterisation {
         PathBuf::from(format!("out/characterisation-{}.json", self.started_at))
     }
 
-    /// Writes the results to `path()`.
-    ///
-    /// Writes to a temporary file and renames it over the real one, so killing
-    /// the program can't leave a half-written file behind — a rename within one
-    /// directory is atomic. The directory is created if it doesn't exist.
+    /// Writes the results to `path()`, with `save_json`.
     pub fn save(&self) -> Result<(), ResultsError> {
         self.save_to(&self.path())
     }
@@ -460,39 +456,48 @@ impl Characterisation {
     /// Separate from `save` so the tests can write somewhere other than `out/`:
     /// they run in parallel, all start in the same second, and would otherwise
     /// share one file there.
-    ///
-    /// The `fs` calls are made inline rather than in `spawn_blocking`: the file
-    /// is small, and this matches the vacuum control binary.
     fn save_to(&self, path: &Path) -> Result<(), ResultsError> {
-        let json = serde_json::to_string_pretty(self).inspect_err(|e| {
-            error!("couldn't serialise the results: {}", e);
-        })?;
-
-        let io_error = |path: &Path| {
-            let path = path.to_path_buf();
-            move |source: std::io::Error| {
-                error!(
-                    "couldn't write the results to {}: {}",
-                    path.display(),
-                    source
-                );
-                ResultsError::Io { path, source }
-            }
-        };
-
-        if let Some(directory) = path.parent() {
-            fs::create_dir_all(directory).map_err(io_error(directory))?;
-        }
-
-        let mut temporary = path.as_os_str().to_owned();
-        temporary.push("_new");
-        let temporary = PathBuf::from(temporary);
-
-        fs::write(&temporary, json).map_err(io_error(&temporary))?;
-        fs::rename(&temporary, path).map_err(io_error(path))?;
-
-        Ok(())
+        save_json(self, path)
     }
+}
+
+/// Writes `value` to `path` as pretty-printed JSON.
+///
+/// Writes to a temporary file and renames it over the real one, so killing the
+/// program can't leave a half-written file behind — a rename within one
+/// directory is atomic. The directory is created if it doesn't exist.
+///
+/// The `fs` calls are made inline rather than in `spawn_blocking`: the file is
+/// small, and this matches the vacuum control binary.
+pub fn save_json<T: Serialize>(value: &T, path: &Path) -> Result<(), ResultsError> {
+    let json = serde_json::to_string_pretty(value).inspect_err(|e| {
+        error!("couldn't serialise the results: {}", e);
+    })?;
+
+    let io_error = |path: &Path| {
+        let path = path.to_path_buf();
+        move |source: std::io::Error| {
+            error!(
+                "couldn't write the results to {}: {}",
+                path.display(),
+                source
+            );
+            ResultsError::Io { path, source }
+        }
+    };
+
+    if let Some(directory) = path.parent() {
+        fs::create_dir_all(directory).map_err(io_error(directory))?;
+    }
+
+    let mut temporary = path.as_os_str().to_owned();
+    temporary.push("_new");
+    let temporary = PathBuf::from(temporary);
+
+    fs::write(&temporary, json).map_err(io_error(&temporary))?;
+    fs::rename(&temporary, path).map_err(io_error(path))?;
+
+    Ok(())
 }
 
 #[cfg(test)]

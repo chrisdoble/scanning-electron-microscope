@@ -158,7 +158,7 @@ pub trait FilamentSystem: std::fmt::Debug + Send + Sync {
 
     /// Sets the channel's current limit in amperes.
     ///
-    /// Must be rejected above `MAXIMUM_HEATING_CURRENT_AMPS`.
+    /// Must be rejected above `POWER_SUPPLY_MAXIMUM_CURRENT_AMPS`.
     async fn set_heating_current_limit(&self, current: f64) -> Result<(), HardwareError>;
 
     /// Enables the supply's overcurrent protection at `current` amperes, as a
@@ -171,7 +171,7 @@ pub trait FilamentSystem: std::fmt::Debug + Send + Sync {
     /// limit above what the current needs, the current limit is what binds and
     /// the channel runs in constant current.
     ///
-    /// Must be rejected above `MAXIMUM_HEATING_VOLTAGE_VOLTS`.
+    /// Must be rejected above `POWER_SUPPLY_MAXIMUM_VOLTAGE_VOLTS`.
     async fn set_heating_voltage_limit(&self, voltage: f64) -> Result<(), HardwareError>;
 
     /// Enables or disables the output.
