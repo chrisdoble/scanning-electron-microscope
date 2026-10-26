@@ -1,22 +1,18 @@
 mod app;
-mod constants;
-mod hardware;
 mod procedure;
-mod python;
-mod results;
 mod steps;
 mod style;
 mod ui;
+
+// Shared with the other binaries through the library. Imported at the root so
+// the modules here can keep referring to them as `crate::hardware` and so on.
+use characteriser::{constants, hardware, python, results, sampling};
 
 use app::{App, AppEvent, Shutdown};
 use clap::Parser;
 use env_logger::{Builder, Target};
 use futures::FutureExt;
-use hardware::{
-    Hardware, HardwareError, MockFilamentSystem, MockVacuumSystem, RealFilamentSystem,
-    RealVacuumSystem,
-};
-use host::controller::Controller;
+use hardware::{Hardware, HardwareError, MockFilamentSystem, MockVacuumSystem};
 use log::*;
 use procedure::Context;
 use results::Characterisation;
@@ -303,26 +299,12 @@ async fn build_hardware(args: &Arguments) -> Result<Hardware, HardwareError> {
 
     // Present because clap's `required_unless_present = "mock"` on each makes
     // them so, and this branch is only reached without `--mock`.
-    let device_path = args.device_path.as_deref().expect("missing device path");
-    let adc_gauge_number = args.adc_gauge_number.expect("missing ADC gauge number");
-    let tmp_address = args.tmp_address.as_deref().expect("missing TMP address");
-
-    // One controller, shared by the ADC, the TMP and the polarity relays.
-    let controller = Arc::new(Controller::new(device_path).map_err(|source| {
-        error!(
-            "failed to open the controller at {}: {}",
-            device_path, source
-        );
-        HardwareError::Controller {
-            path: device_path.to_string(),
-            source,
-        }
-    })?);
-
-    Ok(Hardware {
-        filament: Arc::new(RealFilamentSystem::new(Arc::clone(&controller)).await?),
-        vacuum: Arc::new(RealVacuumSystem::new(controller, adc_gauge_number, tmp_address).await?),
-    })
+    hardware::build_hardware(
+        args.device_path.as_deref().expect("missing device path"),
+        args.adc_gauge_number.expect("missing ADC gauge number"),
+        args.tmp_address.as_deref().expect("missing TMP address"),
+    )
+    .await
 }
 
 /// Initialise `env_logger` to log to `out/app.log`.

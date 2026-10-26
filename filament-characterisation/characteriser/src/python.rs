@@ -18,7 +18,13 @@ use crate::results::{
 use log::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::{io::ErrorKind, path::Path, process::Stdio, time::Duration};
+use std::{
+    io::ErrorKind,
+    path::Path,
+    process::Stdio,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 use thiserror::Error;
 use tokio::{io::AsyncWriteExt, process::Command};
 
@@ -35,6 +41,10 @@ const PYTHON_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/python");
 /// two orders of magnitude more than anything here should need. It's only here
 /// to stop a process that hangs from hanging the application with it.
 const PYTHON_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Whether scripts are given `PYTHON_TIMEOUT`. Only `disable_timeout` turns it
+/// off.
+static TIMEOUT_ENABLED: AtomicBool = AtomicBool::new(true);
 
 /// The commands that create the virtual environment, run from the crate
 /// directory.
@@ -331,6 +341,17 @@ pub async fn run_script<I: Serialize, O: DeserializeOwned>(
     })
 }
 
+/// Stops scripts being given `PYTHON_TIMEOUT`, for the rest of the process.
+///
+/// For tests on a paused clock. Tokio jumps a paused clock forward to the next
+/// timer whenever every task is waiting, including on a script, so the timeout
+/// would fire straight away. It's a switch rather than `cfg(test)` because the
+/// binaries' tests use this module through the library, which isn't built for
+/// tests.
+pub fn disable_timeout() {
+    TIMEOUT_ENABLED.store(false, Ordering::Relaxed);
+}
+
 /// Runs `interpreter` with `args`, writing `input` to its stdin and capturing
 /// its output.
 ///
@@ -368,13 +389,11 @@ async fn run(
         child.wait_with_output().await
     };
 
-    // No timeout in tests, which run on a paused clock. Tokio jumps a paused
-    // clock forward to the next timer whenever every task is waiting, including
-    // on a script, so the timeout would fire straight away.
-    #[cfg(test)]
-    let result = Ok::<_, tokio::time::error::Elapsed>(child.await);
-    #[cfg(not(test))]
-    let result = tokio::time::timeout(PYTHON_TIMEOUT, child).await;
+    let result = if TIMEOUT_ENABLED.load(Ordering::Relaxed) {
+        tokio::time::timeout(PYTHON_TIMEOUT, child).await
+    } else {
+        Ok(child.await)
+    };
 
     match result {
         Ok(Ok(output)) => Ok(output),

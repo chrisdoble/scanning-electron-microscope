@@ -167,7 +167,7 @@ mod tests {
     use super::*;
     use crate::{
         hardware::{self, MockFilamentSystem, MockVacuumSystem},
-        procedure,
+        procedure, python,
         results::{Characterisation, ColdResistancePoint, HotSweepDirection},
         steps::{Section, StepKind},
     };
@@ -224,6 +224,8 @@ mod tests {
     /// settles instead of waiting minutes for them. Needs the Python virtual
     /// environment, for the analysis scripts.
     async fn run_against_mocks(in_vacuum: bool, spin_down: bool) -> (Context, Arc<Mutex<Section>>) {
+        python::disable_timeout();
+
         let hardware = Hardware {
             filament: Arc::new(MockFilamentSystem::default()),
             vacuum: Arc::new(MockVacuumSystem::default()),

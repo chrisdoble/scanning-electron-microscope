@@ -9,6 +9,7 @@ pub use real::{RealFilamentSystem, RealVacuumSystem};
 use async_trait::async_trait;
 use host::{
     adc::{AdcError, Pressure},
+    controller::Controller,
     oscilloscope::{OscilloscopeError, Voltages},
     power_supply::{Polarity, PowerSupplyError, RegulationMode},
     tmp::TmpError,
@@ -232,6 +233,34 @@ pub trait VacuumSystem: std::fmt::Debug + Send + Sync {
 pub struct Hardware {
     pub filament: Arc<dyn FilamentSystem>,
     pub vacuum: Arc<dyn VacuumSystem>,
+}
+
+/// Builds the real hardware, from how to reach it: the path to the controller
+/// device, the gauge number to use with the ADC, and the TMP's address.
+///
+/// Mocks are built directly by whoever wants them, since only the
+/// characteriser has a mock mode.
+pub async fn build_hardware(
+    device_path: &str,
+    adc_gauge_number: u8,
+    tmp_address: &str,
+) -> Result<Hardware, HardwareError> {
+    // One controller, shared by the ADC, the TMP and the polarity relays.
+    let controller = Arc::new(Controller::new(device_path).map_err(|source| {
+        error!(
+            "failed to open the controller at {}: {}",
+            device_path, source
+        );
+        HardwareError::Controller {
+            path: device_path.to_string(),
+            source,
+        }
+    })?);
+
+    Ok(Hardware {
+        filament: Arc::new(RealFilamentSystem::new(Arc::clone(&controller)).await?),
+        vacuum: Arc::new(RealVacuumSystem::new(controller, adc_gauge_number, tmp_address).await?),
+    })
 }
 
 /// Polls the hardware every `POLL_INTERVAL` and publishes what it reads.

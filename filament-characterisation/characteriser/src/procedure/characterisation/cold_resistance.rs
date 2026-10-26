@@ -4,15 +4,15 @@
 //! `filament-characterisation/docs/4_TEMPERATURE_COMPENSATION.md`.
 
 use super::measurement::{
-    CURRENT_READBACK_RESOLUTION_AMPS, OVERCURRENT_PROTECTION_MARGIN_AMPS, SAMPLE_COUNT,
-    SETPOINT_APPLY_TIME, Settle, VERTICAL_SCALES_VOLTS_PER_DIVISION, change_polarity, ramp_to,
-    read_unclipped, summarise, take_samples, wait_for_settle,
+    CURRENT_READBACK_RESOLUTION_AMPS, SAMPLE_COUNT, SETPOINT_APPLY_TIME, Settle, change_polarity,
+    ramp_to, read_unclipped, summarise, take_samples, wait_for_settle,
 };
 use crate::{
     hardware::Hardware,
     procedure::{Context, ProcedureError},
     python::{self, ColdResistanceFitInput, ColdResistanceFitPoint, ColdResistancePointInput},
     results::{ColdResistance, ColdResistanceFitParameters, ColdResistancePoint, Measurement},
+    sampling::{OVERCURRENT_PROTECTION_MARGIN_AMPS, VERTICAL_SCALES_VOLTS_PER_DIVISION},
 };
 use host::power_supply::Polarity;
 use log::*;

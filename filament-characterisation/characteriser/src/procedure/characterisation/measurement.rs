@@ -1,6 +1,7 @@
 //! What every measurement in the procedure uses: ramping, changing the
 //! polarity, sampling, settling and choosing a vertical scale, with the
-//! constants they use.
+//! constants they use. The parts that don't need a `Context` are in
+//! `sampling`, so binaries without the terminal UI can use them too.
 
 use crate::{
     constants::FILAMENT_ABORT_PRESSURE_MBAR,
@@ -8,38 +9,21 @@ use crate::{
     procedure::{Context, ProcedureError},
     python,
     results::Measurement,
+    sampling::{
+        RELAY_SETTLE_TIME, VERTICAL_SCALES_VOLTS_PER_DIVISION, mean_and_standard_error,
+        unclipped_average,
+    },
 };
-use host::{
-    oscilloscope::Voltages,
-    power_supply::{Polarity, RegulationMode},
-};
+use host::power_supply::{Polarity, RegulationMode};
 use log::*;
 use std::time::Duration;
 use tokio::time::Instant;
-
-/// A reading counts as clipped if the voltage's peak is more than this
-/// fraction of the way to the edge of the screen (4 divisions from the
-/// centre).
-///
-/// The scale is chosen once, then fixed, and later readings are bigger: the
-/// filament's resistance keeps rising as it settles, a later window can catch a
-/// larger noise peak, and offsets drift. Without margin, a scale that only just
-/// fits would clip mid-run and abort it. The margin costs almost nothing,
-/// because the gain uncertainty doesn't depend on the scale.
-const CLIPPING_HEADROOM: f64 = 0.8;
 
 /// The supply's current readback resolution in amperes, with the HIRES option.
 pub(super) const CURRENT_READBACK_RESOLUTION_AMPS: f64 = 1e-4;
 
 /// How long `wait_for_settle` waits before giving up and carrying on.
 const MAXIMUM_SETTLE_TIME: Duration = Duration::from_secs(60);
-
-/// How far above the largest setpoint the supply's overcurrent protection is
-/// set, in amperes, as a hardware backstop.
-///
-/// Its 10 ms delay should ride out any overshoot when the output is re-enabled
-/// at a setpoint. If it trips anyway, widen this or lengthen the delay.
-pub(super) const OVERCURRENT_PROTECTION_MARGIN_AMPS: f64 = 0.05;
 
 /// How far `ramp_to` moves the current at each step in amperes.
 ///
@@ -51,9 +35,6 @@ const RAMP_STEP_AMPS: f64 = 0.005;
 
 /// How long `ramp_to` waits between steps.
 const RAMP_STEP_INTERVAL: Duration = Duration::from_millis(100);
-
-/// How long the output stays off while the polarity relays move.
-const RELAY_SETTLE_TIME: Duration = Duration::from_millis(50);
 
 /// How long to wait after changing the setpoint, or re-enabling the output,
 /// before a single reading is taken as being at the new current.
@@ -80,13 +61,6 @@ const SETTLE_TOLERANCE: f64 = 2e-4;
 /// The length of each of the two windows `wait_for_settle` compares. The
 /// earliest possible settle is twice this.
 const SETTLE_WINDOW: Duration = Duration::from_secs(2);
-
-/// The oscilloscope's vertical scales in volts per division, smallest first.
-///
-/// Starts at 10 mV/div, because the ±1% gain spec is only "typical" at 5 mV/div
-/// and below.
-pub(super) const VERTICAL_SCALES_VOLTS_PER_DIVISION: [f64; 10] =
-    [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0];
 
 /// How `wait_for_settle` finished, and after how long.
 pub(super) enum Settle {
@@ -145,19 +119,6 @@ fn check_conditions(ctx: &Context) -> Result<(), ProcedureError> {
     }
 
     Ok(())
-}
-
-/// The mean and standard error of `values`, or `None` if there are fewer than
-/// two.
-fn mean_and_standard_error(values: &[f64]) -> Option<(f64, f64)> {
-    if values.len() < 2 {
-        return None;
-    }
-
-    let n = values.len() as f64;
-    let mean = values.iter().sum::<f64>() / n;
-    let variance = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n - 1.0);
-    Some((mean, (variance / n).sqrt()))
 }
 
 /// Ramps the current from its present setpoint to `to` in steps of
@@ -345,21 +306,6 @@ pub(super) async fn take_offset_samples(
     .await
 }
 
-/// The average of `voltages`, or `None` if it's clipped on `scale`: if any
-/// value is invalid, or the peak is beyond `CLIPPING_HEADROOM` of the way to
-/// the edge of the screen.
-fn unclipped_average(voltages: Voltages, scale: f64) -> Option<f64> {
-    let limit = CLIPPING_HEADROOM * 4.0 * scale;
-    match voltages {
-        Voltages {
-            average: Some(average),
-            maximum: Some(maximum),
-            minimum: Some(minimum),
-        } if maximum.abs().max(minimum.abs()) <= limit => Some(average),
-        _ => None,
-    }
-}
-
 /// Samples until the filament's resistance stops changing, or until
 /// `MAXIMUM_SETTLE_TIME`, without recording the samples.
 ///
@@ -442,45 +388,6 @@ mod tests {
     use super::*;
     use crate::hardware::{MockFilamentSystem, MockVacuumSystem};
     use std::sync::Arc;
-
-    // A reading is clipped if any value is invalid or its peak is past the
-    // headroom, even when the average is fine.
-    #[test]
-    fn unclipped_average_rejects_any_clipped_value() {
-        let scale = 0.01;
-        let limit = CLIPPING_HEADROOM * 4.0 * scale;
-        let voltages = |maximum, minimum| Voltages {
-            average: Some(0.001),
-            maximum,
-            minimum,
-        };
-
-        assert_eq!(
-            unclipped_average(voltages(Some(limit), Some(-limit)), scale),
-            Some(0.001)
-        );
-        assert_eq!(
-            unclipped_average(voltages(Some(limit * 1.01), Some(0.0)), scale),
-            None
-        );
-        assert_eq!(
-            unclipped_average(voltages(Some(0.0), Some(-limit * 1.01)), scale),
-            None
-        );
-        assert_eq!(unclipped_average(voltages(None, Some(0.0)), scale), None);
-        assert_eq!(unclipped_average(voltages(Some(0.0), None), scale), None);
-        assert_eq!(
-            unclipped_average(
-                Voltages {
-                    average: None,
-                    maximum: Some(0.0),
-                    minimum: Some(0.0),
-                },
-                scale
-            ),
-            None
-        );
-    }
 
     #[test]
     fn ramp_steps_end_exactly_on_the_target() {
