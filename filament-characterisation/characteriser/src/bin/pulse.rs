@@ -11,8 +11,8 @@ use characteriser::{
     python,
     results::save_json,
     sampling::{
-        CLIPPING_HEADROOM, OVERCURRENT_PROTECTION_MARGIN_AMPS, SETPOINT_APPLY_TIME,
-        VERTICAL_SCALES_VOLTS_PER_DIVISION, unclipped_average,
+        CLIPPING_HEADROOM, OVERCURRENT_PROTECTION_MARGIN_AMPS, RELAY_SETTLE_TIME,
+        SETPOINT_APPLY_TIME, VERTICAL_SCALES_VOLTS_PER_DIVISION, unclipped_average,
     },
 };
 use clap::Parser;
@@ -74,8 +74,13 @@ const BASELINE_MAXIMUM_SLOPE_OHMS_PER_SECOND: f64 = 3e-6;
 /// How long making the filament safe may take before it's given up on.
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// How often the baseline and the cool-down print their progress.
-const PROGRESS_INTERVAL: Duration = Duration::from_secs(10);
+/// How long the probe stays in each polarity before switching.
+///
+/// The offset that reversal cancels follows the clamp's temperature, which
+/// changes over minutes, so over 10 s it should move by a few µV at most. About
+/// 6 reversals in the baseline and 60 in the cool-down, and about 20 samples
+/// per block once `SETPOINT_APPLY_TIME` has passed.
+const REVERSAL_BLOCK_DURATION: Duration = Duration::from_secs(10);
 
 /// A current readback below this, in amperes, with the supply out of constant
 /// current, is taken to mean the circuit is open.
@@ -267,20 +272,23 @@ struct Scales {
 struct ProbeSample {
     current_amps: f64,
 
-    /// Always forward for now: the probe doesn't reverse yet.
     polarity: Polarity,
 
     /// When the sample finished, in seconds since the run started.
     time_seconds: f64,
 
+    /// Negative in the reverse polarity.
     voltage_volts: f64,
 }
 
-impl ProbeSample {
-    /// $V/I$. Negative in the reverse polarity.
-    fn resistance(&self) -> f64 {
-        self.voltage_volts / self.current_amps
-    }
+/// A probe resistance from a neighbouring pair of blocks, one in each polarity.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ProbeResistance {
+    resistance_ohms: f64,
+
+    /// The midpoint of the two blocks' mean times, in seconds since the run
+    /// started.
+    time_seconds: f64,
 }
 
 /// The pulse: its samples, and when and how it started and ended.
@@ -446,6 +454,7 @@ async fn sequence(
 
     let probe_scale = choose_probe_scale(filament).await?;
     pulse_run.scales.probe = Some(probe_scale);
+    let mut polarity = Polarity::Forward;
 
     // 2. Baseline.
     println!(
@@ -458,20 +467,25 @@ async fn sequence(
         probe_scale,
         BASELINE_DURATION,
         start,
+        &mut polarity,
         &mut pulse_run.baseline,
-        |samples| {
-            let mean = mean(samples.iter().map(ProbeSample::resistance));
-            println!(
-                "  {:>3.0} s: mean resistance so far {:.3} mΩ",
-                baseline_start.elapsed().as_secs_f64(),
-                mean * 1e3
-            );
+        |resistances| {
+            let elapsed = baseline_start.elapsed().as_secs_f64();
+            if resistances.is_empty() {
+                println!("  {:>3.0} s: first block recorded", elapsed);
+            } else {
+                println!(
+                    "  {:>3.0} s: mean resistance so far {:.3} mΩ",
+                    elapsed,
+                    mean(resistances.iter().map(|r| r.resistance_ohms)) * 1e3
+                );
+            }
         },
     )
     .await?;
 
-    let (baseline_resistance, slope) =
-        baseline_fit(&pulse_run.baseline).ok_or("the baseline has fewer than two samples")?;
+    let (baseline_resistance, slope) = baseline_fit(&probe_resistances(&pulse_run.baseline))
+        .ok_or("the baseline has fewer than two reversed pairs of blocks")?;
     println!(
         "Baseline: {:.3} mΩ, slope {:.2} µΩ/s",
         baseline_resistance * 1e3,
@@ -500,6 +514,12 @@ async fn sequence(
             BASELINE_MAXIMUM_SLOPE_OHMS_PER_SECOND * 1e6
         )
         .into());
+    }
+
+    // The pulse is always in forward polarity.
+    if polarity != Polarity::Forward {
+        change_polarity(filament, Polarity::Forward).await?;
+        polarity = Polarity::Forward;
     }
 
     // 3. Fire. The baseline took a minute, so the pressure is checked again.
@@ -560,18 +580,21 @@ async fn sequence(
         probe_scale,
         COOL_DOWN_DURATION,
         start,
+        &mut polarity,
         &mut pulse_run.cool_down,
-        |samples| {
-            // The samples since the last report, as a lower bound on the
-            // warming at that moment.
-            let now = start.elapsed().as_secs_f64();
-            let recent = samples
-                .iter()
-                .filter(|s| now - s.time_seconds < PROGRESS_INTERVAL.as_secs_f64());
-            let extra = mean(recent.map(ProbeSample::resistance)) - baseline_resistance;
+        |resistances| {
+            // The latest pair, as a lower bound on the warming at its time.
+            let Some(latest) = resistances.last() else {
+                println!(
+                    "  {:>3.0} s after the pulse: first block recorded",
+                    down_time.elapsed().as_secs_f64()
+                );
+                return;
+            };
+            let extra = latest.resistance_ohms - baseline_resistance;
             println!(
                 "  {:>3.0} s after the pulse: {:+.3} mΩ, {:+.1} K at the clamp (W-Re)",
-                down_time.elapsed().as_secs_f64(),
+                latest.time_seconds - down,
                 extra * 1e3,
                 extra / (COLD_RESISTANCE_OHMS * TEMPERATURE_COEFFICIENT_PER_KELVIN)
             );
@@ -700,45 +723,136 @@ async fn sample(
     }))
 }
 
-/// Records samples at the probe current into `samples` for `duration`, calling
-/// `report` with everything recorded so far every `PROGRESS_INTERVAL`.
+/// Records samples at the probe current into `samples` for `duration`, in
+/// blocks of `REVERSAL_BLOCK_DURATION` that alternate polarity. The first
+/// block is in `polarity`, which is left as the last block's. Calls `report`
+/// with the probe resistances so far after each block.
+///
+/// After each reversal, waits `SETPOINT_APPLY_TIME` for the supply to settle
+/// with the output back on before sampling.
 async fn record_probe(
     filament: &dyn FilamentSystem,
     scale: f64,
     duration: Duration,
     start: Instant,
+    polarity: &mut Polarity,
     samples: &mut Vec<ProbeSample>,
-    report: impl Fn(&[ProbeSample]),
+    report: impl Fn(&[ProbeResistance]),
 ) -> Result<(), AnyError> {
     let began = Instant::now();
-    let mut next_report = began + PROGRESS_INTERVAL;
+    let mut first = true;
 
     while began.elapsed() < duration {
-        let reading = sample(filament, scale, None)
-            .await?
-            .expect("there's no deadline");
-        if reading.mode != RegulationMode::ConstantCurrent {
-            return Err(format!(
-                "the supply left constant current ({:?}) at the probe current",
-                reading.mode
-            )
-            .into());
+        let block_start = Instant::now();
+        if !first {
+            *polarity = if *polarity == Polarity::Forward {
+                Polarity::Reverse
+            } else {
+                Polarity::Forward
+            };
+            change_polarity(filament, *polarity).await?;
+            tokio::time::sleep(SETPOINT_APPLY_TIME).await;
+        }
+        first = false;
+
+        while block_start.elapsed() < REVERSAL_BLOCK_DURATION && began.elapsed() < duration {
+            let reading = sample(filament, scale, None)
+                .await?
+                .expect("there's no deadline");
+            if reading.mode != RegulationMode::ConstantCurrent {
+                return Err(format!(
+                    "the supply left constant current ({:?}) at the probe current",
+                    reading.mode
+                )
+                .into());
+            }
+
+            samples.push(ProbeSample {
+                current_amps: reading.current,
+                polarity: *polarity,
+                time_seconds: start.elapsed().as_secs_f64(),
+                voltage_volts: reading.voltage,
+            });
         }
 
-        samples.push(ProbeSample {
-            current_amps: reading.current,
-            polarity: Polarity::Forward,
-            time_seconds: start.elapsed().as_secs_f64(),
-            voltage_volts: reading.voltage,
-        });
-
-        if Instant::now() >= next_report {
-            report(samples);
-            next_report += PROGRESS_INTERVAL;
-        }
+        report(&probe_resistances(samples));
     }
 
     Ok(())
+}
+
+/// Changes the direction of the current through the filament, leaving the
+/// output on at the same setpoint.
+///
+/// The output is off for `RELAY_SETTLE_TIME` while the relays move, since
+/// switching them under load would arc their contacts. At the probe current the
+/// break is harmless.
+async fn change_polarity(
+    filament: &dyn FilamentSystem,
+    polarity: Polarity,
+) -> Result<(), AnyError> {
+    debug!("changing the polarity to {:?}", polarity);
+    filament.set_output_enabled(false).await?;
+    filament.set_polarity(polarity).await?;
+    tokio::time::sleep(RELAY_SETTLE_TIME).await;
+    filament.set_output_enabled(true).await?;
+    Ok(())
+}
+
+/// Combines probe samples into resistances, cancelling offsets and thermal
+/// EMFs by polarity reversal.
+///
+/// Each block of consecutive samples in one polarity is averaged to one V, I
+/// and t. Every neighbouring pair of blocks in opposite polarities, a and b,
+/// gives
+///
+/// ```text
+/// R = |Vₐ − V_b| / (Iₐ + I_b)
+/// ```
+///
+/// Both currents are positive, since the supply's readback doesn't reverse
+/// with the relays. One voltage is +R·I + E and the other −R·I + E, where E is
+/// the offset, so E cancels in the difference. Which relay state gives the
+/// positive voltage depends on how the relays and sense leads are wired, so
+/// it's not assumed: the magnitude is the same either way. Each R is
+/// timestamped at the midpoint of its two blocks' times. Every block but the
+/// first and last is in two pairs, so an offset drifting by ΔE between blocks
+/// adds ±ΔE/(Iₐ + I_b), alternating in sign from one pair to the next, which
+/// averages out across a fit.
+fn probe_resistances(samples: &[ProbeSample]) -> Vec<ProbeResistance> {
+    struct Block {
+        current: f64,
+        polarity: Polarity,
+        time: f64,
+        voltage: f64,
+    }
+
+    let blocks: Vec<Block> = samples
+        .chunk_by(|a, b| a.polarity == b.polarity)
+        .map(|block| Block {
+            current: mean(block.iter().map(|s| s.current_amps)),
+            polarity: block[0].polarity,
+            time: mean(block.iter().map(|s| s.time_seconds)),
+            voltage: mean(block.iter().map(|s| s.voltage_volts)),
+        })
+        .collect();
+
+    blocks
+        .windows(2)
+        .filter_map(|pair| {
+            let [a, b] = pair else { unreachable!() };
+            if !matches!(
+                (a.polarity, b.polarity),
+                (Polarity::Forward, Polarity::Reverse) | (Polarity::Reverse, Polarity::Forward)
+            ) {
+                return None;
+            }
+            Some(ProbeResistance {
+                resistance_ohms: (a.voltage - b.voltage).abs() / (a.current + b.current),
+                time_seconds: (a.time + b.time) / 2.0,
+            })
+        })
+        .collect()
 }
 
 /// Fires the pulse: jumps to `current`, samples until `duration` has passed
@@ -749,7 +863,7 @@ async fn record_probe(
 /// Records into `pulse` as it goes, so a run that stops partway still has what
 /// was measured.
 ///
-/// The energy is Σ V·I·Δt, each sample's power taken over the time since the
+/// The energy is Σ |V|·I·Δt, each sample's power taken over the time since the
 /// previous sample, or since the current was set for the first. The last
 /// sample's power is taken to continue until the current is set back down.
 async fn fire(
@@ -780,7 +894,9 @@ async fn fire(
         };
         let now = Instant::now();
 
-        power = reading.voltage * reading.current;
+        // A magnitude, because the voltage's sign depends on how the relays
+        // and sense leads are wired.
+        power = reading.voltage.abs() * reading.current;
         energy += power * (now - previous).as_secs_f64();
         previous = now;
 
@@ -818,10 +934,10 @@ async fn fire(
 }
 
 /// The baseline's mean resistance, and its slope against time from a
-/// straight-line fit, in ohms and ohms per second. `None` with fewer than two
-/// samples.
+/// straight-line fit, in ohms and ohms per second, from its probe resistances.
+/// `None` with fewer than two.
 ///
-/// The mean is the plain mean of the samples' resistances, R̄. The slope is
+/// The mean is the plain mean of the resistances, R̄. The slope is
 /// the ordinary least-squares estimate for R = a + b·t, the b that minimises
 /// Σ(Rᵢ − a − b·tᵢ)²:
 ///
@@ -832,18 +948,18 @@ async fn fire(
 /// i.e. the covariance of t and R over the variance of t, with the 1/n of each
 /// cancelling. See "Fitting the regression line" in
 /// <https://en.wikipedia.org/wiki/Simple_linear_regression>.
-fn baseline_fit(samples: &[ProbeSample]) -> Option<(f64, f64)> {
-    if samples.len() < 2 {
+fn baseline_fit(resistances: &[ProbeResistance]) -> Option<(f64, f64)> {
+    if resistances.len() < 2 {
         return None;
     }
 
-    let t_mean = mean(samples.iter().map(|s| s.time_seconds));
-    let r_mean = mean(samples.iter().map(ProbeSample::resistance));
+    let t_mean = mean(resistances.iter().map(|r| r.time_seconds));
+    let r_mean = mean(resistances.iter().map(|r| r.resistance_ohms));
 
     // The numerator and denominator of b.
-    let (covariance, variance) = samples.iter().fold((0.0, 0.0), |(c, v), s| {
-        let dt = s.time_seconds - t_mean;
-        (c + dt * (s.resistance() - r_mean), v + dt * dt)
+    let (covariance, variance) = resistances.iter().fold((0.0, 0.0), |(c, v), r| {
+        let dt = r.time_seconds - t_mean;
+        (c + dt * (r.resistance_ohms - r_mean), v + dt * dt)
     });
     Some((r_mean, covariance / variance))
 }
@@ -942,23 +1058,106 @@ mod tests {
 
     #[test]
     fn the_baseline_fit_finds_the_slope() {
-        let samples: Vec<_> = (0..10)
-            .map(|i| ProbeSample {
-                current_amps: 0.1,
-                polarity: Polarity::Forward,
+        let resistances: Vec<_> = (0..10)
+            .map(|i| ProbeResistance {
+                resistance_ohms: 0.1 + 2e-6 * i as f64,
                 time_seconds: i as f64,
-                voltage_volts: 0.1 * (0.1 + 2e-6 * i as f64),
             })
             .collect();
-        let (resistance, slope) = baseline_fit(&samples).unwrap();
+        let (resistance, slope) = baseline_fit(&resistances).unwrap();
         assert!((resistance - (0.1 + 9e-6)).abs() < 1e-12);
         assert!((slope - 2e-6).abs() < 1e-12);
-        assert!(baseline_fit(&samples[..1]).is_none());
+        assert!(baseline_fit(&resistances[..1]).is_none());
     }
 
-    async fn powered_mock() -> MockFilamentSystem {
+    // An offset common to both polarities cancels, whatever the currents and
+    // whichever polarity gives the positive voltage, and each resistance is
+    // timed at the midpoint of its two blocks.
+    #[test]
+    fn reversed_blocks_cancel_an_offset() {
+        let resistance = 0.0977;
+        let offset = -3e-4;
+        for forward_sign in [1.0, -1.0] {
+            let mut samples = Vec::new();
+            for block in 0..4 {
+                let (polarity, sign) = if block % 2 == 0 {
+                    (Polarity::Forward, forward_sign)
+                } else {
+                    (Polarity::Reverse, -forward_sign)
+                };
+                for i in 0..3 {
+                    let current = 0.1 + 1e-4 * block as f64;
+                    samples.push(ProbeSample {
+                        current_amps: current,
+                        polarity,
+                        time_seconds: 10.0 * block as f64 + i as f64,
+                        voltage_volts: sign * resistance * current + offset,
+                    });
+                }
+            }
+
+            let resistances = probe_resistances(&samples);
+            assert_eq!(resistances.len(), 3);
+            for (k, r) in resistances.iter().enumerate() {
+                assert!((r.resistance_ohms - resistance).abs() < 1e-12, "{:?}", r);
+                // Blocks k and k + 1 have mean times 10k + 1 and 10k + 11.
+                assert!((r.time_seconds - (10.0 * k as f64 + 6.0)).abs() < 1e-12);
+            }
+            assert!(probe_resistances(&samples[..3]).is_empty());
+        }
+    }
+
+    // The probe alternates polarity block by block, starting in the polarity
+    // it's given, and the mock's resistance comes back from the pairs. The mock
+    // refuses to switch the relays with the output on, so this also checks the
+    // output is turned off for each reversal.
+    #[tokio::test(start_paused = true)]
+    async fn the_probe_reverses_in_blocks() {
+        let filament = powered_mock(Polarity::Forward).await;
+        filament.set_heating_current_limit(0.1).await.unwrap();
+        let mut polarity = Polarity::Forward;
+        let mut samples = Vec::new();
+        record_probe(
+            &filament,
+            0.01,
+            Duration::from_secs(60),
+            Instant::now(),
+            &mut polarity,
+            &mut samples,
+            |_| {},
+        )
+        .await
+        .unwrap();
+
+        let polarities: Vec<_> = samples
+            .chunk_by(|a, b| a.polarity == b.polarity)
+            .map(|block| block[0].polarity)
+            .collect();
+        assert_eq!(
+            polarities,
+            [
+                Polarity::Forward,
+                Polarity::Reverse,
+                Polarity::Forward,
+                Polarity::Reverse,
+                Polarity::Forward,
+                Polarity::Reverse,
+            ]
+        );
+        assert_eq!(polarity, Polarity::Reverse);
+
+        let resistances = probe_resistances(&samples);
+        assert_eq!(resistances.len(), 5);
+        for r in resistances {
+            assert!((r.resistance_ohms - 0.096).abs() < 1e-12, "{:?}", r);
+        }
+    }
+
+    /// The mock with its output on in `polarity`. Its voltage is positive in
+    /// forward polarity and negative in reverse.
+    async fn powered_mock(polarity: Polarity) -> MockFilamentSystem {
         let filament = MockFilamentSystem::default();
-        filament.set_polarity(Polarity::Forward).await.unwrap();
+        filament.set_polarity(polarity).await.unwrap();
         filament.set_output_enabled(true).await.unwrap();
         filament
     }
@@ -967,7 +1166,7 @@ mod tests {
     // instrument call, and the current goes back to the probe current.
     #[tokio::test(start_paused = true)]
     async fn the_pulse_ends_when_its_duration_has_passed() {
-        let filament = powered_mock().await;
+        let filament = powered_mock(Polarity::Forward).await;
         let mut pulse = None;
         let energy = fire(
             &filament,
@@ -995,28 +1194,37 @@ mod tests {
         );
     }
 
+    // In either polarity: either can read a negative voltage, depending on
+    // the wiring, and the energy must still count up.
     #[tokio::test(start_paused = true)]
     async fn the_pulse_ends_early_at_the_maximum_energy() {
-        let filament = powered_mock().await;
-        let mut pulse = None;
-        let energy = fire(
-            &filament,
-            2.0,
-            Duration::from_secs(5),
-            Some(0.3),
-            2.0,
-            Instant::now(),
-            &mut pulse,
-        )
-        .await
-        .unwrap();
+        for polarity in [Polarity::Forward, Polarity::Reverse] {
+            let filament = powered_mock(polarity).await;
+            let mut pulse = None;
+            let energy = fire(
+                &filament,
+                2.0,
+                Duration::from_secs(5),
+                Some(0.3),
+                2.0,
+                Instant::now(),
+                &mut pulse,
+            )
+            .await
+            .unwrap();
 
-        let pulse = pulse.unwrap();
-        assert_eq!(pulse.end, Some(PulseEnd::EnergyLimit));
-        assert!((0.3..0.33).contains(&energy), "{} J", energy);
-        assert_eq!(
-            filament.get_heating_current_limit().await.unwrap(),
-            PROBE_CURRENT_AMPS
-        );
+            let pulse = pulse.unwrap();
+            assert_eq!(pulse.end, Some(PulseEnd::EnergyLimit), "{:?}", polarity);
+            assert!(
+                (0.3..0.33).contains(&energy),
+                "{:?}: {} J",
+                polarity,
+                energy
+            );
+            assert_eq!(
+                filament.get_heating_current_limit().await.unwrap(),
+                PROBE_CURRENT_AMPS
+            );
+        }
     }
 }
