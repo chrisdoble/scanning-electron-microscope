@@ -9,7 +9,7 @@ use characteriser::{
     constants::{FILAMENT_OPERATING_PRESSURE_MBAR, POWER_SUPPLY_MAXIMUM_CURRENT_AMPS},
     hardware::{self, FilamentSystem, Hardware},
     python,
-    results::save_json,
+    results::{Derived, save_json},
     sampling::{
         CLIPPING_HEADROOM, OVERCURRENT_PROTECTION_MARGIN_AMPS, RELAY_SETTLE_TIME,
         SETPOINT_APPLY_TIME, VERTICAL_SCALES_VOLTS_PER_DIVISION, unclipped_average,
@@ -21,7 +21,7 @@ use futures::FutureExt;
 use host::power_supply::{Polarity, RegulationMode};
 use log::*;
 use schemars::JsonSchema;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     any::Any,
     fs,
@@ -89,14 +89,22 @@ const REVERSAL_BLOCK_DURATION: Duration = Duration::from_secs(10);
 /// draws.
 const OPEN_CIRCUIT_CURRENT_AMPS: f64 = 0.01;
 
+/// Cool-down samples this soon after the pulse are recorded but left out of
+/// the analysis's fit, while the filament itself cools.
+const FIT_SKIP: Duration = Duration::from_secs(5);
+
 /// The filament's resistance with no current and the mount at room
-/// temperature, in ohms, from the hot sweeps. Only used to print the clamp's
-/// rise as the cool-down goes.
+/// temperature, in ohms, from the hot sweeps. Converts extra resistance to the
+/// clamp's rise.
 const COLD_RESISTANCE_OHMS: f64 = 0.0977;
 
-/// W-Re's temperature coefficient of resistance near room temperature, per
-/// kelvin. Only used to print the clamp's rise as the cool-down goes.
-const TEMPERATURE_COEFFICIENT_PER_KELVIN: f64 = 0.0031;
+/// Temperature coefficients of resistance near room temperature, per kelvin,
+/// for converting extra resistance to the clamp's rise. Neither has been
+/// measured for this wire. W-Re's is inferred from the wire's resistance, and
+/// is the conservative one: it gives the larger rise. Pure tungsten's is a
+/// bound.
+const TUNGSTEN_RHENIUM_TEMPERATURE_COEFFICIENT_PER_KELVIN: f64 = 0.0031;
+const TUNGSTEN_TEMPERATURE_COEFFICIENT_PER_KELVIN: f64 = 0.0045;
 
 #[derive(Parser)]
 struct Arguments {
@@ -170,7 +178,10 @@ struct PulseRun {
     /// The probe samples after the pulse.
     cool_down: Vec<ProbeSample>,
 
-    /// Why the run stopped early, if it did.
+    /// The output of `pulse.py`, once it's run.
+    analysis: Option<PulseAnalysis>,
+
+    /// Why the run stopped early, or its analysis failed, if either did.
     error: Option<String>,
 
     /// An identifier for the filament, from the arguments.
@@ -200,16 +211,23 @@ impl PulseRun {
         Self {
             baseline: Vec::new(),
             cool_down: Vec::new(),
+            analysis: None,
             error: None,
             filament_id: args.filament_id.clone(),
             parameters: Parameters {
                 baseline_duration_seconds: BASELINE_DURATION.as_secs_f64(),
                 baseline_maximum_slope_ohms_per_second: BASELINE_MAXIMUM_SLOPE_OHMS_PER_SECOND,
+                cold_resistance_ohms: COLD_RESISTANCE_OHMS,
                 cool_down_duration_seconds: COOL_DOWN_DURATION.as_secs_f64(),
                 current_amps: args.current,
                 duration_seconds: args.duration,
+                fit_skip_seconds: FIT_SKIP.as_secs_f64(),
                 maximum_energy_joules: args.maximum_energy,
                 probe_current_amps: PROBE_CURRENT_AMPS,
+                temperature_coefficients_per_kelvin: TemperatureCoefficients {
+                    tungsten: TUNGSTEN_TEMPERATURE_COEFFICIENT_PER_KELVIN,
+                    tungsten_rhenium: TUNGSTEN_RHENIUM_TEMPERATURE_COEFFICIENT_PER_KELVIN,
+                },
                 voltage_limit_volts: PULSE_VOLTAGE_LIMIT_VOLTS,
             },
             pressure_mbar: Pressures::default(),
@@ -237,6 +255,7 @@ impl PulseRun {
 struct Parameters {
     baseline_duration_seconds: f64,
     baseline_maximum_slope_ohms_per_second: f64,
+    cold_resistance_ohms: f64,
     cool_down_duration_seconds: f64,
 
     /// The pulse current asked for.
@@ -245,9 +264,20 @@ struct Parameters {
     /// The pulse duration asked for.
     duration_seconds: f64,
 
+    fit_skip_seconds: f64,
     maximum_energy_joules: Option<f64>,
     probe_current_amps: f64,
+    temperature_coefficients_per_kelvin: TemperatureCoefficients,
     voltage_limit_volts: f64,
+}
+
+/// Temperature coefficients of resistance, per kelvin, by the alloy they're
+/// for.
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+struct TemperatureCoefficients {
+    tungsten: f64,
+    tungsten_rhenium: f64,
 }
 
 /// The chamber pressure at each check, once taken.
@@ -267,7 +297,7 @@ struct Scales {
 }
 
 /// One sample at the probe current.
-#[derive(Debug, JsonSchema, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ProbeSample {
     current_amps: f64,
@@ -311,7 +341,7 @@ struct Pulse {
 }
 
 /// One sample during the pulse.
-#[derive(Debug, JsonSchema, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 struct PulseSample {
     current_amps: f64,
@@ -334,6 +364,135 @@ enum PulseEnd {
     /// The supply left constant current, so the voltage limit bound: the hot
     /// resistance is more than the limit divided by the current.
     ConstantVoltage,
+}
+
+/// The input to `pulse.py`: everything the analysis needs from a completed run.
+#[derive(Debug, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PulseAnalysisInput {
+    baseline: Vec<ProbeSample>,
+    cold_resistance_ohms: f64,
+    cool_down: Vec<ProbeSample>,
+
+    /// Cool-down samples this soon after the pulse's end are left out of the
+    /// fit.
+    fit_skip_seconds: f64,
+
+    /// When the current was set back down, in seconds since the run started.
+    pulse_down_seconds: f64,
+
+    pulse_samples: Vec<PulseSample>,
+
+    /// When the current was set to the pulse current, in seconds since the
+    /// run started.
+    pulse_up_seconds: f64,
+
+    temperature_coefficients_per_kelvin: TemperatureCoefficients,
+}
+
+/// The analysis of a run: exactly the output of `pulse.py`.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PulseAnalysis {
+    /// A straight line fitted to the baseline's probe resistances.
+    baseline: BaselineAnalysis,
+
+    /// The energy that would give `clamp_rise_budget_kelvin` at the measured
+    /// K per joule with the W-Re α. `None` if the fitted warming isn't
+    /// positive.
+    budget_energy_joules: Option<Derived>,
+
+    /// The planned limit on a pulse's clamp rise, with the W-Re α.
+    clamp_rise_budget_kelvin: f64,
+
+    /// The extrapolated rise at the clamp at the end of the pulse, with each
+    /// α.
+    clamp_rise_kelvin: ByAlloy,
+
+    /// R(t) = R_b + A·e^(−t/τ) fitted to the baseline and the cool-down.
+    fit: CoolDownFit,
+
+    /// The first cool-down probe resistance after the skip, against the
+    /// baseline: model-free, and a lower bound on the warming at its time.
+    first_reading: FirstReading,
+
+    /// The clamp rise per joule of pulse energy, with each α.
+    kelvin_per_joule: ByAlloy,
+
+    pulse: PulseSummary,
+
+    /// Anything worth knowing about the analysis, e.g. a poor fit.
+    warnings: Vec<String>,
+}
+
+/// A straight line fitted to the baseline.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+struct BaselineAnalysis {
+    /// The line's value at the baseline's mean time.
+    resistance_ohms: Derived,
+
+    slope_ohms_per_second: Derived,
+}
+
+/// A quantity worked out with each temperature coefficient.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ByAlloy {
+    tungsten: Derived,
+    tungsten_rhenium: Derived,
+}
+
+/// The fit to the cool-down.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+struct CoolDownFit {
+    /// R_b, shared by the baseline and the cool-down.
+    baseline_resistance_ohms: Derived,
+
+    degrees_of_freedom: u32,
+
+    /// A: the extra resistance from the mount's warming at the end of the
+    /// pulse.
+    extra_resistance_at_end_ohms: Derived,
+
+    reduced_chi_squared: f64,
+
+    /// τ.
+    time_constant_seconds: Derived,
+}
+
+/// The first cool-down probe resistance after the skip.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+struct FirstReading {
+    /// Its resistance less the baseline's.
+    extra_resistance_ohms: Derived,
+
+    /// Its time, from the end of the pulse.
+    seconds_after_pulse: f64,
+}
+
+/// The pulse, from its samples.
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PulseSummary {
+    /// From the current being set up to it being set back down.
+    duration_seconds: f64,
+
+    /// Σ |V|·I·Δt, as the binary works it out.
+    energy_joules: f64,
+
+    /// The last sample's hot resistance.
+    final_resistance_ohms: f64,
+
+    /// The energy over the duration.
+    mean_power_watts: f64,
+
+    peak_power_watts: f64,
+
+    /// Each sample's hot resistance, |V|/I.
+    resistances_ohms: Vec<f64>,
 }
 
 /// Reports `run`'s result and turns it into an exit status, printing errors
@@ -412,8 +571,100 @@ async fn run() -> Result<(), AnyError> {
         error!("couldn't make the filament safe: {}", e);
         eprintln!("Warning: the filament system may still be powered: {}", e);
     }
+    result?;
 
-    Ok(result?)
+    println!("Analysing");
+    match analyse(&pulse_run).await {
+        Ok(analysis) => {
+            print_summary(&analysis);
+            pulse_run.analysis = Some(analysis);
+        }
+        Err(e) => {
+            error!("the analysis failed: {}", e);
+            pulse_run.error = Some(format!("the analysis failed: {}", e));
+        }
+    }
+    save_json(&pulse_run, &path)?;
+
+    match pulse_run.error {
+        Some(e) => Err(e.into()),
+        None => Ok(()),
+    }
+}
+
+/// Runs `pulse.py` on a completed run.
+async fn analyse(pulse_run: &PulseRun) -> Result<PulseAnalysis, AnyError> {
+    let pulse = pulse_run.pulse.as_ref().ok_or("the run has no pulse")?;
+    let parameters = &pulse_run.parameters;
+    let input = PulseAnalysisInput {
+        baseline: pulse_run.baseline.clone(),
+        cold_resistance_ohms: parameters.cold_resistance_ohms,
+        cool_down: pulse_run.cool_down.clone(),
+        fit_skip_seconds: parameters.fit_skip_seconds,
+        pulse_down_seconds: pulse.down_seconds.ok_or("the pulse has no end")?,
+        pulse_samples: pulse.samples.clone(),
+        pulse_up_seconds: pulse.up_seconds,
+        temperature_coefficients_per_kelvin: parameters.temperature_coefficients_per_kelvin,
+    };
+    Ok(python::run_script("pulse.py", &input).await?)
+}
+
+/// Prints the analysis's summary.
+fn print_summary(analysis: &PulseAnalysis) {
+    let pulse = &analysis.pulse;
+    let fit = &analysis.fit;
+    let milliohms = |d: &Derived| format!("{:.3} ± {:.3} mΩ", d.value * 1e3, d.uncertainty * 1e3);
+    let kelvin = |d: &Derived| format!("{:.1} ± {:.1}", d.value, d.uncertainty);
+
+    println!(
+        "Pulse: {:.2} s, {:.2} J, mean {:.2} W, peak {:.2} W, final hot resistance {:.3} Ω",
+        pulse.duration_seconds,
+        pulse.energy_joules,
+        pulse.mean_power_watts,
+        pulse.peak_power_watts,
+        pulse.final_resistance_ohms
+    );
+    println!(
+        "Baseline: {}, slope {:.2} ± {:.2} µΩ/s",
+        milliohms(&analysis.baseline.resistance_ohms),
+        analysis.baseline.slope_ohms_per_second.value * 1e6,
+        analysis.baseline.slope_ohms_per_second.uncertainty * 1e6
+    );
+    println!(
+        "First reading, {:.0} s after the pulse: {} above the baseline",
+        analysis.first_reading.seconds_after_pulse,
+        milliohms(&analysis.first_reading.extra_resistance_ohms)
+    );
+    println!(
+        "At the end of the pulse: {} above the baseline, τ = {:.0} ± {:.0} s (reduced χ² {:.2}, \
+         {} degrees of freedom)",
+        milliohms(&fit.extra_resistance_at_end_ohms),
+        fit.time_constant_seconds.value,
+        fit.time_constant_seconds.uncertainty,
+        fit.reduced_chi_squared,
+        fit.degrees_of_freedom
+    );
+    println!(
+        "Clamp rise at the end of the pulse: {} K (W-Re α), {} K (pure W α)",
+        kelvin(&analysis.clamp_rise_kelvin.tungsten_rhenium),
+        kelvin(&analysis.clamp_rise_kelvin.tungsten)
+    );
+    println!(
+        "Per joule: {:.2} ± {:.2} K/J (W-Re α), {:.2} ± {:.2} K/J (pure W α)",
+        analysis.kelvin_per_joule.tungsten_rhenium.value,
+        analysis.kelvin_per_joule.tungsten_rhenium.uncertainty,
+        analysis.kelvin_per_joule.tungsten.value,
+        analysis.kelvin_per_joule.tungsten.uncertainty
+    );
+    if let Some(energy) = &analysis.budget_energy_joules {
+        println!(
+            "Energy for the {:.0} K budget (W-Re α): {:.1} ± {:.1} J",
+            analysis.clamp_rise_budget_kelvin, energy.value, energy.uncertainty
+        );
+    }
+    for warning in &analysis.warnings {
+        println!("Warning: {}", warning);
+    }
 }
 
 /// Everything from the startup pressure check to the end of the cool-down.
@@ -596,7 +847,8 @@ async fn sequence(
                 "  {:>3.0} s after the pulse: {:+.3} mΩ, {:+.1} K at the clamp (W-Re)",
                 latest.time_seconds - down,
                 extra * 1e3,
-                extra / (COLD_RESISTANCE_OHMS * TEMPERATURE_COEFFICIENT_PER_KELVIN)
+                extra
+                    / (COLD_RESISTANCE_OHMS * TUNGSTEN_RHENIUM_TEMPERATURE_COEFFICIENT_PER_KELVIN)
             );
         },
     )
@@ -1000,6 +1252,39 @@ fn panic_message(panic: &(dyn Any + Send)) -> String {
 mod tests {
     use super::*;
     use characteriser::hardware::MockFilamentSystem;
+    use schemars::schema_for;
+
+    /// Checks that `pulse.py`'s schemas in `python/schemas/` match the Rust
+    /// types, as the library's `schemas_are_up_to_date` does for the other
+    /// scripts.
+    ///
+    /// Run with `UPDATE_SCHEMAS=1` to write them instead.
+    #[test]
+    fn schemas_are_up_to_date() {
+        let schemas_dir =
+            std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/python/schemas"));
+        let update = std::env::var_os("UPDATE_SCHEMAS").is_some();
+
+        for (kind, schema) in [
+            ("input", schema_for!(PulseAnalysisInput)),
+            ("output", schema_for!(PulseAnalysis)),
+        ] {
+            let path = schemas_dir.join(format!("pulse.{}.json", kind));
+            let expected = serde_json::to_string_pretty(&schema).unwrap() + "\n";
+
+            if update {
+                fs::write(&path, expected).unwrap();
+            } else {
+                let actual = fs::read_to_string(&path).unwrap_or_default();
+                assert_eq!(
+                    actual,
+                    expected,
+                    "{} is out of date; run the test with UPDATE_SCHEMAS=1",
+                    path.display()
+                );
+            }
+        }
+    }
 
     fn arguments(current: f64, duration: f64, maximum_energy: Option<f64>) -> Arguments {
         Arguments {

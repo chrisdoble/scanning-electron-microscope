@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PulseAnalysisInput",
+  "description": "The input to `pulse.py`: everything the analysis needs from a completed run.",
+  "type": "object",
+  "properties": {
+    "baseline": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ProbeSample"
+      }
+    },
+    "cold_resistance_ohms": {
+      "type": "number",
+      "format": "double"
+    },
+    "cool_down": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ProbeSample"
+      }
+    },
+    "fit_skip_seconds": {
+      "description": "Cool-down samples this soon after the pulse's end are left out of the\nfit.",
+      "type": "number",
+      "format": "double"
+    },
+    "pulse_down_seconds": {
+      "description": "When the current was set back down, in seconds since the run started.",
+      "type": "number",
+      "format": "double"
+    },
+    "pulse_samples": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PulseSample"
+      }
+    },
+    "pulse_up_seconds": {
+      "description": "When the current was set to the pulse current, in seconds since the\nrun started.",
+      "type": "number",
+      "format": "double"
+    },
+    "temperature_coefficients_per_kelvin": {
+      "$ref": "#/$defs/TemperatureCoefficients"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "baseline",
+    "cold_resistance_ohms",
+    "cool_down",
+    "fit_skip_seconds",
+    "pulse_down_seconds",
+    "pulse_samples",
+    "pulse_up_seconds",
+    "temperature_coefficients_per_kelvin"
+  ],
+  "$defs": {
+    "Polarity": {
+      "description": "The direction of the current through the filament.\n\nEach side of the filament is switched by one SPDT relay. With both relays\nde-energised, both sides sit on the negative rail, no current can flow, and\nthe current has no direction — that's `Nil`. That is the state the\ncontroller powers up in, and the state cleanup returns to. Energising one\nrelay or the other puts one side on the positive rail, setting the\ndirection.\n\nReversing the direction lets the Seebeck voltages at the filament's\njunctions cancel when a forward and a reverse measurement are averaged.\n\nA fourth relay state exists — both energised, both sides on the positive\nrail — which is equivalent to `Nil` and is never used.",
+      "oneOf": [
+        {
+          "description": "Relay 1 energised: current flows through the filament one way.",
+          "type": "string",
+          "const": "Forward"
+        },
+        {
+          "description": "Both relays de-energised: no current flows, so there is no polarity.",
+          "type": "string",
+          "const": "Nil"
+        },
+        {
+          "description": "Relay 2 energised: current flows the other way.",
+          "type": "string",
+          "const": "Reverse"
+        }
+      ]
+    },
+    "ProbeSample": {
+      "description": "One sample at the probe current.",
+      "type": "object",
+      "properties": {
+        "current_amps": {
+          "type": "number",
+          "format": "double"
+        },
+        "polarity": {
+          "$ref": "#/$defs/Polarity"
+        },
+        "time_seconds": {
+          "description": "When the sample finished, in seconds since the run started.",
+          "type": "number",
+          "format": "double"
+        },
+        "voltage_volts": {
+          "description": "Negative in the reverse polarity.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "current_amps",
+        "polarity",
+        "time_seconds",
+        "voltage_volts"
+      ]
+    },
+    "PulseSample": {
+      "description": "One sample during the pulse.",
+      "type": "object",
+      "properties": {
+        "current_amps": {
+          "type": "number",
+          "format": "double"
+        },
+        "time_seconds": {
+          "description": "When the sample finished, in seconds since the run started.",
+          "type": "number",
+          "format": "double"
+        },
+        "voltage_volts": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "current_amps",
+        "time_seconds",
+        "voltage_volts"
+      ]
+    },
+    "TemperatureCoefficients": {
+      "description": "Temperature coefficients of resistance, per kelvin, by the alloy they're\nfor.",
+      "type": "object",
+      "properties": {
+        "tungsten": {
+          "type": "number",
+          "format": "double"
+        },
+        "tungsten_rhenium": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tungsten",
+        "tungsten_rhenium"
+      ]
+    }
+  }
+}

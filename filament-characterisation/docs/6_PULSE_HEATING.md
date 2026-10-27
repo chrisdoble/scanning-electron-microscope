@@ -233,6 +233,8 @@ A new script, `characteriser/python/pulse.py`, run by the binary at the end thro
 - **First reading:** the extra resistance at the first cool-down point after `FIT_SKIP`, against R_b. It's model-free and a lower bound.
 - **At the end of the pulse:** a fit to the cool-down points of R(t) = R_b + A·e^(−t/τ), with t measured from the end of the pulse. A is the extra resistance at the end of the pulse, X_end.
   - One time constant to start. The sweeps and the hold test hint at a slower component, so a second term can be added if the residuals show one.
+  - The baseline points are fitted along with the cool-down, as R = R_b, so the two share R_b and its uncertainty carries into A.
+  - Neighbouring probe resistances share a block, so their noise is correlated, about 0.5. The fit weights each point by its own variance only, because a fit using the full covariance would weight heavily the pattern that alternates from pair to pair, which is what a drifting offset leaves. The correlation goes into the uncertainties instead, through the sandwich covariance. On synthetic runs at the rig's noise, A's errors spread by 0.96 of its stated uncertainty, and A is good to about 40 µΩ, 0.13 K.
 - **Clamp rise:** X_end / (R₀α), with both αs, as in `MOUNT_WARMING_ANALYSIS.md`.
 
 **Per joule:**

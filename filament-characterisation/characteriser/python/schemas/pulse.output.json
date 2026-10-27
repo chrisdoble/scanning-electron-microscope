@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PulseAnalysis",
+  "description": "The analysis of a run: exactly the output of `pulse.py`.",
+  "type": "object",
+  "properties": {
+    "baseline": {
+      "description": "A straight line fitted to the baseline's probe resistances.",
+      "$ref": "#/$defs/BaselineAnalysis"
+    },
+    "budget_energy_joules": {
+      "description": "The energy that would give `clamp_rise_budget_kelvin` at the measured\nK per joule with the W-Re α. `None` if the fitted warming isn't\npositive.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Derived"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "clamp_rise_budget_kelvin": {
+      "description": "The planned limit on a pulse's clamp rise, with the W-Re α.",
+      "type": "number",
+      "format": "double"
+    },
+    "clamp_rise_kelvin": {
+      "description": "The extrapolated rise at the clamp at the end of the pulse, with each\nα.",
+      "$ref": "#/$defs/ByAlloy"
+    },
+    "first_reading": {
+      "description": "The first cool-down probe resistance after the skip, against the\nbaseline: model-free, and a lower bound on the warming at its time.",
+      "$ref": "#/$defs/FirstReading"
+    },
+    "fit": {
+      "description": "R(t) = R_b + A·e^(−t/τ) fitted to the baseline and the cool-down.",
+      "$ref": "#/$defs/CoolDownFit"
+    },
+    "kelvin_per_joule": {
+      "description": "The clamp rise per joule of pulse energy, with each α.",
+      "$ref": "#/$defs/ByAlloy"
+    },
+    "pulse": {
+      "$ref": "#/$defs/PulseSummary"
+    },
+    "warnings": {
+      "description": "Anything worth knowing about the analysis, e.g. a poor fit.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "baseline",
+    "clamp_rise_budget_kelvin",
+    "clamp_rise_kelvin",
+    "fit",
+    "first_reading",
+    "kelvin_per_joule",
+    "pulse",
+    "warnings"
+  ],
+  "$defs": {
+    "BaselineAnalysis": {
+      "description": "A straight line fitted to the baseline.",
+      "type": "object",
+      "properties": {
+        "resistance_ohms": {
+          "description": "The line's value at the baseline's mean time.",
+          "$ref": "#/$defs/Derived"
+        },
+        "slope_ohms_per_second": {
+          "$ref": "#/$defs/Derived"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "resistance_ohms",
+        "slope_ohms_per_second"
+      ]
+    },
+    "ByAlloy": {
+      "description": "A quantity worked out with each temperature coefficient.",
+      "type": "object",
+      "properties": {
+        "tungsten": {
+          "$ref": "#/$defs/Derived"
+        },
+        "tungsten_rhenium": {
+          "$ref": "#/$defs/Derived"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tungsten",
+        "tungsten_rhenium"
+      ]
+    },
+    "CoolDownFit": {
+      "description": "The fit to the cool-down.",
+      "type": "object",
+      "properties": {
+        "baseline_resistance_ohms": {
+          "description": "R_b, shared by the baseline and the cool-down.",
+          "$ref": "#/$defs/Derived"
+        },
+        "degrees_of_freedom": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "extra_resistance_at_end_ohms": {
+          "description": "A: the extra resistance from the mount's warming at the end of the\npulse.",
+          "$ref": "#/$defs/Derived"
+        },
+        "reduced_chi_squared": {
+          "type": "number",
+          "format": "double"
+        },
+        "time_constant_seconds": {
+          "description": "τ.",
+          "$ref": "#/$defs/Derived"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "baseline_resistance_ohms",
+        "degrees_of_freedom",
+        "extra_resistance_at_end_ohms",
+        "reduced_chi_squared",
+        "time_constant_seconds"
+      ]
+    },
+    "Derived": {
+      "description": "A value derived by Python from measurements, with its standard uncertainty.\n\nUnlike `Measurement` there are no samples: it's calculated from other\nquantities, not sampled.",
+      "type": "object",
+      "properties": {
+        "uncertainty": {
+          "description": "The standard uncertainty.",
+          "type": "number",
+          "format": "double"
+        },
+        "value": {
+          "description": "The value.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "uncertainty",
+        "value"
+      ]
+    },
+    "FirstReading": {
+      "description": "The first cool-down probe resistance after the skip.",
+      "type": "object",
+      "properties": {
+        "extra_resistance_ohms": {
+          "description": "Its resistance less the baseline's.",
+          "$ref": "#/$defs/Derived"
+        },
+        "seconds_after_pulse": {
+          "description": "Its time, from the end of the pulse.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "extra_resistance_ohms",
+        "seconds_after_pulse"
+      ]
+    },
+    "PulseSummary": {
+      "description": "The pulse, from its samples.",
+      "type": "object",
+      "properties": {
+        "duration_seconds": {
+          "description": "From the current being set up to it being set back down.",
+          "type": "number",
+          "format": "double"
+        },
+        "energy_joules": {
+          "description": "Σ |V|·I·Δt, as the binary works it out.",
+          "type": "number",
+          "format": "double"
+        },
+        "final_resistance_ohms": {
+          "description": "The last sample's hot resistance.",
+          "type": "number",
+          "format": "double"
+        },
+        "mean_power_watts": {
+          "description": "The energy over the duration.",
+          "type": "number",
+          "format": "double"
+        },
+        "peak_power_watts": {
+          "type": "number",
+          "format": "double"
+        },
+        "resistances_ohms": {
+          "description": "Each sample's hot resistance, |V|/I.",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "duration_seconds",
+        "energy_joules",
+        "final_resistance_ohms",
+        "mean_power_watts",
+        "peak_power_watts",
+        "resistances_ohms"
+      ]
+    }
+  }
+}
