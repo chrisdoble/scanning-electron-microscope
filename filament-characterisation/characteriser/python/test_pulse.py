@@ -70,7 +70,7 @@ def run_input(forward_sign: float = 1.0, noise: float = 5e-6, seed: int = 0) -> 
         "baseline": probe_samples(0.0, 60.0, forward_sign, noise, rng),
         "cold_resistance_ohms": 0.0977,
         "cool_down": probe_samples(DOWN, DOWN + 600.0, forward_sign, noise, rng),
-        "fit_skip_seconds": 5.0,
+        "fit_skip_seconds": 15.0,
         "pulse_down_seconds": DOWN,
         "pulse_samples": [
             {"current_amps": 2.0, "time_seconds": float(t), "voltage_volts": forward_sign * 1.0}
@@ -106,7 +106,7 @@ class TestPulse(unittest.TestCase):
     def test_the_first_reading_is_a_lower_bound(self) -> None:
         analysis = pulse.analyse(run_input())
         first = analysis["first_reading"]
-        self.assertGreaterEqual(first["seconds_after_pulse"], 5.0)
+        self.assertGreaterEqual(first["seconds_after_pulse"], 15.0)
         self.assertLess(
             first["extra_resistance_ohms"]["value"],
             analysis["fit"]["extra_resistance_at_end_ohms"]["value"],

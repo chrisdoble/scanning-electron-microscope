@@ -40,11 +40,11 @@ type AnyError = Box<dyn std::error::Error>;
 /// put tens of joules into the mount.
 const MAXIMUM_PULSE_DURATION: Duration = Duration::from_secs(10);
 
-/// The supply's voltage limit throughout, in volts.
+/// The highest voltage limit that may be asked for, in volts.
 ///
-/// Bounds the pulse's power, and sets the scope's scale for the pulse. Above
-/// what 3 A needs unless the hot resistance exceeds 1.7 Ω.
-const PULSE_VOLTAGE_LIMIT_VOLTS: f64 = 5.0;
+/// Bounds the pulse's power. Above what 3 A needs unless the hot resistance
+/// exceeds 1.7 Ω.
+const MAXIMUM_VOLTAGE_LIMIT_VOLTS: f64 = 5.0;
 
 /// The current the mount's temperature is measured with, in amperes.
 ///
@@ -90,8 +90,13 @@ const REVERSAL_BLOCK_DURATION: Duration = Duration::from_secs(10);
 const OPEN_CIRCUIT_CURRENT_AMPS: f64 = 0.01;
 
 /// Cool-down samples this soon after the pulse are recorded but left out of
-/// the analysis's fit, while the filament itself cools.
-const FIT_SKIP: Duration = Duration::from_secs(5);
+/// the analysis's fit and the cool-down's progress, while the filament itself
+/// cools.
+///
+/// The filament's resistance falls most of the way back within a second or
+/// two, but its tail is still about 1 mΩ, several times the mount's warming,
+/// 5–8 s after a 1 A pulse.
+const FIT_SKIP: Duration = Duration::from_secs(15);
 
 /// The filament's resistance with no current and the mount at room
 /// temperature, in ohms, from the hot sweeps. Converts extra resistance to the
@@ -135,6 +140,14 @@ struct Arguments {
     /// Ends the pulse early once it has delivered this much energy, in joules.
     #[arg(long)]
     maximum_energy: Option<f64>,
+
+    /// The supply's voltage limit throughout, in volts.
+    ///
+    /// The pulse ends if the filament needs more, and the scope's scale for the
+    /// pulse is the smallest that fits it, so about twice the expected pulse
+    /// voltage both bounds the power and resolves the voltage well.
+    #[arg(long)]
+    voltage_limit: f64,
 }
 
 /// Rejects arguments outside their limits, before anything is powered.
@@ -162,6 +175,19 @@ fn check_arguments(args: &Arguments) -> Result<(), String> {
         return Err(format!(
             "the maximum energy must be more than 0 J: {}",
             energy
+        ));
+    }
+
+    // Below the current through the cold filament, the pulse would end as soon
+    // as it started.
+    let minimum_voltage_limit = args.current * COLD_RESISTANCE_OHMS;
+    if !(args.voltage_limit > minimum_voltage_limit
+        && args.voltage_limit <= MAXIMUM_VOLTAGE_LIMIT_VOLTS)
+    {
+        return Err(format!(
+            "the voltage limit must be above the cold filament's voltage at the pulse \
+             current, {:.3} V, and at most {} V: {}",
+            minimum_voltage_limit, MAXIMUM_VOLTAGE_LIMIT_VOLTS, args.voltage_limit
         ));
     }
 
@@ -228,7 +254,7 @@ impl PulseRun {
                     tungsten: TUNGSTEN_TEMPERATURE_COEFFICIENT_PER_KELVIN,
                     tungsten_rhenium: TUNGSTEN_RHENIUM_TEMPERATURE_COEFFICIENT_PER_KELVIN,
                 },
-                voltage_limit_volts: PULSE_VOLTAGE_LIMIT_VOLTS,
+                voltage_limit_volts: args.voltage_limit,
             },
             pressure_mbar: Pressures::default(),
             pulse: None,
@@ -268,6 +294,8 @@ struct Parameters {
     maximum_energy_joules: Option<f64>,
     probe_current_amps: f64,
     temperature_coefficients_per_kelvin: TemperatureCoefficients,
+
+    /// The supply's voltage limit asked for.
     voltage_limit_volts: f64,
 }
 
@@ -688,7 +716,7 @@ async fn sequence(
     filament.set_output_enabled(false).await?;
     filament.set_polarity(Polarity::Forward).await?;
     filament
-        .set_heating_voltage_limit(PULSE_VOLTAGE_LIMIT_VOLTS)
+        .set_heating_voltage_limit(args.voltage_limit)
         .await?;
     filament
         .set_overcurrent_protection(args.current + OVERCURRENT_PROTECTION_MARGIN_AMPS)
@@ -720,8 +748,9 @@ async fn sequence(
         start,
         &mut polarity,
         &mut pulse_run.baseline,
-        |resistances| {
+        |samples| {
             let elapsed = baseline_start.elapsed().as_secs_f64();
+            let resistances = probe_resistances(samples);
             if resistances.is_empty() {
                 println!("  {:>3.0} s: first block recorded", elapsed);
             } else {
@@ -778,7 +807,7 @@ async fn sequence(
 
     // The scale changes before the pulse because changing it takes a second or
     // two.
-    let pulse_scale = pulse_scale(PULSE_VOLTAGE_LIMIT_VOLTS);
+    let pulse_scale = pulse_scale(args.voltage_limit);
     println!("Setting the scope to {} V/div for the pulse", pulse_scale);
     filament.set_vertical_scale(pulse_scale).await?;
     pulse_run.scales.pulse = Some(pulse_scale);
@@ -814,7 +843,7 @@ async fn sequence(
     if pulse.end == Some(PulseEnd::ConstantVoltage) {
         println!(
             "  The supply left constant current: the hot resistance is more than {} V / {} A",
-            PULSE_VOLTAGE_LIMIT_VOLTS, args.current
+            args.voltage_limit, args.current
         );
     }
 
@@ -833,12 +862,18 @@ async fn sequence(
         start,
         &mut polarity,
         &mut pulse_run.cool_down,
-        |resistances| {
+        |samples| {
             // The latest pair, as a lower bound on the warming at its time.
-            let Some(latest) = resistances.last() else {
+            // Samples from while the filament itself cools are left out, as
+            // the fit leaves them out, or the first pair reads several kelvin
+            // too warm.
+            let skip_end = down + FIT_SKIP.as_secs_f64();
+            let skipped = samples.partition_point(|s| s.time_seconds < skip_end);
+            let Some(latest) = probe_resistances(&samples[skipped..]).pop() else {
                 println!(
-                    "  {:>3.0} s after the pulse: first block recorded",
-                    down_time.elapsed().as_secs_f64()
+                    "  {:>3.0} s after the pulse: no pair after the first {} s yet",
+                    down_time.elapsed().as_secs_f64(),
+                    FIT_SKIP.as_secs()
                 );
                 return;
             };
@@ -978,7 +1013,7 @@ async fn sample(
 /// Records samples at the probe current into `samples` for `duration`, in
 /// blocks of `REVERSAL_BLOCK_DURATION` that alternate polarity. The first
 /// block is in `polarity`, which is left as the last block's. Calls `report`
-/// with the probe resistances so far after each block.
+/// with the samples so far after each block.
 ///
 /// After each reversal, waits `SETPOINT_APPLY_TIME` for the supply to settle
 /// with the output back on before sampling.
@@ -989,7 +1024,7 @@ async fn record_probe(
     start: Instant,
     polarity: &mut Polarity,
     samples: &mut Vec<ProbeSample>,
-    report: impl Fn(&[ProbeResistance]),
+    report: impl Fn(&[ProbeSample]),
 ) -> Result<(), AnyError> {
     let began = Instant::now();
     let mut first = true;
@@ -1027,7 +1062,7 @@ async fn record_probe(
             });
         }
 
-        report(&probe_resistances(samples));
+        report(samples);
     }
 
     Ok(())
@@ -1286,12 +1321,18 @@ mod tests {
         }
     }
 
-    fn arguments(current: f64, duration: f64, maximum_energy: Option<f64>) -> Arguments {
+    fn arguments(
+        current: f64,
+        duration: f64,
+        maximum_energy: Option<f64>,
+        voltage_limit: f64,
+    ) -> Arguments {
         Arguments {
             filament_id: String::from("test"),
             current,
             duration,
             maximum_energy,
+            voltage_limit,
             device_path: String::new(),
             adc_gauge_number: 1,
             tmp_address: String::new(),
@@ -1300,28 +1341,34 @@ mod tests {
 
     #[test]
     fn arguments_within_their_limits_are_accepted() {
-        assert!(check_arguments(&arguments(2.0, 5.0, None)).is_ok());
-        assert!(check_arguments(&arguments(3.0, 10.0, Some(10.0))).is_ok());
+        assert!(check_arguments(&arguments(2.0, 5.0, None, 1.0)).is_ok());
+        assert!(check_arguments(&arguments(3.0, 10.0, Some(10.0), 5.0)).is_ok());
+        assert!(check_arguments(&arguments(1.1, 2.0, Some(0.55), 0.5)).is_ok());
     }
 
     #[test]
     fn arguments_outside_their_limits_are_rejected() {
-        for (current, duration, energy) in [
-            (PROBE_CURRENT_AMPS, 5.0, None),
-            (3.01, 5.0, None),
-            (f64::NAN, 5.0, None),
-            (2.0, 0.0, None),
-            (2.0, 10.01, None),
-            (2.0, f64::NAN, None),
-            (2.0, 5.0, Some(0.0)),
-            (2.0, 5.0, Some(f64::NAN)),
+        for (current, duration, energy, voltage_limit) in [
+            (PROBE_CURRENT_AMPS, 5.0, None, 1.0),
+            (3.01, 5.0, None, 1.0),
+            (f64::NAN, 5.0, None, 1.0),
+            (2.0, 0.0, None, 1.0),
+            (2.0, 10.01, None, 1.0),
+            (2.0, f64::NAN, None, 1.0),
+            (2.0, 5.0, Some(0.0), 1.0),
+            (2.0, 5.0, Some(f64::NAN), 1.0),
+            // 2 A through the cold filament is about 0.2 V.
+            (2.0, 5.0, None, 0.15),
+            (2.0, 5.0, None, 5.01),
+            (2.0, 5.0, None, f64::NAN),
         ] {
             assert!(
-                check_arguments(&arguments(current, duration, energy)).is_err(),
-                "{} A, {} s, {:?} J",
+                check_arguments(&arguments(current, duration, energy, voltage_limit)).is_err(),
+                "{} A, {} s, {:?} J, {} V",
                 current,
                 duration,
-                energy
+                energy,
+                voltage_limit
             );
         }
     }
@@ -1339,6 +1386,8 @@ mod tests {
         // 5 V needs 5 / (4 × 0.8) = 1.56 V/div.
         assert_eq!(pulse_scale(5.0), 2.0);
         assert_eq!(pulse_scale(3.2), 1.0);
+        // 0.5 V needs 0.16 V/div.
+        assert_eq!(pulse_scale(0.5), 0.2);
     }
 
     #[test]

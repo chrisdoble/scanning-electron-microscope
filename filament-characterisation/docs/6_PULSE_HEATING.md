@@ -84,33 +84,34 @@ A new top-level type, `PulseRun`, defined in `src/bin/pulse.rs` rather than in t
 ## The binary's arguments
 
 ```
-pulse <DEVICE_PATH> <ADC_GAUGE_NUMBER> <TMP_ADDRESS> --filament-id 1 --current 2.0 --duration 5 [--maximum-energy 10]
+pulse <DEVICE_PATH> <ADC_GAUGE_NUMBER> <TMP_ADDRESS> --filament-id 1 --current 2.0 --duration 5 --voltage-limit 1.0 [--maximum-energy 10]
 ```
 
-| Argument                                         | Meaning                                                           | Default  | Limits                                                               |
-| ------------------------------------------------ | ----------------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
-| `--filament-id`                                  | Recorded in the results                                           | required |                                                                      |
-| `--current`                                      | The pulse current, in A                                           | required | above the probe current, at most `POWER_SUPPLY_MAXIMUM_CURRENT_AMPS` |
-| `--duration`                                     | How long the pulse is held, in s                                  | required | more than 0, at most `MAXIMUM_PULSE_DURATION`                        |
-| `--maximum-energy`                               | Ends the pulse early once it has delivered this much energy, in J | none     | more than 0                                                          |
-| `DEVICE_PATH`, `ADC_GAUGE_NUMBER`, `TMP_ADDRESS` | Positional, as for the characteriser                              |          |                                                                      |
+| Argument                                         | Meaning                                                               | Default  | Limits                                                                                        |
+| ------------------------------------------------ | --------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `--filament-id`                                  | Recorded in the results                                               | required |                                                                                               |
+| `--current`                                      | The pulse current, in A                                               | required | above the probe current, at most `POWER_SUPPLY_MAXIMUM_CURRENT_AMPS`                          |
+| `--duration`                                     | How long the pulse is held, in s                                      | required | more than 0, at most `MAXIMUM_PULSE_DURATION`                                                 |
+| `--maximum-energy`                               | Ends the pulse early once it has delivered this much energy, in J     | none     | more than 0                                                                                   |
+| `--voltage-limit`                                | The supply's voltage limit throughout, in V (see "The scope's scale") | required | above the pulse current through `COLD_RESISTANCE_OHMS`, at most `MAXIMUM_VOLTAGE_LIMIT_VOLTS` |
+| `DEVICE_PATH`, `ADC_GAUGE_NUMBER`, `TMP_ADDRESS` | Positional, as for the characteriser                                  |          |                                                                                               |
 
 Out-of-range arguments are rejected before anything is powered.
 
 ## Constants
 
-| Constant                                 | Value  | Why                                                                                                                                                                                                                                                                                                     |
-| ---------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MAXIMUM_PULSE_DURATION`                 | 10 s   | Longer than filming needs. A pulse this long at incandescent currents would put tens of joules into the mount.                                                                                                                                                                                          |
-| `PULSE_VOLTAGE_LIMIT_VOLTS`              | 5.0    | Bounds the pulse's power, and sets the scope's scale (see "The pulse"). Above what 3 A needs unless the hot resistance exceeds 1.7 Ω. To be revisited once the hot resistance is measured.                                                                                                              |
-| `PROBE_CURRENT_AMPS`                     | 0.1    | Keeps the probe's own warming negligible (see "Why 100 mA").                                                                                                                                                                                                                                            |
-| `BASELINE_DURATION`                      | 60 s   | Long enough to average the probe's noise down to about 0.1 K, and to check that the mount isn't still cooling.                                                                                                                                                                                          |
-| `COOL_DOWN_DURATION`                     | 600 s  | About five of the mount's 2-minute time constants, so the fit sees the slow decay through to the baseline.                                                                                                                                                                                              |
-| `BASELINE_MAXIMUM_SLOPE_OHMS_PER_SECOND` | 3 µΩ/s | Rejects a baseline taken while the mount is still cooling. A mount whose resistance is X above its cold value, cooling with τ ≈ 2 minutes, drifts at X/τ. So 3 µΩ/s means X ≈ 0.36 mΩ, about 1 K warm. A tighter limit would trip on noise: the fitted slope over 60 s is uncertain by about this much. |
-| `REVERSAL_BLOCK_DURATION`                | 10 s   | How long the probe stays in each polarity before switching, about 25 samples (see "The probe measurement").                                                                                                                                                                                             |
-| `FIT_SKIP`                               | 5 s    | Cool-down samples this soon after the pulse are recorded but left out of the fit, while the filament itself cools.                                                                                                                                                                                      |
-| `CLEANUP_TIMEOUT`                        | 5 s    | As in the characteriser: how long making the filament safe may take before it's given up on.                                                                                                                                                                                                            |
-| `CLAMP_RISE_BUDGET_KELVIN`               | 25 K   | In pulse.py, not the binary. Only used to print the energy that would reach it; nothing enforces it (see "The budget").                                                                                                                                                                                 |
+| Constant                                 | Value  | Why                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `MAXIMUM_PULSE_DURATION`                 | 10 s   | Longer than filming needs. A pulse this long at incandescent currents would put tens of joules into the mount.                                                                                                                                                                                                                       |
+| `MAXIMUM_VOLTAGE_LIMIT_VOLTS`            | 5.0    | The highest `--voltage-limit` allowed. Bounds the pulse's power. Above what 3 A needs unless the hot resistance exceeds 1.7 Ω.                                                                                                                                                                                                       |
+| `PROBE_CURRENT_AMPS`                     | 0.1    | Keeps the probe's own warming negligible (see "Why 100 mA").                                                                                                                                                                                                                                                                         |
+| `BASELINE_DURATION`                      | 60 s   | Long enough to average the probe's noise down to about 0.1 K, and to check that the mount isn't still cooling.                                                                                                                                                                                                                       |
+| `COOL_DOWN_DURATION`                     | 600 s  | About five of the mount's 2-minute time constants, so the fit sees the slow decay through to the baseline.                                                                                                                                                                                                                           |
+| `BASELINE_MAXIMUM_SLOPE_OHMS_PER_SECOND` | 3 µΩ/s | Rejects a baseline taken while the mount is still cooling. A mount whose resistance is X above its cold value, cooling with τ ≈ 2 minutes, drifts at X/τ. So 3 µΩ/s means X ≈ 0.36 mΩ, about 1 K warm. A tighter limit would trip on noise: the fitted slope over 60 s is uncertain by about this much.                              |
+| `REVERSAL_BLOCK_DURATION`                | 10 s   | How long the probe stays in each polarity before switching, about 25 samples (see "The probe measurement").                                                                                                                                                                                                                          |
+| `FIT_SKIP`                               | 15 s   | Cool-down samples this soon after the pulse are recorded but left out of the fit and the printed progress, while the filament itself cools. After the first 1 A pulse, the filament's tail was still about 1 mΩ 5–8 s after the pulse, several times the mount's warming; with a 5 s skip it inflated the fitted rise about twofold. |
+| `CLEANUP_TIMEOUT`                        | 5 s    | As in the characteriser: how long making the filament safe may take before it's given up on.                                                                                                                                                                                                                                         |
+| `CLAMP_RISE_BUDGET_KELVIN`               | 25 K   | In pulse.py, not the binary. Only used to print the energy that would reach it; nothing enforces it (see "The budget").                                                                                                                                                                                                              |
 
 ## The procedure
 
@@ -128,7 +129,7 @@ There are no confirmations as in the characteriser's `prepare`. The baseline's s
 ### 1. Setup
 
 - **Supply:**
-  - voltage limit `PULSE_VOLTAGE_LIMIT_VOLTS`;
+  - voltage limit `--voltage-limit`;
   - overcurrent protection at the pulse current plus `OVERCURRENT_PROTECTION_MARGIN_AMPS`;
   - current 0, output on, forward polarity.
 - **Jump to the probe current,** as for the pulse: the supply is constant-current, so there's no inrush.
@@ -146,7 +147,7 @@ Both are computed in the binary as soon as the baseline ends, not by the analysi
 ### 3. Fire
 
 - **Check the pressure again.** Read it once more, since the baseline took a minute, and exit with an error if it's no longer low enough.
-- **Set the pulse scale before the pulse.** It comes from the voltage limit, not a measurement: 2 V/div (see "The scope's scale"). Changing the scale takes a second or two, as the clamping fix showed, so it can't happen during the pulse (see "The pulse"). The pulse follows straight after, with no prompt or countdown: the camera is started before the binary is run.
+- **Set the pulse scale before the pulse.** It comes from the voltage limit, not a measurement (see "The scope's scale"). Changing the scale takes a second or two, as the clamping fix showed, so it can't happen during the pulse (see "The pulse"). The pulse follows straight after, with no prompt or countdown: the camera is started before the binary is run.
 
 ### 4. The pulse
 
@@ -156,9 +157,9 @@ Both are computed in the binary as soon as the baseline ends, not by the analysi
 - **Energy.** The pulse's energy is accumulated from the samples, E = Σ V·I·Δt. With `--maximum-energy`, the pulse ends early once E passes it, and that's recorded.
 - **Jump back** to the probe current at the end.
 
-**The scope's scale.** The pulse's scale is the smallest that fits `PULSE_VOLTAGE_LIMIT_VOLTS` with `CLIPPING_HEADROOM`: 5.0 / (4 × 0.8) = 1.56, so 2 V/div. The supply can't put more than the voltage limit across the filament, so the reading can't clip. The gain uncertainty doesn't depend on the scale, so the coarse scale costs only resolution: about 1% at 1 V, plenty for the energy.
+**The scope's scale.** The pulse's scale is the smallest that fits `--voltage-limit` with `CLIPPING_HEADROOM`, e.g. 0.5 / (4 × 0.8) = 0.16, so 0.2 V/div. The supply can't put more than the voltage limit across the filament, so the reading can't clip. So the voltage limit should be about twice the expected pulse voltage, I·R_hot: much higher and the reading is coarse. The first 1 A pulse ran with a fixed 5 V limit, so 2 V/div, and its 0.13–0.16 V readings were about a tenth of a division: a step of the 8-bit scope is about 60 mV there, and the offset error is likely tens of mV, so its energy may be off by 20% or more. A limit near the expected voltage also bounds the pulse: a hot resistance higher than expected ends it (see "Leaving constant current").
 
-**Leaving constant current.** If the filament's hot resistance is more than the voltage limit divided by the current, the supply goes into constant voltage, which limits the power. That's a safety limit working, not a fault, but it also happens when the circuit opens, e.g. if the filament burns out. Either way the pulse ends, and the reason is recorded. A current readback near zero is reported as an open circuit.
+**Leaving constant current.** If the filament's hot resistance is more than the voltage limit divided by the current, the supply goes into constant voltage, which caps the power at about V_limit·I. That's a safety limit working, not a fault, but it also happens when the circuit opens, e.g. if the filament burns out. Either way the pulse ends, and the reason is recorded. A current readback near zero is reported as an open circuit.
 
 **The pressure isn't monitored during the pulse.** Reading the gauge would slow the sampling, and the pulse lasts seconds. A filament glowing for the first time outgasses, so the pressure may rise briefly. The next run's startup check catches a chamber that hasn't recovered.
 
@@ -166,7 +167,7 @@ Both are computed in the binary as soon as the baseline ends, not by the analysi
 
 - **Reset the scale.** Set the probe's scale again. Its first second or two of samples are lost, but `FIT_SKIP` excludes them from the fit anyway.
 - **Record** the probe resistance for `COOL_DOWN_DURATION`, timestamped, into the `PulseRun` results.
-- **Print it as it goes.** Every 10 s, print the time since the pulse, the extra resistance against the baseline, and the clamp rise it implies with the W-Re α. Each value is a model-free lower bound on the warming at that moment.
+- **Print it as it goes.** Every 10 s, print the time since the pulse, the extra resistance against the baseline, and the clamp rise it implies with the W-Re α, from the latest pair of blocks after `FIT_SKIP`. Each value is a model-free lower bound on the warming at that moment. Without the skip, the first pair includes the filament's own cooling: after the first 1 A pulse it read +7 K when the mount was about 0.7 K warm.
 
 ### 6. Analyse and finish
 
@@ -264,7 +265,7 @@ Times are in seconds since the run started, as `time_seconds` is elsewhere.
 
 ## What the measurement can and can't see
 
-- **It can see** the clamp's lumped temperature from a few seconds after the pulse onwards, and, by extrapolation, its value at the end of the pulse.
+- **It can see** the clamp's lumped temperature from `FIT_SKIP` after the pulse onwards, and, by extrapolation, its value at the end of the pulse.
 - **It can't see** anything that settles faster than `FIT_SKIP`. That includes heat spreading out from the clamp in the first seconds, while the filament and its legs cool. The local peak at the clamp during the pulse, and in any epoxy within a millimetre or two of it, can be higher than X_end suggests.
 
 So X_end is a lower bound on the hottest spot, and the budget leaves room for that.
@@ -279,10 +280,10 @@ So X_end is a lower bound on the hottest spot, and the budget leaves room for th
 
 1. **First pulse:** a pulse that's surely harmless and still tells us something, e.g. 1.0 A for 2 s. That's probably under 2 J, so a few K at most even with the sweep's model.
 2. **After each pulse:**
-   - **Predict the next pulse's energy.** The filament reaches its hot resistance within about a second, so a pulse's energy is close to E = P·t, where P = I²·R_hot is the steady power: the mean of V·I over the pulse samples after the first second. P grows faster than I² because R_hot rises with the temperature, so the question is how much faster. For a pulse at I_next lasting t_next:
+   - **Predict the next pulse's energy.** A pulse's energy is close to E = P·t, where P = I²·R_hot is the steady power: the mean of V·I over the pulse samples after the first second. Below glow the filament may not quite reach its hot resistance within a 2 s pulse: at 1 A it was still rising at 1.7 s, from 134 to 154 to 161 mΩ. So P from a short pulse is a slight underestimate, and the 1.2× margin on `--maximum-energy` covers it. P grows faster than I² because R_hot rises with the temperature, so the question is how much faster. For a pulse at I_next lasting t_next:
      - **From one pulse** (I₁, P₁): E_next ≈ P₁·(I_next/I₁)³·t_next. For a glowing tungsten filament losing heat mostly by radiation, P ∝ T⁴ and R ∝ T^1.2 give P ∝ I^2.9, so the cube is a fair guess. Below glow, where conduction to the posts dominates, P can rise faster than I³, so treat this as rough.
      - **From two or more pulses:** use the local exponent from the two most recent, n = ln(P₂/P₁) / ln(I₂/I₁), then E_next ≈ P₂·(I_next/I₂)ⁿ·t_next. Only the recent pulses, because n changes as the filament moves from conduction to radiation.
-     - **The voltage limit:** if I_next·R_hot would exceed `PULSE_VOLTAGE_LIMIT_VOLTS`, the supply goes constant-voltage and P is capped at about V_limit·I_next.
+     - **The voltage limit:** set `--voltage-limit` to about 2·I_next·R_hot, with R_hot extrapolated from the last pulse's final resistance. If R_hot turns out higher, the supply goes constant-voltage and the pulse ends.
      - Errors in n are what the 1.5× energy step below protects against: each step is checked by the next pulse's measured P before it's extrapolated again.
    - **Predict its clamp rise.** Multiply the predicted energy by the measured K per joule.
 3. **Only fire the next pulse** if the predicted rise is within the budget, and the energy is at most 1.5 times the last pulse's. That limits how far each extrapolation goes.
