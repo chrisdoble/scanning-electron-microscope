@@ -18,6 +18,7 @@ use characteriser::{
 use clap::Parser;
 use env_logger::{Builder, Target};
 use futures::FutureExt;
+use host::oscilloscope::Voltages;
 use host::power_supply::{Polarity, RegulationMode};
 use log::*;
 use schemars::JsonSchema;
@@ -746,6 +747,7 @@ async fn sequence(
         probe_scale,
         BASELINE_DURATION,
         start,
+        None,
         &mut polarity,
         &mut pulse_run.baseline,
         |samples| {
@@ -848,18 +850,23 @@ async fn sequence(
     }
 
     // 5. Cool-down. The first second or two of samples are lost while the
-    // scale changes back.
+    // scale changes back. Right after the pulse the current is still falling
+    // to the probe current, which takes about as long as the scale change, and
+    // the filament is hot, so the voltage can clip on the probe's scale. Those
+    // samples are within `FIT_SKIP` and left out of the fit anyway, so they're
+    // dropped; clipping after it is still an error.
     filament.set_vertical_scale(probe_scale).await?;
     println!(
         "Recording the cool-down for {} s",
         COOL_DOWN_DURATION.as_secs()
     );
     let down_time = start + Duration::from_secs_f64(down);
-    record_probe(
+    let dropped = record_probe(
         filament,
         probe_scale,
         COOL_DOWN_DURATION,
         start,
+        Some(down_time + FIT_SKIP),
         &mut polarity,
         &mut pulse_run.cool_down,
         |samples| {
@@ -888,6 +895,15 @@ async fn sequence(
         },
     )
     .await?;
+    if dropped > 0 {
+        let warning = format!(
+            "{} cool-down samples within {} s of the pulse clipped and were dropped",
+            dropped,
+            FIT_SKIP.as_secs()
+        );
+        println!("  Warning: {}", warning);
+        pulse_run.warnings.push(warning);
+    }
 
     Ok(())
 }
@@ -944,7 +960,21 @@ fn pulse_scale(voltage_limit: f64) -> f64 {
 struct Reading {
     current: f64,
     mode: RegulationMode,
-    voltage: f64,
+
+    /// The average voltage, or `None` if it clipped.
+    voltage: Option<f64>,
+
+    /// The scope's readings the voltage came from.
+    voltages: Voltages,
+}
+
+/// The error for a reading whose voltage clipped.
+fn clipped_error(scale: f64, voltages: Voltages) -> AnyError {
+    format!(
+        "the filament voltage clipped at {} V/div: {:?}",
+        scale, voltages
+    )
+    .into()
 }
 
 /// Takes one sample: the filament's voltage, its current, then whether the
@@ -955,9 +985,9 @@ struct Reading {
 /// A call isn't abandoned partway, because the instruments' replies would be
 /// left for the next query to read.
 ///
-/// Fails if the protection has tripped, the circuit looks open, or the voltage
-/// clipped. Leaving constant current otherwise isn't an error here: the caller
-/// decides.
+/// Fails if the protection has tripped or the circuit looks open. A clipped
+/// voltage, or leaving constant current otherwise, isn't an error here: the
+/// caller decides.
 async fn sample(
     filament: &dyn FilamentSystem,
     scale: f64,
@@ -995,18 +1025,11 @@ async fn sample(
         .into());
     }
 
-    let Some(voltage) = unclipped_average(voltages, scale) else {
-        return Err(format!(
-            "the filament voltage clipped at {} V/div: {:?}",
-            scale, voltages
-        )
-        .into());
-    };
-
     Ok(Some(Reading {
         current,
         mode,
-        voltage,
+        voltage: unclipped_average(voltages, scale),
+        voltages,
     }))
 }
 
@@ -1017,17 +1040,23 @@ async fn sample(
 ///
 /// After each reversal, waits `SETPOINT_APPLY_TIME` for the supply to settle
 /// with the output back on before sampling.
+///
+/// A clipped sample before `clipping_allowed_until` is dropped, and counted in
+/// the returned number; after it, it's an error.
+#[allow(clippy::too_many_arguments)]
 async fn record_probe(
     filament: &dyn FilamentSystem,
     scale: f64,
     duration: Duration,
     start: Instant,
+    clipping_allowed_until: Option<Instant>,
     polarity: &mut Polarity,
     samples: &mut Vec<ProbeSample>,
     report: impl Fn(&[ProbeSample]),
-) -> Result<(), AnyError> {
+) -> Result<usize, AnyError> {
     let began = Instant::now();
     let mut first = true;
+    let mut dropped = 0;
 
     while began.elapsed() < duration {
         let block_start = Instant::now();
@@ -1053,19 +1082,26 @@ async fn record_probe(
                 )
                 .into());
             }
+            let Some(voltage) = reading.voltage else {
+                if clipping_allowed_until.is_some_and(|until| Instant::now() < until) {
+                    dropped += 1;
+                    continue;
+                }
+                return Err(clipped_error(scale, reading.voltages));
+            };
 
             samples.push(ProbeSample {
                 current_amps: reading.current,
                 polarity: *polarity,
                 time_seconds: start.elapsed().as_secs_f64(),
-                voltage_volts: reading.voltage,
+                voltage_volts: voltage,
             });
         }
 
         report(samples);
     }
 
-    Ok(())
+    Ok(dropped)
 }
 
 /// Changes the direction of the current through the filament, leaving the
@@ -1180,23 +1216,26 @@ async fn fire(
             break PulseEnd::Duration;
         };
         let now = Instant::now();
+        let Some(voltage) = reading.voltage else {
+            return Err(clipped_error(scale, reading.voltages));
+        };
 
         // A magnitude, because the voltage's sign depends on how the relays
         // and sense leads are wired.
-        power = reading.voltage.abs() * reading.current;
+        power = voltage.abs() * reading.current;
         energy += power * (now - previous).as_secs_f64();
         previous = now;
 
         pulse.samples.push(PulseSample {
             current_amps: reading.current,
             time_seconds: (now - start).as_secs_f64(),
-            voltage_volts: reading.voltage,
+            voltage_volts: voltage,
         });
         println!(
             "  {:>5.2} s: {:.3} A, {:.3} V, {:.3} W, {:.2} J so far",
             (now - up).as_secs_f64(),
             reading.current,
-            reading.voltage,
+            voltage,
             power,
             energy
         );
@@ -1441,6 +1480,35 @@ mod tests {
         }
     }
 
+    // Clipped probe samples are dropped while clipping is allowed, and are an
+    // error once it isn't. Every sample clips on a scale this small.
+    #[tokio::test(start_paused = true)]
+    async fn the_probe_drops_clipped_samples_only_while_allowed() {
+        let filament = powered_mock(Polarity::Forward).await;
+        filament.set_heating_current_limit(0.1).await.unwrap();
+        let allowed = Duration::from_secs(15);
+
+        for allow in [false, true] {
+            let start = Instant::now();
+            let mut samples = Vec::new();
+            let result = record_probe(
+                &filament,
+                1e-4,
+                Duration::from_secs(60),
+                start,
+                allow.then_some(start + allowed),
+                &mut Polarity::Forward,
+                &mut samples,
+                |_| {},
+            )
+            .await;
+
+            assert!(result.is_err());
+            assert!(samples.is_empty());
+            assert_eq!(start.elapsed() >= allowed, allow);
+        }
+    }
+
     // The probe alternates polarity block by block, starting in the polarity
     // it's given, and the mock's resistance comes back from the pairs. The mock
     // refuses to switch the relays with the output on, so this also checks the
@@ -1456,6 +1524,7 @@ mod tests {
             0.01,
             Duration::from_secs(60),
             Instant::now(),
+            None,
             &mut polarity,
             &mut samples,
             |_| {},

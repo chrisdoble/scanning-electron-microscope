@@ -166,6 +166,7 @@ Both are computed in the binary as soon as the baseline ends, not by the analysi
 ### 5. Cool-down
 
 - **Reset the scale.** Set the probe's scale again. Its first second or two of samples are lost, but `FIT_SKIP` excludes them from the fit anyway.
+- **Tolerate clipping within `FIT_SKIP`.** Right after the pulse, the current is still falling to the probe current (the supply takes about 0.6 s to apply a setpoint) and the filament is hot, so the first samples can clip on the probe's scale; after the 1.5 A pulse the first read up to 43 mV, past the 32 mV that 10 mV/div allows. Clipped samples before `FIT_SKIP` are dropped and counted in a warning. After it, clipping is an error as everywhere else.
 - **Record** the probe resistance for `COOL_DOWN_DURATION`, timestamped, into the `PulseRun` results.
 - **Print it as it goes.** Every 10 s, print the time since the pulse, the extra resistance against the baseline, and the clamp rise it implies with the W-Re α, from the latest pair of blocks after `FIT_SKIP`. Each value is a model-free lower bound on the warming at that moment. Without the skip, the first pair includes the filament's own cooling: after the first 1 A pulse it read +7 K when the mount was about 0.7 K warm.
 
